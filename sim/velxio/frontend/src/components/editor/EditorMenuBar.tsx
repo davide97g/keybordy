@@ -43,32 +43,21 @@ type Item =
       id: EditorCommandId;
       label: string;
       shortcut?: string;
-      pro?: boolean;
       /** Hide the row entirely when no handler is registered, instead of
-       *  the default "render disabled". For account-scoped items the
-       *  absence of a handler is not "temporarily unavailable" but "does
-       *  not apply here": OSS has no accounts at all, and in pro exactly
-       *  one of Sign in / My projects is meaningful at a time. A greyed-out
-       *  "My projects" would read as a broken feature in both. */
+       *  the default "render disabled". */
       optional?: boolean;
     }
   | { kind: 'link'; href: string; label: string }
   | { kind: 'separator' };
 
-// Same links the desktop app's Help menu opens (pro/desktop menu.rs) — the
-// web editor mirrors that structure so both feel like one product. They
-// replace the marketing nav this header no longer shows, opening in a new
-// tab so the editor (and any unsaved work) stays put.
+// Upstream project links, opening in a new tab so the editor (and any
+// unsaved work) stays put.
 const GITHUB_URL = 'https://github.com/davidmonterocrespo24/velxio';
 const DISCORD_URL = 'https://discord.gg/3mARjJrh4E';
-// In the OSS build the marketing pages live on velxio.dev, not in this app
-// (the overlay registers them only in pro builds) — link absolute, exactly
-// like the desktop app's Help menu does.
-const SITE = import.meta.env.VITE_PRO_BUILD ? '' : 'https://velxio.dev';
 
 export const EditorMenuBar: React.FC = () => {
   const { t } = useTranslation();
-  const [open, setOpen] = useState<'file' | 'edit' | 'view' | 'account' | 'help' | null>(null);
+  const [open, setOpen] = useState<'file' | 'edit' | 'view' | 'language' | 'help' | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Re-render when owners (un)register their commands.
@@ -114,15 +103,6 @@ export const EditorMenuBar: React.FC = () => {
     { kind: 'command', id: 'project.new', label: t('editor.menu.newProject', 'New workspace') },
     { kind: 'command', id: 'file.new', label: t('editor.menu.newFile', 'New file') },
     { kind: 'separator' },
-    // Third item, and deliberately at the head of the project group rather
-    // than tacked onto the "new …" pair above: it opens the user's saved
-    // work, which is what Open/Save below are about.
-    {
-      kind: 'command',
-      id: 'account.myProjects',
-      label: t('header.auth.myProjects', 'My projects'),
-      optional: true,
-    },
     { kind: 'command', id: 'project.open', label: t('editor.menu.open', 'Open project…') },
     {
       kind: 'command',
@@ -134,66 +114,12 @@ export const EditorMenuBar: React.FC = () => {
     { kind: 'command', id: 'project.import', label: t('editor.toolbar.importLabel', 'Import project') },
     { kind: 'command', id: 'project.exportVlx', label: t('editor.toolbar.exportVlxLabel', 'Export project (.vlx)') },
     { kind: 'command', id: 'project.export', label: t('editor.toolbar.exportLabel', 'Export project (.zip)') },
-    { kind: 'command', id: 'project.exportBom', label: t('editor.toolbar.exportBomLabel', 'Bill of Materials (CSV)'), pro: true },
-    {
-      kind: 'command',
-      id: 'project.exportScreenshot',
-      label: t('editor.toolbar.exportScreenshotLabel', 'Schematic image (PNG)'),
-      pro: true,
-    },
     { kind: 'separator' },
-    // The toolbar's "..." menu folded in here — same actions, same PRO
-    // pills, one button fewer in the strip.
-    { kind: 'command', id: 'project.share', label: t('editor.toolbar.shareLabel', 'Share / Embed') },
-    { kind: 'command', id: 'project.githubSync', label: t('editor.toolbar.githubSyncLabel', 'Sync to GitHub'), pro: true },
-    {
-      kind: 'command',
-      id: 'project.connectAgent',
-      label: t('editor.toolbar.connectAgentLabel', 'Connect AI agent (Claude/Codex)'),
-      pro: true,
-      // Only the pro overlay registers a handler; hide (not grey out) the
-      // row in builds where connecting an external agent cannot exist.
-      optional: true,
-    },
     { kind: 'command', id: 'firmware.upload', label: t('editor.toolbar.uploadFirmwareLabel', 'Upload firmware') },
-    { kind: 'command', id: 'sim.record', label: t('editor.toolbar.recordLabel', 'Record simulation'), pro: true },
-  ];
-
-  // Sign in / My projects for the Account menu. The bottom-left account
-  // dropdown gets these from its own (pro) markup; this menubar only ever
-  // hosted the shared `user-menu` slot, which is why the editor's Account
-  // menu had no way in or out of a session.
-  const accountItems: Item[] = [
-    {
-      kind: 'command',
-      id: 'account.myProjects',
-      label: t('header.auth.myProjects', 'My projects'),
-      optional: true,
-    },
-    {
-      kind: 'command',
-      id: 'account.login',
-      label: t('header.auth.signIn', 'Sign in'),
-      optional: true,
-    },
   ];
 
   const helpItems: Item[] = [
-    // Only present once a post has been delivered — the announcement is a
-    // toast now, and this is how it stays reachable after it retires.
-    {
-      kind: 'command',
-      id: 'help.whatsNew',
-      label: t('news.kicker', "What's new"),
-      optional: true,
-    },
-    { kind: 'link', href: `${SITE}/docs`, label: t('header.nav.documentation', 'Documentation') },
     { kind: 'link', href: '/examples', label: t('header.nav.examples', 'Examples') },
-    { kind: 'link', href: `${SITE}/pricing`, label: t('header.nav.pricing', 'Pricing') },
-    { kind: 'separator' },
-    { kind: 'link', href: SITE || '/', label: t('editor.menu.home', 'Velxio Home') },
-    { kind: 'link', href: `${SITE}/blog/`, label: t('header.nav.blog', 'Blog') },
-    { kind: 'link', href: `${SITE}/about`, label: t('editor.menu.about', 'About Velxio') },
     { kind: 'separator' },
     { kind: 'link', href: DISCORD_URL, label: t('editor.menu.discord', 'Discord Community') },
     { kind: 'link', href: GITHUB_URL, label: t('editor.menu.github', 'GitHub Repository') },
@@ -266,13 +192,12 @@ export const EditorMenuBar: React.FC = () => {
     >
       <span>
         {item.label}
-        {item.pro && <span className="emb-pro">PRO</span>}
       </span>
       {item.shortcut && <span className="emb-shortcut">{item.shortcut}</span>}
     </button>
   );
 
-  const menu = (which: 'file' | 'edit' | 'view' | 'account' | 'help', label: string, items: Item[]): React.ReactNode => (
+  const menu = (which: 'file' | 'edit' | 'view' | 'language' | 'help', label: string, items: Item[]): React.ReactNode => (
     <div className="emb-root" key={which}>
       <button
         className={`emb-trigger${open === which ? ' emb-trigger-open' : ''}`}
@@ -369,35 +294,8 @@ export const EditorMenuBar: React.FC = () => {
               <div className="emb-separator" />
             </>
           )}
-          {which === 'account' && (
+          {which === 'language' && (
             <>
-              {/* Session entry points, above the pro extras. Exactly one of
-                  the two is registered at a time (pro registers by session
-                  state) and neither exists in OSS, so this block renders
-                  nothing in an OSS build. */}
-              {accountItems
-                .filter((item) => item.kind !== 'command' || hasEditorCommand(item.id))
-                .map((item) => (item.kind === 'command' ? renderCommand(item) : null))}
-              {accountItems.some(
-                (item) => item.kind === 'command' && hasEditorCommand(item.id),
-              ) && <div className="emb-separator" />}
-              {/* Pro account items (PRO badge, Subscribe / Manage
-                  subscription, licenses, history, replays, Privacy) mount
-                  here via the SAME user-menu slot the bottom-left account
-                  dropdown uses — one overlay renderer, two hosts. Clicking
-                  any of them closes this menu (they navigate or open their
-                  own modal). Empty in OSS builds. */}
-              <div
-                data-velxio-slot="user-menu"
-                style={{ display: 'contents' }}
-                onClick={() => setOpen(null)}
-              />
-              <div className="emb-separator" />
-              {/* Language moved in here from its own top-level menu — the
-                  menubar was one trigger too wide once the AI chat docks. */}
-              <div className="emb-section-label">
-                {t('editor.menu.language', 'Language')}
-              </div>
               {LOCALES.map((loc) => (
                 <button
                   key={loc}
@@ -472,7 +370,7 @@ export const EditorMenuBar: React.FC = () => {
       {menu('file', t('editor.menu.file', 'File'), fileItems)}
       {menu('edit', t('editor.menu.edit', 'Edit'), editItems)}
       {menu('view', t('editor.menu.view', 'View'), viewItems)}
-      {menu('account', t('editor.menu.account', 'Account'), [])}
+      {menu('language', t('editor.menu.language', 'Language'), [])}
       {menu('help', t('editor.menu.help', 'Help'), helpItems)}
     </div>
   );

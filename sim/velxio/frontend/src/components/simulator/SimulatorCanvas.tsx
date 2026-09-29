@@ -76,9 +76,8 @@ import { useIsCoarsePointer } from '../../utils/useTouchDevice';
 import type { ComponentMetadata } from '../../types/component-metadata';
 import type { BoardKind, BoardInstance } from '../../types/board';
 import { BOARD_KIND_FQBN, boardDisplayName } from '../../types/board';
-import { blockedByBoardGate } from '../../lib/proBoardGate';
 import { FlashModal } from './FlashModal';
-import { isTauri as isTauriRuntimeFn } from '../../desktop/tauriBridge';
+import { isTauri as isTauriRuntimeFn } from '../../lib/nativeShell';
 import { webFlashAvailable, webFlashMpyAvailable } from '../../lib/proWebFlash';
 import { boardKindHasUf2 } from '../../utils/uf2Download';
 import { isEsp32Family } from '../../types/boardOptions';
@@ -86,12 +85,6 @@ import { BoardOptionsModal } from './BoardOptionsModal';
 import { useOscilloscopeStore } from '../../store/useOscilloscopeStore';
 import { resolveProbe } from '../../simulation/probeResolve';
 import { showMessageDialog } from '../../store/useMessageDialogStore';
-import {
-  trackSelectBoard,
-  trackAddComponent,
-  trackCreateWire,
-  trackToggleSerialMonitor,
-} from '../../utils/analytics';
 import { SelectionActionBar } from './SelectionActionBar';
 import { WireModeBanner } from './WireModeBanner';
 import { PinPickerDialog } from './PinPickerDialog';
@@ -1635,7 +1628,6 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         }
       : metadata;
     const component = createComponentFromMetadata(effectiveMetadata, x, y);
-    trackAddComponent(metadata.id);
     // Recorded — user can Ctrl+Z to remove the just-added component.
     recordAddComponent(component as Parameters<typeof recordAddComponent>[0]);
     setShowComponentPicker(false);
@@ -2339,7 +2331,6 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
       // created and push a CanvasCommand with applyNow:false (state is
       // already at the post-add state). Undo removes the wire; redo re-adds.
       finishWireCreation({ componentId, pinName, x, y });
-      trackCreateWire();
       const wires = useSimulatorStore.getState().wires;
       const created = wires[wires.length - 1];
       if (created) {
@@ -2841,10 +2832,6 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                   </span>
                 )}
 
-                {/* Overlay slot for board status next to the selector (e.g.
-                    which engine a run will use). Empty in the OSS build. */}
-                <span data-velxio-slot="board-status" />
-
                 {/* Undo / Redo moved to the Edit menu in the header
                     (Ctrl+Z / Ctrl+Y still work) — two fewer buttons in a
                     row that measurably overlapped at laptop widths. */}
@@ -2853,7 +2840,6 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                 <button
                   onClick={() => {
                     toggleSerialMonitor();
-                    trackToggleSerialMonitor(!serialMonitorOpen);
                   }}
                   className={`canvas-serial-btn${serialMonitorOpen ? ' canvas-serial-btn-active' : ''}`}
                   title={t('editor.canvas.toggleSerialMonitor')}
@@ -2930,10 +2916,6 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                       />
                     ) : null;
                   })()}
-
-                {/* Overlay slot for the WiFi/network panel (local gateway
-                    pairing on velxio.dev). Empty in the OSS build. */}
-                <span data-velxio-slot="wifi-panel" />
 
                 {/* WiFi status indicator + IoT-gateway launcher (ESP32 + Pico W).
                     Wokwi-style lifecycle: nothing until Run. The badge appears
@@ -3857,11 +3839,6 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         onClose={() => setShowComponentPicker(false)}
         onSelectComponent={handleSelectComponent}
         onSelectBoard={(kind: BoardKind) => {
-          // Pro gate, 'add' action: the overlay decides whether a non-paid
-          // web user may PLACE this board (it lets the run gate do the
-          // selling, so this normally allows). OSS / desktop / paid -> allow.
-          if (blockedByBoardGate(kind, 'add')) return;
-          trackSelectBoard(kind);
           // Same landing rule as components: the visible corner, first free
           // slot. Boards used to be placed 420 world-px right of the ACTIVE
           // board plus 60/30 px per board already on the canvas — a fixed

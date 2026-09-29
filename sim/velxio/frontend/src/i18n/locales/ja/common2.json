@@ -455,9 +455,6 @@
       "retryCompile": "再コンパイルして書き込む",
       "cancel": "キャンセル",
       "hide": "隠す",
-      "paidOnlyTitle": "実機への書き込みは Velxio Desktop の有料ライセンスの機能です",
-      "paidOnlyBody": "USB 接続の実機へスケッチを書き込む機能は Personal・Commercial・Enterprise ライセンスで利用できます。シミュレータ自体は無料のままです。",
-      "seePlans": "プランを見る",
       "log": {
         "compiling": "書き込み前にスケッチをコンパイルしています...",
         "recompiling": "前回のビルド以降にコードが変更されました。書き込み前に再コンパイルします...",

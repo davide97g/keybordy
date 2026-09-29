@@ -492,9 +492,6 @@
       "retryCompile": "Recompile & flash",
       "cancel": "Cancel",
       "hide": "Hide",
-      "paidOnlyTitle": "Flashing real boards is part of the paid Velxio Desktop license",
-      "paidOnlyBody": "Uploading a sketch to a real USB-attached board is available with a Personal, Commercial or Enterprise license. The simulator itself stays free.",
-      "seePlans": "See plans",
       "log": {
         "compiling": "Compiling the sketch before flashing...",
         "recompiling": "Code changed since the last build — recompiling before flashing...",

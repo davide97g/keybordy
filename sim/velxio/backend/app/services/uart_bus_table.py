@@ -51,9 +51,8 @@ Which unit a chip is on comes from, in this order:
 Owners link a map entry to a registration: a record's `owner` field, else its
 `component_id`, the same identity the tab's registry keys the endpoint by.
 
-Plain Python with no QEMU in it, so the ESP32 worker and the STM32 worker
-(pro/backend/app/pro_boards/stm32_worker.py) share it and it is tested on its
-own (test/backend/unit/test_board_buses_f6_worker_uart.py).
+Plain Python with no QEMU in it, so the ESP32 worker uses it and it is tested
+on its own (test/backend/unit/test_board_buses_f6_worker_uart.py).
 """
 from __future__ import annotations
 

@@ -1,17 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { registerEditorCommand } from '../../lib/editorCommands';
-import { publishCompileOutput } from '../../lib/intellisenseRegistry';
 import { useEditorStore, chipFileGroupId } from '../../store/useEditorStore';
 import { useSimulatorStore, piRerunScript } from '../../store/useSimulatorStore';
-import { decideEngine } from '../../lib/instantEngine';
-import { blockedByBoardGate } from '../../lib/proBoardGate';
 import { useElectricalStore } from '../../store/useElectricalStore';
 import { type VerificationResult } from '../../simulation/verify/circuitVerifier';
 import { verifyCircuitFromStore } from '../../simulation/verify/verifyFromStore';
 import { CircuitVerificationModal } from '../simulator/CircuitVerificationModal';
 import type { BoardKind, LanguageMode } from '../../types/board';
-import { BOARD_KIND_FQBN, BOARD_SUPPORTS_ESPIDF, BOARD_SUPPORTS_MICROPYTHON, fqbnForLanguage, isKnownBoardKind, isPiBoardKind, boardDisplayName } from '../../types/board';
+import { BOARD_KIND_FQBN, BOARD_SUPPORTS_ESPIDF, BOARD_SUPPORTS_MICROPYTHON, fqbnForLanguage, isPiBoardKind, boardDisplayName } from '../../types/board';
 import { compileCode } from '../../services/compilation';
 import { compileOptionsForBoard } from '../../utils/boardCompile';
 import {
@@ -23,7 +20,6 @@ import {
 import { ensureChipWasm, flushChipFileSync } from '../../services/chipFiles';
 import { clearChipDrives } from '../../simulation/customChips/chipPinDrives';
 import { requestElectricalResolve } from '../../simulation/spice/electricalResolveHook';
-import { reportRunEvent } from '../../services/metricsService';
 import { useProjectStore } from '../../store/useProjectStore';
 import { triggerDownloadVlx } from '../../utils/vlxFile';
 import {
@@ -35,20 +31,12 @@ import { InstallLibrariesModal } from '../simulator/InstallLibrariesModal';
 import { mergeSuggestedLibraries } from '../../utils/libraryManifest';
 import { parseCompileResult, isNoiseBuildLine } from '../../utils/compilationLogger';
 import type { CompilationLog, CompileTarget } from '../../utils/compilationLogger';
-import { exportToWokwiZip, retargetBoardWires } from '../../utils/wokwiZip';
+import { exportToWokwiZip } from '../../utils/wokwiZip';
 import { wifiSsidNoteFor } from '../../utils/firmwareWifiNote';
-import { importProjectFile, PROJECT_FILE_ACCEPT } from '../../utils/importProject';
+import { applyWokwiImport, importProjectFile, PROJECT_FILE_ACCEPT } from '../../utils/importProject';
 import { readFirmwareFile } from '../../utils/firmwareLoader';
-import {
-  trackCompileCode,
-  trackRunSimulation,
-  trackStopSimulation,
-  trackResetSimulation,
-  trackOpenLibraryManager,
-} from '../../utils/analytics';
 import './EditorToolbar.css';
 import { ThemeToggle } from '../layout/ThemeToggle';
-import { getResolvedTheme } from '../../lib/theme';
 
 /**
  * Output-console group for circuit pre-flight + runtime faults. Routing these
@@ -238,21 +226,6 @@ export const EditorToolbar = ({
   const [verification, setVerification] = useState<VerificationResult | null>(null);
   const pendingRunRef = useRef<(() => void) | null>(null);
 
-  // Helper: report a Run event to the backend for analytics. Resolves the
-  // FQBN from the board kind so the backend can group by family/fqbn.
-  const reportRun = useCallback(
-    (boardKind: BoardKind | undefined, engine?: 'instant' | 'linux') => {
-      const fqbn = boardKind ? BOARD_KIND_FQBN[boardKind] : null;
-      void reportRunEvent({
-        project_id: currentProject?.id ?? null,
-        board_fqbn: fqbn ?? null,
-        board_kind: boardKind ?? null,
-        example_id: useProjectStore.getState().currentExampleId,
-        engine: engine ?? null,
-      });
-    },
-    [currentProject],
-  );
   const [compiling, setCompiling] = useState(false);
   // True while the pre-flight circuit verification SPICE solve is running.
   // Drives the Run-button spinner so the user gets feedback during the
@@ -459,7 +432,6 @@ export const EditorToolbar = ({
     // after the pre-flight verification logs them, and clearing here would
     // wipe a circuit warning the user just triggered.
     setCompileLogs((prev) => prev.filter((l) => l.target?.id === CIRCUIT_CHECK_TARGET.id));
-    trackCompileCode();
 
     // ── Custom-chip preparation ─────────────────────────────────────────
     // Any custom-chip on the canvas is made "live" here so a single
@@ -634,13 +606,6 @@ export const EditorToolbar = ({
       const resultLogs = parseCompileResult(result, boardLabel, boardTarget, lastStreamedLen > 0);
       setCompileLogs((prev: CompilationLog[]) => [...prev, ...resultLogs]);
 
-      // Intellisense seam: hand the raw compiler text to the overlay so it
-      // can paint file:line markers in the editor. Empty string clears the
-      // markers after a successful build. No-op in OSS.
-      publishCompileOutput(
-        result.success ? '' : [result.stderr, result.error].filter(Boolean).join('\n'),
-      );
-
       if (result.success) {
         const program = result.hex_content ?? result.binary_content ?? null;
         if (program && activeBoardId) {
@@ -759,16 +724,6 @@ export const EditorToolbar = ({
   const handleRun = async (skipVerify = false) => {
     console.log('[handleRun] click', { activeBoardId, running, codeChangedSinceLastCompile });
 
-    // Pro gate, first thing: a run the gate refuses must not compile first.
-    // STM32 builds on the server, and the refusal used to arrive only from
-    // startBoard's backstop AFTER the build — an anonymous or trial-exhausted
-    // user waited for arduino-cli just to be told no. Same verdict as the
-    // backstop (which stays, for the paths that do not come through here).
-    if (activeBoardId && !running) {
-      const gated = boards.find((b) => b.id === activeBoardId);
-      if (gated && blockedByBoardGate(gated.boardKind, 'run')) return;
-    }
-
     // Pre-flight: solve the circuit and check for shorts / overcurrent /
     // overpower. If anything trips we hand control to the modal, which
     // resumes by calling `handleRun(true)` for "Run anyway".
@@ -834,8 +789,6 @@ export const EditorToolbar = ({
 
       // MicroPython mode: stop any running session first, then reload firmware + start
       if (board?.languageMode === 'micropython') {
-        trackRunSimulation(board.boardKind);
-        reportRun(board.boardKind);
 
         // Always stop the current session so the new run gets a clean QEMU boot.
         // This also prevents the double start_esp32 that occurs when the bridge
@@ -888,11 +841,6 @@ export const EditorToolbar = ({
         // re-run-without-reboot on a booted guest). Must stay ABOVE the
         // generic stop-then-boot restart below.
         if (isPiBoardKind(board?.boardKind ?? '')) {
-          trackRunSimulation(board?.boardKind);
-          reportRun(
-            board?.boardKind,
-            decideEngine(activeBoardId, board?.enginePinned).engine,
-          );
           if (board?.running) {
             // Zombie/edge case (Run is normally disabled while running):
             // power-cycle for a clean boot.
@@ -932,8 +880,6 @@ export const EditorToolbar = ({
           if (autoRunAfterCompile.current) {
             autoRunAfterCompile.current = false;
             if (updatedBoard?.compiledProgram) {
-              trackRunSimulation(updatedBoard.boardKind);
-              reportRun(updatedBoard.boardKind);
               console.log('[handleRun] → startBoard', activeBoardId);
               startBoard(activeBoardId);
               setMessage(null);
@@ -956,8 +902,6 @@ export const EditorToolbar = ({
           }
           return;
         }
-        trackRunSimulation(board?.boardKind);
-        reportRun(board?.boardKind);
         console.log('[handleRun] → startBoard (already compiled)', activeBoardId);
         startBoard(activeBoardId);
         setMessage(null);
@@ -974,8 +918,6 @@ export const EditorToolbar = ({
           .boards.find((b) => b.id === activeBoardId);
         if (autoRunAfterCompile.current && updatedBoard?.compiledProgram) {
           autoRunAfterCompile.current = false;
-          trackRunSimulation(updatedBoard.boardKind);
-          reportRun(updatedBoard.boardKind);
           startBoard(activeBoardId);
           setMessage(null);
         } else {
@@ -984,8 +926,6 @@ export const EditorToolbar = ({
         return;
       }
 
-      trackRunSimulation(board?.boardKind);
-      reportRun(board?.boardKind);
       startBoard(activeBoardId);
       setMessage(null);
       return;
@@ -998,23 +938,18 @@ export const EditorToolbar = ({
       const hex = useSimulatorStore.getState().compiledHex;
       if (autoRunAfterCompile.current && hex) {
         autoRunAfterCompile.current = false;
-        trackRunSimulation();
-        reportRun(undefined);
         startSimulation();
         setMessage(null);
       } else {
         autoRunAfterCompile.current = false;
       }
     } else {
-      trackRunSimulation();
-      reportRun(undefined);
       startSimulation();
       setMessage(null);
     }
   };
 
   const handleStop = () => {
-    trackStopSimulation();
     if (isBoardless) {
       // Freeze the chip tick (the paused flag) AND clear the chip's output
       // drives so its LEDs go dark on Stop — not frozen at their last frame.
@@ -1036,7 +971,6 @@ export const EditorToolbar = ({
   };
 
   const handleReset = () => {
-    trackResetSimulation();
     // QEMU-Linux boards: Reset = re-upload the edited files and re-run the
     // script on the live guest (no ~45 s reboot). Mirrors what Reset means
     // elsewhere — restart the program — while Run keeps the standard
@@ -1254,7 +1188,6 @@ export const EditorToolbar = ({
   };
 
   const handleCompileAll = () => {
-    trackCompileCode();
     void compileAllBoards();
   };
 
@@ -1269,12 +1202,6 @@ export const EditorToolbar = ({
     const boardsList = sim.boards;
     const chips = sim.components.filter((c) => c.metadataId === 'custom-chip');
     if (boardsList.length === 0 && chips.length === 0) return;
-
-    // Same gate-before-compile rule as handleRun, for every board that is
-    // about to start. One prompt is enough: the first refused board fires it.
-    for (const b of boardsList) {
-      if (!b.running && blockedByBoardGate(b.boardKind, 'run')) return;
-    }
 
     // Same pre-flight safety check as handleRun — block on shorts / overcurrent
     // before starting every board, with a "Run anyway" escape.
@@ -1320,8 +1247,6 @@ export const EditorToolbar = ({
           const pyFiles = groupFiles.map((f) => ({ name: f.name, content: f.content }));
           await loadMicroPythonProgram(board.id, pyFiles);
         }
-        trackRunSimulation(board.boardKind);
-        reportRun(board.boardKind);
         startBoard(board.id);
       }
     }
@@ -1364,6 +1289,7 @@ export const EditorToolbar = ({
 
   const handleExport = async () => {
     try {
+      flushChipFileSync(); // same reason as the .vlx export above
       const { components, wires, boards, activeBoardId, boardPosition, boardType } =
         useSimulatorStore.getState();
       // The board itself, not the flat legacy mirror. `boardType` only tracks
@@ -1407,113 +1333,6 @@ export const EditorToolbar = ({
       }
     } catch (err) {
       setMessage({ type: 'error', text: 'Export failed.' });
-    }
-  };
-
-  // Phase 3 D3.2 — Schematic screenshot. Pro-tier-gated by the backend.
-  // Same UX pattern as BOM export: everyone can click; 402 redirects to
-  // /pricing. The server-side headless chromium renders the canvas and
-  // returns a PNG, which we trigger a download for.
-  const handleExportScreenshot = async () => {
-    const projectId = currentProject?.id;
-    if (!projectId) {
-      setMessage({ type: 'error', text: 'Save the project before exporting an image.' });
-      return;
-    }
-    setMessage({ type: 'info', text: 'Rendering screenshot — may take 5-10 seconds…' });
-    try {
-      // The render happens in a headless browser on the server, which has
-      // no localStorage and therefore no idea which theme the user is
-      // looking at -- it used to hand back a dark image to someone working
-      // in light mode. Pass the RESOLVED theme so the export matches the
-      // canvas it was taken from.
-      const resp = await fetch(
-        `/api/pro/projects/${projectId}/screenshot.png?theme=${getResolvedTheme()}`,
-        { credentials: 'include' },
-      );
-      if (resp.status === 402) {
-        // Fire the in-place upgrade modal instead of bouncing to /pricing —
-        // keeps the user in the editor with full context. The pro overlay's
-        // UpgradeGate listens for this event and opens UpgradePromptModal.
-        window.dispatchEvent(new CustomEvent('velxio-pro-upgrade-prompt', {
-          detail: { componentName: 'Schematic screenshot export' },
-        }));
-        return;
-      }
-      if (resp.status === 401) {
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-        return;
-      }
-      if (resp.status === 422) {
-        setMessage({ type: 'error', text: 'Add at least one component to export an image.' });
-        return;
-      }
-      if (!resp.ok) {
-        setMessage({ type: 'error', text: 'Screenshot export failed.' });
-        return;
-      }
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const cd = resp.headers.get('Content-Disposition') || '';
-      const m = /filename="?([^"]+)"?/.exec(cd);
-      a.download = m ? m[1] : `velxio-${projectId}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      setMessage({ type: 'success', text: 'Screenshot downloaded.' });
-    } catch {
-      setMessage({ type: 'error', text: 'Screenshot export failed.' });
-    }
-  };
-
-  // Phase 3 D3.1 — BOM export. Pro-tier-gated by the backend (402 if not pro).
-  // We let everyone click; the 402 response feeds the upgrade prompt below
-  // so free/maker users hit the funnel naturally instead of an obviously-
-  // locked button (which they'd just dismiss).
-  const handleExportBom = async () => {
-    const projectId = currentProject?.id;
-    if (!projectId) {
-      setMessage({ type: 'error', text: 'Save the project before exporting a BOM.' });
-      return;
-    }
-    try {
-      const resp = await fetch(`/api/pro/projects/${projectId}/bom.csv`, {
-        credentials: 'include',
-      });
-      if (resp.status === 402) {
-        // Fire the in-place upgrade modal instead of bouncing to /pricing —
-        // keeps the user in the editor with full context. The pro overlay's
-        // UpgradeGate listens for this event and opens UpgradePromptModal.
-        window.dispatchEvent(new CustomEvent('velxio-pro-upgrade-prompt', {
-          detail: { componentName: 'BOM export' },
-        }));
-        return;
-      }
-      if (resp.status === 401) {
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-        return;
-      }
-      if (!resp.ok) {
-        setMessage({ type: 'error', text: 'BOM export failed.' });
-        return;
-      }
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      // Filename comes from Content-Disposition; pick a fallback.
-      const cd = resp.headers.get('Content-Disposition') || '';
-      const m = /filename="?([^"]+)"?/.exec(cd);
-      a.download = m ? m[1] : `bom-${projectId}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      setMessage({ type: 'error', text: 'BOM export failed.' });
     }
   };
 
@@ -1582,61 +1401,7 @@ export const EditorToolbar = ({
       }
       // .zip path: apply the parsed payload to the stores ourselves, then
       // surface any missing libraries via the existing install modal.
-      const { loadFiles } = useEditorStore.getState();
-      const { setComponents, setWires, setBoardType, setBoardPosition, stopSimulation } =
-        useSimulatorStore.getState();
-      stopSimulation();
-      // A board kind this build does not know is left alone rather than
-      // coerced. The importer no longer answers 'arduino-uno' for everything
-      // it fails to recognise (#268), so say what happened instead of swapping
-      // the user's board for one the file never mentioned.
-      const importWarnings = [...result.warnings];
-      // Put the board on the canvas. `setBoardType` re-kinds the ACTIVE board,
-      // so on an empty canvas it changed nothing and the project arrived with
-      // its circuit and no chip — the reporter's "the board isn't recognized"
-      // (#268). Adding one when there is none is the other half of the fix.
-      let boardId: string | null = null;
-      if (result.boardType && isKnownBoardKind(result.boardType)) {
-        const sim = useSimulatorStore.getState();
-        const current =
-          sim.boards.find((b) => b.id === sim.activeBoardId) ?? sim.boards[0] ?? null;
-        if (current) {
-          setBoardType(result.boardType);
-          boardId = current.id;
-        } else {
-          boardId = sim.addBoard(
-            result.boardType,
-            result.boardPosition.x,
-            result.boardPosition.y,
-          );
-          // addBoard promotes the first board to active but does not sync the
-          // flat legacy fields; setActiveBoardId is where that happens, and
-          // whatever still reads `boardType` would otherwise see the board
-          // this import just replaced.
-          useSimulatorStore.getState().setActiveBoardId(boardId);
-        }
-      } else if (result.boardType) {
-        // Nothing to swap the board for, so the circuit lands on whatever is
-        // already there — and its wires have to be told, or the message would
-        // be describing something that did not happen.
-        const sim = useSimulatorStore.getState();
-        boardId = (sim.boards.find((b) => b.id === sim.activeBoardId) ?? sim.boards[0])?.id ?? null;
-        importWarnings.push(
-          boardId
-            ? `This project is for a "${result.boardType}" board, which this build does not have. The circuit was imported onto the current board.`
-            : `This project is for a "${result.boardType}" board, which this build does not have, and there is no board on the canvas to put the circuit on.`,
-        );
-      }
-      setBoardPosition(result.boardPosition);
-      setComponents(result.components);
-      // The wires name the board by its kind; the board on the canvas may
-      // answer to something else.
-      setWires(
-        boardId && result.boardType
-          ? retargetBoardWires(result.wires, result.boardType, boardId)
-          : result.wires,
-      );
-      if (result.files.length > 0) loadFiles(result.files);
+      const importWarnings = applyWokwiImport(result);
       setMessage(
         importWarnings.length > 0
           ? { type: 'error', text: `Imported ${file.name} — ${importWarnings.join(' ')}` }
@@ -1658,24 +1423,7 @@ export const EditorToolbar = ({
     import: () => importInputRef.current?.click(),
     export: () => void handleExport(),
     exportVlx: () => handleExportVlx(),
-    bom: () => void handleExportBom(),
-    screenshot: () => void handleExportScreenshot(),
     firmware: () => firmwareInputRef.current?.click(),
-    // Pro actions fire the same window events the old "..." menu items
-    // fired; without the overlay they are silent no-ops, which is fine —
-    // OSS builds cannot have linked repos or shared projects anyway.
-    share: () =>
-      window.dispatchEvent(new CustomEvent('velxio-pro-share-prompt', {
-        detail: { projectId: currentProject?.id ?? null },
-      })),
-    githubSync: () =>
-      window.dispatchEvent(new CustomEvent('velxio-pro-github-sync-prompt', {
-        detail: { projectId: currentProject?.id ?? null },
-      })),
-    record: () =>
-      window.dispatchEvent(new CustomEvent('velxio-pro-replay-record-toggle', {
-        detail: { projectId: currentProject?.id ?? null },
-      })),
     compile: () => void handleCompile(),
     run: () => void handleRun(),
     stop: () => handleStop(),
@@ -1689,12 +1437,7 @@ export const EditorToolbar = ({
       registerEditorCommand('project.import', () => menuCommandsRef.current.import()),
       registerEditorCommand('project.export', () => menuCommandsRef.current.export()),
       registerEditorCommand('project.exportVlx', () => menuCommandsRef.current.exportVlx()),
-      registerEditorCommand('project.exportBom', () => menuCommandsRef.current.bom()),
-      registerEditorCommand('project.exportScreenshot', () => menuCommandsRef.current.screenshot()),
       registerEditorCommand('firmware.upload', () => menuCommandsRef.current.firmware()),
-      registerEditorCommand('project.share', () => menuCommandsRef.current.share()),
-      registerEditorCommand('project.githubSync', () => menuCommandsRef.current.githubSync()),
-      registerEditorCommand('sim.record', () => menuCommandsRef.current.record()),
       registerEditorCommand('sim.compile', () => menuCommandsRef.current.compile()),
       registerEditorCommand('sim.run', () => menuCommandsRef.current.run()),
       registerEditorCommand('sim.stop', () => menuCommandsRef.current.stop()),
@@ -2026,7 +1769,6 @@ export const EditorToolbar = ({
             {/* Library Manager — always visible with label */}
             <button
               onClick={() => {
-                trackOpenLibraryManager();
                 setLibManagerOpen(true);
               }}
               className="tb-btn-libraries"
@@ -2114,7 +1856,6 @@ export const EditorToolbar = ({
           <button
             className="tb-lib-hint-btn"
             onClick={() => {
-              trackOpenLibraryManager();
               setLibManagerOpen(true);
               setMissingLibHint(false);
             }}

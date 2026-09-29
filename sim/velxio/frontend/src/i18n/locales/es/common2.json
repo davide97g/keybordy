@@ -465,9 +465,6 @@
       "retryCompile": "Recompilar y grabar",
       "cancel": "Cancelar",
       "hide": "Ocultar",
-      "paidOnlyTitle": "Grabar placas reales forma parte de la licencia de pago de Velxio Desktop",
-      "paidOnlyBody": "Subir un sketch a una placa real conectada por USB está disponible con una licencia Personal, Commercial o Enterprise. El simulador sigue siendo gratis.",
-      "seePlans": "Ver planes",
       "log": {
         "compiling": "Compilando el sketch antes de grabar...",
         "recompiling": "El código cambió desde la última compilación: recompilando antes de grabar...",

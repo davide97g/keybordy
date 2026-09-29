@@ -1,19 +1,6 @@
 #!/bin/bash
 set -e
 
-# Auto-generate SECRET_KEY if not provided so the app boots out-of-the-box
-# without requiring the user to create backend/.env first. Persists in the
-# data volume so JWTs survive container restarts.
-if [ -z "$SECRET_KEY" ]; then
-    SECRET_FILE="${DATA_DIR:-/app/data}/.secret_key"
-    mkdir -p "$(dirname "$SECRET_FILE")"
-    if [ ! -f "$SECRET_FILE" ]; then
-        echo "🔑 No SECRET_KEY provided — generating one (saved to $SECRET_FILE)"
-        head -c 48 /dev/urandom | base64 | tr -d '\n' > "$SECRET_FILE"
-    fi
-    export SECRET_KEY="$(cat "$SECRET_FILE")"
-fi
-
 # Ensure arduino-cli config and board manager URLs are set up
 if [ ! -f /root/.arduino15/arduino-cli.yaml ]; then
     echo "📦 Initializing arduino-cli config..."
@@ -28,17 +15,6 @@ if [ ! -f /root/.arduino15/arduino-cli.yaml ]; then
     # See https://github.com/SpenceKonde/ATTinyCore
     arduino-cli config add board_manager.additional_urls \
         http://drazzy.com/package_drazzy.com_index.json 2>/dev/null || true
-    # STM32duino (STMicroelectronics:stm32) — needed for STM32 Blue/Black Pill
-    # FQBNs. Without this URL `core install STMicroelectronics:stm32` fails with
-    #   "Platform 'STMicroelectronics:stm32' not found: platform not installed".
-    # Registered only where STM32 can actually run: STM32 emulation is a paid
-    # feature of velxio.dev and Velxio Desktop, and the self-hosted image has no
-    # libqemu-arm, so the ~350 MB toolchain would only ever be downloaded to
-    # compile sketches nothing can execute. See install_stm32_core below.
-    if [ "${ENABLE_PRO:-}" = "true" ] || [ "${VELXIO_INSTALL_STM32:-}" = "1" ]; then
-        arduino-cli config add board_manager.additional_urls \
-            https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json 2>/dev/null || true
-    fi
 fi
 
 # Seed board-manager indexes vendored into the image (issue #254).
@@ -60,20 +36,12 @@ if [ -d /opt/arduino15-seed ]; then
 fi
 
 # Install missing cores.
-# ESP32 builds use ESP-IDF 5.5.4 + arduino-esp32 3.3.10 (the velxio.dev pair);
-# the arduino-cli 3.x core below is only the fallback when ESP-IDF is absent.
+# ESP32 builds use ESP-IDF 5.5.4 + arduino-esp32 3.3.10; the arduino-cli 3.x
+# core below is only the fallback when ESP-IDF is absent.
 arduino-cli core update-index 2>/dev/null || true
 arduino-cli core install arduino:avr 2>/dev/null || true
 arduino-cli core install rp2040:rp2040 2>/dev/null || true
 arduino-cli core install ATTinyCore:avr@1.4.1 2>/dev/null || true
-# STM32 (STMicroelectronics:stm32) is paid-only (velxio.dev + Velxio Desktop),
-# and the OSS image cannot emulate it at all, so its toolchain (xpack gcc
-# 271 MiB + core + SVD, ~350 MiB from GitHub releases) is not pulled here.
-# The pro image sets ENABLE_PRO=true; a self-hoster who really wants the
-# compiler can opt in with VELXIO_INSTALL_STM32=1 (compile only, no run).
-if [ "${ENABLE_PRO:-}" = "true" ] || [ "${VELXIO_INSTALL_STM32:-}" = "1" ]; then
-    arduino-cli core install STMicroelectronics:stm32 2>/dev/null || true
-fi
 
 # ESP32 compilation now uses ESP-IDF instead of arduino-cli.
 # arduino-cli ESP32 core is no longer needed for QEMU-compatible builds.
@@ -86,7 +54,7 @@ else
     echo "⚠️  ESP-IDF not found — falling back to arduino-cli for ESP32"
     # 3.x core (IDF 5.5 based), matching the arduino-esp32 3.3.10 the image
     # builds with under ESP-IDF; 3.3.9 is the newest 3.3.x the board manager
-    # index carries. Sketches written on velxio.dev use 3.x-only APIs.
+    # index carries. Sketches written for the 3.x core use 3.x-only APIs.
     ESP32_CORE_VERSION=3.3.9
     ESP32_VER=$(arduino-cli core list 2>/dev/null | grep esp32:esp32 | awk '{print $2}')
     if [ -z "$ESP32_VER" ]; then

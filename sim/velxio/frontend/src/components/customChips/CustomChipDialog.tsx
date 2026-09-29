@@ -87,18 +87,6 @@ export const CustomChipDialog = ({ chipName, onClose, onPick }: CustomChipDialog
         </div>
 
         <div style={footerStyle}>
-          {/* Extension point for the velxio-prod overlay (e.g. a "Create with
-              AI" button). Empty in OSS. The overlay reads `velxioCloseDialog`
-              off this element to dismiss the dialog after it acts. */}
-          <div
-            data-velxio-slot="custom-chip-actions"
-            style={{ display: 'contents' }}
-            ref={(el) => {
-              if (el) {
-                (el as unknown as { velxioCloseDialog?: () => void }).velxioCloseDialog = onClose;
-              }
-            }}
-          />
           <div style={{ flex: 1 }} />
           <button style={cancelBtn} onClick={onClose}>{t('editor.customChip.cancel')}</button>
         </div>

@@ -16,27 +16,18 @@
  *     landing with preview + description, `/example/<id>` (singular)
  *     is the live editor with the example pre-loaded.
  *
- * If the user starts editing and clicks "Save", the pro overlay's
- * save modal asks for a name and creates a NEW project (no project
- * id is set on useProjectStore, so it can't overwrite anything).
  */
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { exampleProjects, subscribeProExamples,
-  areProExamplesSettled, getProExamplesVersion } from '../data/examples';
+import { exampleProjects } from '../data/examples';
 import { loadExample, type LibraryInstallProgress } from '../utils/loadExample';
 import { EditorPage } from './EditorPage';
 import { AppHeader } from '../components/layout/AppHeader';
-import { useSEO } from '../utils/useSEO';
-import { starterBoard, starterTitle, starterDescription } from '../data/starters';
-
-const DOMAIN = 'https://velxio.dev';
+import { useDocumentTitle } from '../utils/useDocumentTitle';
+import { starterBoard, starterTitle } from '../data/starters';
 
 export const ExampleEditorPage: React.FC = () => {
-  // Re-render when the pro overlay registers late examples (dynamic import).
-  useSyncExternalStore(subscribeProExamples, getProExamplesVersion, getProExamplesVersion);
-
   const { exampleId } = useParams<{ exampleId: string }>();
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
@@ -53,36 +44,11 @@ export const ExampleEditorPage: React.FC = () => {
   // Starter examples are the "New <board> project" entry points: their
   // head says the action, not the sketch (the gallery keeps the sketch title).
   const board = starterBoard(example?.id);
-  useSEO({
-    title: board
-      ? starterTitle(board)
-      : example
-        ? `${example.title} — Velxio Arduino Simulator`
-        : 'Example — Velxio',
-    description: board
-      ? starterDescription(board)
-      : (example?.description ?? 'Arduino example running on Velxio.'),
-    url: example
-      ? `${DOMAIN}/example/${example.id}`
-      : `${DOMAIN}/examples`,
-  });
-
-  const settled = useSyncExternalStore(
-    subscribeProExamples,
-    areProExamplesSettled,
-    areProExamplesSettled,
+  useDocumentTitle(
+    board ? starterTitle(board) : example ? `${example.title} — Velxio` : 'Example — Velxio',
   );
 
   useEffect(() => {
-    // `settled` is deliberately NOT a dependency. A direct link to a pro
-    // example can begin loading the moment the overlay registers it — one
-    // microtask BEFORE the overlay's import promise settles. With `settled`
-    // in the deps, that flip re-fired the effect mid-load: the cleanup set
-    // `cancelled`, setReady was skipped, and the re-run hit the loadedIdRef
-    // guard and returned — the page hung on "Loading example…" forever
-    // (found with the reSpeaker example; any /example/<pro-id> direct URL
-    // could lose this race). The 404 decision lives in the render below,
-    // where reading `settled` doesn't cancel anything.
     if (!exampleId || !example) return;
     if (loadedIdRef.current === exampleId) return;
     loadedIdRef.current = exampleId;
@@ -118,10 +84,7 @@ export const ExampleEditorPage: React.FC = () => {
     };
   }, [exampleId, example]);
 
-  // "Not in the gallery" and "not in the gallery YET" are different answers
-  // while the pro overlay's dynamic import is still in flight: only once the
-  // registry settles is a missing id really a 404.
-  if (error || !exampleId || (settled && !example)) {
+  if (error || !exampleId || !example) {
     return (
       <div
         style={{

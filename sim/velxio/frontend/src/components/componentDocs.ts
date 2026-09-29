@@ -107,23 +107,9 @@ export function productLinkKind(url: string): 'product' | 'docs' {
   }
 }
 
-/**
- * Decorate a datasheet Buy/Product-page URL with UTM attribution so the
- * vendor sees the referral came from Velxio. `componentId` lands in
- * utm_content so partner dashboards can tell WHICH part drove the visit.
- * Existing query params on the vendor URL are preserved.
- */
-export function productPageHref(url: string, componentId: string): string {
-  try {
-    const u = new URL(url);
-    u.searchParams.set('utm_source', 'velxio');
-    u.searchParams.set('utm_medium', 'simulator');
-    u.searchParams.set('utm_campaign', 'datasheet');
-    u.searchParams.set('utm_content', componentId);
-    return u.toString();
-  } catch {
-    return url;
-  }
+/** The vendor link as given: no tracking parameters added. */
+export function productPageHref(url: string, _componentId: string): string {
+  return url;
 }
 
 /**

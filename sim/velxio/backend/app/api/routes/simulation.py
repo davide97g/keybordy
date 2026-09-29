@@ -3,11 +3,7 @@ import logging
 import socket
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.esp_qemu_manager import esp_qemu_manager
-from app.services.board_access import PRO_BOARD_MESSAGE
 from app.services.esp32_lib_manager import esp_lib_manager
-from app.core.hooks import dispatch_ws_sim_message, dispatch_ws_sim_disconnect
-
-
 
 
 def _find_free_port() -> int:
@@ -73,41 +69,8 @@ async def simulation_websocket(websocket: WebSocket, client_id: str):
             msg_type: str = message.get('type', '')
             msg_data: dict = message.get('data', {})
 
-            # ── QEMU board lane: Raspberry Pi Linux + STM32 ──────────────
-            # Both families are paid-only (velxio.dev with a paid plan, or
-            # Velxio Desktop with a paid licence), so their emulators are not
-            # part of the open-source image at all: qemu_manager, boot_images
-            # and stm32_lib_manager live in an optional `app.pro_boards`
-            # package that registers itself through register_ws_sim_handler.
-            # With no extension installed these messages are ignored and the
-            # boards never start, which is the intent — the frontend already
-            # frames them as a Pro feature (board_access.PRO_BOARD_MESSAGE).
-            #
-            # `serial_input`, `gpio_in` and `pin_change` read as generic but
-            # have only ever driven the Linux guests; the ESP32 and Pico lanes
-            # use their own prefixed message names.
-            if msg_type in (
-                'start_pi', 'stop_pi', 'serial_input', 'gpio_in', 'pin_change',
-                'pi_sensor_state', 'pi_uart_rx', 'pi_attach_slave', 'pi_detach_slave',
-                'pi_bus_reply', 'pi_bus_topology', 'pi_bus_regs', 'pi_bus_attrs',
-                'pi_sensor_attach', 'pi_sensor_update', 'pi_sensor_detach',
-                'start_stm32', 'stop_stm32', 'stm32_load_firmware', 'stm32_gpio_in',
-                'stm32_serial_input', 'stm32_sensor_attach', 'stm32_sensor_update',
-                'stm32_sensor_detach', 'stm32_bus_map', 'stm32_bus_attrs',
-            ):
-                handled = await dispatch_ws_sim_message(
-                    websocket, client_id, msg_type, msg_data, qemu_callback,
-                )
-                if not handled and msg_type in ('start_pi', 'start_stm32'):
-                    # No extension installed: say so instead of going quiet.
-                    # Silence here reads as a hung Run button — the user gets
-                    # no error, no serial output and no stop. Only the two
-                    # start messages answer; the rest of the lane's traffic
-                    # would just repeat the same line.
-                    await qemu_callback('error', {'message': PRO_BOARD_MESSAGE})
-
             # ── ESP32 lifecycle ──────────────────────────────────────────
-            elif msg_type == 'start_esp32':
+            if msg_type == 'start_esp32':
                 board        = msg_data.get('board', 'esp32')
                 firmware_b64 = msg_data.get('firmware_b64')
                 sensors      = msg_data.get('sensors', [])
@@ -147,16 +110,6 @@ async def simulation_websocket(websocket: WebSocket, client_id: str):
                         esp_lib_manager.load_firmware(client_id, firmware_b64)
                     else:
                         esp_qemu_manager.load_firmware(client_id, firmware_b64)
-
-            # ── Pico W (CYW43439) WiFi bridge — overlay-provided ─────────
-            # The chip-side gSPI emulator lives in the frontend; the userspace
-            # network stack AND the paid-plan gate live in the velxio-prod
-            # overlay (registered via register_ws_sim_handler). OSS has no
-            # handler, so these messages are ignored and a Pico W has no WiFi.
-            elif msg_type in ('start_picow', 'stop_picow', 'picow_packet_out'):
-                await dispatch_ws_sim_message(
-                    websocket, client_id, msg_type, msg_data, qemu_callback,
-                )
 
             # ── ESP32 serial (UART 0 / 1 / 2) ───────────────────────────
             elif msg_type == 'esp32_serial_input':
@@ -340,9 +293,6 @@ async def simulation_websocket(websocket: WebSocket, client_id: str):
         # A newer simulation_websocket may have already connected and replaced us.
         if manager.active_connections.get(client_id) is websocket:
             manager.disconnect(client_id)
-            # Tear down whatever an extension started for this client (a Pi
-            # guest is a real QEMU child holding 1-2 GB, so this must run).
-            await dispatch_ws_sim_disconnect(client_id)
             await esp_lib_manager.stop_instance(client_id)
             esp_qemu_manager.stop_instance(client_id)
         else:
@@ -351,8 +301,5 @@ async def simulation_websocket(websocket: WebSocket, client_id: str):
         logger.error('WebSocket error for %s: %s', client_id, exc)
         if manager.active_connections.get(client_id) is websocket:
             manager.disconnect(client_id)
-            # Tear down whatever an extension started for this client (a Pi
-            # guest is a real QEMU child holding 1-2 GB, so this must run).
-            await dispatch_ws_sim_disconnect(client_id)
             await esp_lib_manager.stop_instance(client_id)
             esp_qemu_manager.stop_instance(client_id)

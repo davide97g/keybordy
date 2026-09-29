@@ -22,6 +22,9 @@
 import { importVlxFile, VlxParseError } from './vlxFile';
 import { importFromWokwiZip } from './wokwiZip';
 import type { ImportResult } from './wokwiZip';
+import { isKnownBoardKind, type BoardInstance } from '../types/board';
+import { useSimulatorStore } from '../store/useSimulatorStore';
+import { useProjectStore } from '../store/useProjectStore';
 
 /**
  * Common result shape: `kind` tells callers which path ran, so they can
@@ -75,3 +78,38 @@ export async function importProjectFile(file: File): Promise<ProjectImportResult
 
 /** File-input `accept` attribute that pairs with importProjectFile. */
 export const PROJECT_FILE_ACCEPT = '.vlx,.zip,application/json,application/zip';
+
+/**
+ * Replace the workspace with an imported Wokwi project: its board (id = its
+ * kind, which is what the importer's wires name), sketch files, parts and
+ * wires. Returns the import's warnings, plus one when the board kind is not
+ * in this build. Libraries ride on the board; installing them is the
+ * caller's call (the toolbar asks, the URL loader installs).
+ */
+export function applyWokwiImport(result: ImportResult): string[] {
+  const warnings = [...result.warnings];
+  const kind = result.boardType && isKnownBoardKind(result.boardType) ? result.boardType : null;
+  if (result.boardType && !kind) {
+    warnings.push(
+      `This project is for a "${result.boardType}" board, which this build does not have. The circuit was imported without it.`,
+    );
+  }
+  useProjectStore.getState().clearCurrentProject();
+  const board = kind
+    ? ({
+        id: kind,
+        boardKind: kind,
+        x: result.boardPosition.x,
+        y: result.boardPosition.y,
+        libraries: result.libraries,
+      } as BoardInstance)
+    : null;
+  useSimulatorStore.getState().loadProjectState({
+    boards: board ? [board] : [],
+    fileGroups: board ? { [`group-${board.id}`]: result.files } : {},
+    components: result.components,
+    wires: result.wires,
+    activeBoardId: board?.id ?? null,
+  });
+  return warnings;
+}

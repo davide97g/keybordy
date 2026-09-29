@@ -4,29 +4,19 @@
  * Shown (a) on a pristine `/editor` visit (over an emptied canvas), and
  * (b) from the "New workspace" button / File menu entry. Offers a blank
  * workspace plus a ready-to-run Blink starter per board family — Arduino,
- * ESP32 (one card per chip generation, XIAO variant preferred), M5Stack
- * (overlay-registered all-in-ones, listed ahead of STM32), STM32, Raspberry
- * Pi — each card carrying the same circuit thumbnail the examples gallery
+ * ESP32 (one card per chip generation, XIAO variant preferred), Raspberry
+ * Pi Pico — each card carrying the same circuit thumbnail the examples gallery
  * uses (/examples-thumbs/<id>.webp, CircuitPreview fallback).
  *
  * Selecting a board loads its gallery Blink example when one exists (full
  * wiring: 220Ω resistor + LED); boards without one get a fresh board whose
- * default sketch blinks the on-board LED. Pro-gated boards (STM32 + QEMU
- * Raspberry Pi) carry the same PRO pill as the component picker and go
- * through the same board-gate seam ('add' action) before anything is created.
+ * default sketch blinks the on-board LED.
  */
-import React, { useEffect, useMemo, useSyncExternalStore } from 'react';
+import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { BoardKind } from '../../types/board';
 import { BOARD_KIND_LABELS } from '../../types/board';
-import { blockedByBoardGate, isProBoardKind } from '../../lib/proBoardGate';
-import {
-  listProBoards,
-  subscribeProBoards,
-  getProBoardsVersion,
-  type ProBoardDef,
-} from '../../lib/proBoardRegistry';
 import { useSimulatorStore, DEFAULT_BOARD_POSITION } from '../../store/useSimulatorStore';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useEditorStore } from '../../store/useEditorStore';
@@ -34,7 +24,6 @@ import { getLocaleFromPath, localizedPath } from '../../i18n/path';
 import { loadExample } from '../../utils/loadExample';
 import type { ExampleProject } from '../../data/examples';
 import { ExampleThumbnail } from '../examples/ExampleThumbnail';
-import { trackSelectBoard } from '../../utils/analytics';
 import './NewProjectDialog.css';
 
 interface NewProjectDialogProps {
@@ -52,30 +41,8 @@ const BOARD_BLURBS: Record<string, string> = {
   'esp32-cam': 'ESP32 + OV2640 camera, streams to LCD (QEMU)',
   'xiao-esp32-s3': 'Seeed XIAO tiny form, 8MB flash+PSRAM (QEMU)',
   'xiao-esp32-c3': 'Seeed XIAO ESP32-C3 mini board (QEMU)',
-  'stm32-bluepill': 'STM32F103C8 Cortex-M3, 64KB flash, 37 GPIO (QEMU)',
-  'stm32-blackpill': 'STM32F411CE Cortex-M4, 512KB flash, 50 GPIO (QEMU)',
-  'stm32-bluepill-f103cb': 'STM32F103CB Cortex-M3, 128KB flash, 37 GPIO (QEMU)',
-  'stm32-blackpill-f401': 'STM32F401CE Cortex-M4, 512KB flash, 50 GPIO (QEMU)',
-  'stm32-f4-discovery': 'STM32F407VG Cortex-M4, 1MB flash, 4 onboard LEDs (QEMU)',
-  'stm32-olimex-h405': 'Olimex STM32-H405, F405RG Cortex-M4, 1MB flash (QEMU)',
-  'stm32-netduino-plus2': 'Netduino Plus 2, STM32F405 Cortex-M4 (QEMU)',
-  'stm32-netduino2': 'Netduino 2, STM32F205 Cortex-M3 (QEMU, serial)',
   'raspberry-pi-pico': 'RP2040 dual-core Cortex-M0+',
-  'raspberry-pi-3': 'ARM64 Cortex-A53 quad-core, Linux/Python (QEMU)',
-  'raspberry-pi-4': 'ARM64 Cortex-A72 quad-core, Linux/Python (QEMU)',
-  'raspberry-pi-5': 'ARM64 Cortex-A76 quad-core + RP1 I/O, Linux/Python (QEMU)',
 };
-
-const STM32_BOARDS: BoardKind[] = [
-  'stm32-bluepill',
-  'stm32-blackpill',
-  'stm32-bluepill-f103cb',
-  'stm32-blackpill-f401',
-  'stm32-f4-discovery',
-  'stm32-olimex-h405',
-  'stm32-netduino-plus2',
-  'stm32-netduino2',
-];
 
 /**
  * Starter-card thumbnail: reuse the gallery's convention-based thumbs
@@ -137,36 +104,6 @@ const PREFERRED_BLINK_EXAMPLE: Record<string, string> = {
   'esp32-c3': 'c3-blink',
   'esp32-c6': 'c6-blink',
   'raspberry-pi-pico': 'pico-blink',
-  'raspberry-pi-3': 'pi3-blink-led',
-  'xiao-rp2040': 'xiao-rp2040-blink',
-  'xiao-esp32c6': 'xiao-esp32c6-blink',
-  'stm32-bluepill': 'stm32-bluepill-blink',
-  'stm32-blackpill': 'stm32-blackpill-blink',
-  'stm32-bluepill-f103cb': 'stm32-bluepill-f103cb-blink',
-  'stm32-blackpill-f401': 'stm32-blackpill-f401-blink',
-  'stm32-f4-discovery': 'stm32-f4-discovery-blink',
-  'stm32-olimex-h405': 'stm32-olimex-h405-blink',
-  'stm32-netduino-plus2': 'stm32-netduino-plus2-blink',
-  // M5Stack all-in-ones (overlay kinds): no LED to blink — the on-LCD hello
-  // is the first run. Both ids carry a captured gallery thumb.
-  'cardputer-adv': 'cardputer-adv-hello',
-  'm5stack-core': 'm5stack-core-m5-helloworld',
-  // Partner boards (overlay kinds), one representative first-run each. The
-  // Stellar/Badger entries are REQUIRED, not just preferred: their gallery
-  // examples use `boards[]` + boardFilter, which the generic single-board
-  // search above never matches.
-  'xiao-esp32s3-sense': 'xiao-esp32s3-sense-hello',
-  'unihiker-m10': 'unihiker-blink-p2',
-  'pimoroni-pico-plus-2w': 'pimoroni-pico-plus-2w-blink',
-  'badger-2350': 'badger-2350-badgeos',
-  'stellar-unicorn': 'stellar-unicorn-rainbow',
-  // Espressif devkits — launch-embargoed; cards appear when the boards do.
-  'esp32-c3-lcdkit': 'esp32-c3-lcdkit-knob-dial',
-  'esp32-s3-eye': 'esp32-s3-eye-camera-lcd',
-  'esp-vocat': 'esp-vocat-face',
-  'esp-sensairshuttle': 'esp-sensair-lcd-dash',
-  'esp32-p4': 'esp32-p4-blink',
-  'esp32-p4-preview': 'esp32-p4-preview-blink',
 };
 
 /** Dynamic import keeps the (large) gallery data out of the editor bundle
@@ -229,17 +166,9 @@ export interface StarterSection {
   entries: Array<{ kind: string; blurb: string }>;
 }
 
-/**
- * The card sections, in display order. Overlay-registered kinds only exist
- * when the private overlay mounted — an OSS build simply doesn't show those
- * cards, and a section left with no entries is not rendered at all.
- */
-export function buildStarterSections(defs: ProBoardDef[]): StarterSection[] {
+/** The card sections, in display order. */
+export function buildStarterSections(): StarterSection[] {
   const oss = (k: BoardKind) => ({ kind: k as string, blurb: BOARD_BLURBS[k] ?? '' });
-  const pro = (k: string) => {
-    const d = defs.find((x) => x.kind === k);
-    return d ? [{ kind: d.kind, blurb: d.description }] : [];
-  };
   return [
     {
       title: 'Arduino',
@@ -251,82 +180,19 @@ export function buildStarterSections(defs: ProBoardDef[]): StarterSection[] {
       ],
     },
     // One card per ESP32 chip generation, XIAO variant preferred where
-    // Seeed makes one: classic → DevKit V1, S3/C3 → XIAO, C6 → XIAO (overlay).
-    // The S3 Sense sits here next to its sibling — a separate Seeed section
-    // would repeat a brand this section already carries (operator call,
-    // 2026-08-28).
+    // Seeed makes one: classic → DevKit V1, S3/C3 → XIAO.
     {
       title: 'ESP32',
-      entries: [
-        oss('esp32'),
-        oss('esp32-cam'),
-        oss('xiao-esp32-s3'),
-        ...pro('xiao-esp32s3-sense'),
-        oss('xiao-esp32-c3'),
-        ...pro('xiao-esp32c6'),
-      ],
+      entries: [oss('esp32'), oss('esp32-cam'), oss('xiao-esp32-s3'), oss('xiao-esp32-c3')],
     },
-    // M5Stack all-in-ones (overlay): ahead of STM32 by operator request —
-    // they run on Free and are a friendlier first pick than the Pro-gated
-    // STM32 family. Cardputer first, then the Core.
-    { title: 'M5Stack', entries: [...pro('cardputer-adv'), ...pro('m5stack-core')] },
-    // Hardware partners (overlay kinds, same shape as M5Stack): each section
-    // lists only the boards the overlay actually registered, so an OSS build
-    // and launch-embargoed items simply render nothing. Seeed gets no section
-    // of its own — its boards live in the chip-family sections above.
-    { title: 'DFRobot', entries: [...pro('unihiker-m10')] },
-    {
-      title: 'Pimoroni',
-      entries: [
-        ...pro('pimoroni-pico-plus-2w'),
-        ...pro('badger-2350'),
-        ...pro('stellar-unicorn'),
-      ],
-    },
-    {
-      title: 'Espressif',
-      entries: [
-        ...pro('esp32-c3-lcdkit'),
-        ...pro('esp32-s3-eye'),
-        ...pro('esp-vocat'),
-        ...pro('esp32-p4'),
-        ...pro('esp32-p4-preview'),
-        ...pro('esp-sensairshuttle'),
-      ],
-    },
-    { title: 'STM32', entries: STM32_BOARDS.map(oss) },
-    {
-      title: 'Raspberry Pi',
-      entries: [
-        oss('raspberry-pi-pico'),
-        ...pro('xiao-rp2040'),
-        oss('raspberry-pi-3'),
-        oss('raspberry-pi-4'),
-        oss('raspberry-pi-5'),
-      ],
-    },
+    { title: 'Raspberry Pi', entries: [oss('raspberry-pi-pico')] },
   ];
 }
 
-const ProPill: React.FC = () => (
-  <span className="new-project-pro" title="Pro board — you can place and wire it; running it depends on your plan">
-    PRO
-  </span>
-);
+const SECTIONS = buildStarterSections();
 
 export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation();
-
-  // Late-overlay registrations (the @pro import is dynamic) must re-render an
-  // already-mounted dialog — same contract as the component picker.
-  const proBoardsVersion = useSyncExternalStore(
-    subscribeProBoards,
-    getProBoardsVersion,
-    getProBoardsVersion,
-  );
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const sections = useMemo(() => buildStarterSections(listProBoards()), [proBoardsVersion]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -340,14 +206,6 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ isOpen, onCl
   if (!isOpen) return null;
 
   const handleSelect = (kind: string | 'blank') => {
-    if (kind !== 'blank' && blockedByBoardGate(kind as BoardKind, 'add')) {
-      // Same gate as adding the board from the picker ('add' action): the
-      // prompt is already up; close and create nothing. Both land in the
-      // same render, so the order does not show.
-      onClose();
-      return;
-    }
-    if (kind !== 'blank') trackSelectBoard(kind);
     onClose();
     applyStarter(kind).catch((err) => {
       // eslint-disable-next-line no-console
@@ -388,7 +246,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ isOpen, onCl
             </button>
           </div>
 
-          {sections.map((section) =>
+          {SECTIONS.map((section) =>
             section.entries.length === 0 ? null : (
               <React.Fragment key={section.title}>
                 <div className="new-project-section-title">{section.title}</div>
@@ -408,7 +266,6 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ isOpen, onCl
                             height={180}
                           />
                         </span>
-                        {isProBoardKind(kind) && <ProPill />}
                         <span className="new-project-card-info">
                           <span className="new-project-card-name">{label}</span>
                           <span className="new-project-card-desc">{blurb}</span>

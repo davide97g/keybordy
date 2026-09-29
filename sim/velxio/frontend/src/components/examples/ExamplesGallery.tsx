@@ -9,8 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import {
   exampleProjects,
-  subscribeProExamples,
-  getProExamplesVersion,
   type ExampleProject,
 } from '../../data/examples';
 import { subscribeProBoards, getProBoardsVersion } from '../../lib/proBoardRegistry';
@@ -100,10 +98,8 @@ export const ExamplesGallery: React.FC<ExamplesGalleryProps> = ({ onLoadExample 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [search, setSearch] = useState<string>('');
 
-  // Overlay boards and their examples register asynchronously — re-derive the
-  // filter options when either lands, so a pro board's tab appears without a
-  // reload.
-  useSyncExternalStore(subscribeProExamples, getProExamplesVersion, getProExamplesVersion);
+  // Overlay boards register asynchronously — re-derive the filter options
+  // when one lands.
   useSyncExternalStore(subscribeProBoards, getProBoardsVersion, getProBoardsVersion);
 
   // The static tabs cover the OSS boards; every other board kind that appears

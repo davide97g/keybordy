@@ -121,12 +121,6 @@ export const CompilationConsole: React.FC<CompilationConsoleProps> = React.memo(
                 ⚠ {warningCount}
               </span>
             )}
-            {/* Pro overlay mounts a "Diagnose with AI" button here when
-                errorCount > 0. Empty in the OSS image — slotMounter
-                only fires when the pro tree is present. */}
-            {errorCount > 0 && (
-              <div data-velxio-slot="compile-console-actions" />
-            )}
           </div>
         </div>
         <div style={styles.headerRight}>

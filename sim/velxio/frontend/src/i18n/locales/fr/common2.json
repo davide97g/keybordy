@@ -455,9 +455,6 @@
       "retryCompile": "Recompiler et flasher",
       "cancel": "Annuler",
       "hide": "Masquer",
-      "paidOnlyTitle": "Flasher des cartes réelles fait partie de la licence payante de Velxio Desktop",
-      "paidOnlyBody": "Envoyer un sketch vers une carte réelle branchée en USB est disponible avec une licence Personal, Commercial ou Enterprise. Le simulateur reste gratuit.",
-      "seePlans": "Voir les offres",
       "log": {
         "compiling": "Compilation du sketch avant le flash...",
         "recompiling": "Le code a changé depuis la dernière compilation : recompilation avant le flash...",

@@ -10,14 +10,12 @@
  */
 
 import React from 'react';
-import { useSyncExternalStore } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { exampleProjects, subscribeProExamples, getProExamplesVersion } from '../data/examples';
+import { exampleProjects } from '../data/examples';
 import { AppHeader } from '../components/layout/AppHeader';
 import { ExampleThumbnail } from '../components/examples/ExampleThumbnail';
-import { useSEO } from '../utils/useSEO';
+import { useDocumentTitle } from '../utils/useDocumentTitle';
 
-const DOMAIN = 'https://velxio.dev';
 
 const BOARD_LABELS: Record<string, string> = {
   'arduino-uno': 'Arduino Uno',
@@ -45,9 +43,6 @@ const DIFFICULTY_COLOR: Record<string, string> = {
 };
 
 export const ExampleDetailPage: React.FC = () => {
-  // Re-render when the pro overlay registers late examples (dynamic import).
-  useSyncExternalStore(subscribeProExamples, getProExamplesVersion, getProExamplesVersion);
-
   const { exampleId } = useParams<{ exampleId: string }>();
   const navigate = useNavigate();
 
@@ -62,15 +57,8 @@ export const ExampleDetailPage: React.FC = () => {
     ? (BOARD_LABELS[example.boardType ?? 'arduino-uno'] ?? example.boardType ?? 'Arduino Uno')
     : '';
 
-  const seoDescription = example
-    ? `${example.description}. Run this ${boardLabel} example free in your browser — no install, no account required.`
-    : 'This example was not found.';
 
-  useSEO({
-    title: seoTitle,
-    description: seoDescription,
-    url: `${DOMAIN}/examples/${exampleId ?? ''}`,
-  });
+  useDocumentTitle(seoTitle);
 
   const handleOpen = () => {
     if (!example) return;
@@ -357,23 +345,6 @@ export const ExampleDetailPage: React.FC = () => {
           </div>
         </article>
 
-        {/* JSON-LD structured data */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'LearningResource',
-              name: example.title,
-              description: seoDescription,
-              url: `${DOMAIN}/examples/${example.id}`,
-              educationalLevel: example.difficulty,
-              learningResourceType: 'Simulation',
-              provider: { '@type': 'Organization', name: 'Velxio', url: DOMAIN },
-              about: { '@type': 'Thing', name: boardLabel },
-            }),
-          }}
-        />
       </main>
 
       {/* Library install overlay used to live here — moved to

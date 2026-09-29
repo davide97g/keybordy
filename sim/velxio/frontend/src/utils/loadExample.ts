@@ -14,7 +14,6 @@ import { useVfsStore } from '../store/useVfsStore';
 import { serverProvidesGalleryLibraries } from '../services/galleryLibrariesGate';
 import { isBoardComponent } from './boardPinMapping';
 import { getInstalledLibraries, installLibrary } from '../services/libraryService';
-import { trackOpenExample } from './analytics';
 import { stripBrandPrefix } from './exampleToBuildNetlistInput';
 
 export interface LibraryInstallProgress {
@@ -98,7 +97,6 @@ export async function loadExample(
   example: ExampleProject,
   onLibraryProgress?: (progress: LibraryInstallProgress | null) => void,
 ): Promise<void> {
-  trackOpenExample(example.title);
 
   // CRITICAL — clear currentProject FIRST, before touching any other store.
   //

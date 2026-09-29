@@ -20,14 +20,12 @@
  * undo, colors and running-state gating.
  */
 
-import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { ComponentMetadata } from '../../types/component-metadata';
 import {
   exampleProjects,
-  subscribeProExamples,
-  getProExamplesVersion,
   type ExampleProject,
 } from '../../data/examples';
 import { stripBrandPrefix } from '../../utils/exampleToBuildNetlistInput';
@@ -55,7 +53,6 @@ import {
   type PanelData,
 } from '../ComponentInfoPanel';
 import { productPageHref, productLinkKind } from '../componentDocs';
-import { trackProductPageClick } from '../../utils/analytics';
 import {
   layoutInspectorPins,
   type InspectorPinInput,
@@ -191,10 +188,6 @@ export const PartInspectorDialog: React.FC<PartInspectorDialogProps> = ({
 
   const doc = useComponentDoc(componentMetadata.id);
 
-  // Pro examples register asynchronously (dynamic overlay import): the
-  // version subscription re-derives the list the moment they land, so a
-  // dialog opened early does not miss them.
-  useSyncExternalStore(subscribeProExamples, getProExamplesVersion);
   const partExamples = examplesForPart(componentMetadata.id);
 
   // ── Keyboard binding capture (unchanged from the old dialog) ─────────────
@@ -492,7 +485,6 @@ export const PartInspectorDialog: React.FC<PartInspectorDialogProps> = ({
     properties: componentMetadata.properties,
     tags: componentMetadata.tags ?? [],
     thumbnail: componentMetadata.thumbnail,
-    pro_only: componentMetadata.pro_only,
   };
 
   // The art scaled to the header's 40px box (scalableSvgThumbnail adds the
@@ -562,7 +554,6 @@ export const PartInspectorDialog: React.FC<PartInspectorDialogProps> = ({
           <span className="pid-name">{componentMetadata.name}</span>
           <span className="pid-badges">
             <span className="pid-cat">{panelData.category}</span>
-            {componentMetadata.pro_only && <span className="pid-pro">PRO</span>}
             {componentMetadata.pinCount > 0 && (
               <span className="pid-pins-badge">{componentMetadata.pinCount} pins</span>
             )}
@@ -982,9 +973,6 @@ export const PartInspectorDialog: React.FC<PartInspectorDialogProps> = ({
                 target="_blank"
                 rel="noopener noreferrer"
                 title={buyHref}
-                onClick={() =>
-                  trackProductPageClick(componentMetadata.id, doc?.brand, buyHref)
-                }
               >
                 <svg
                   width="14"

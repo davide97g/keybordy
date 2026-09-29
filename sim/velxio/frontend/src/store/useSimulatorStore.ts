@@ -28,8 +28,6 @@ import {
   isStm32BoardKind,
 } from '../types/board';
 import { annotateSerialChunk } from '../utils/serialDiagnostics';
-import { blockedByBoardGate, reportBoardRunRefused } from '../lib/proBoardGate';
-import { getSerialTxInterceptor } from '../lib/proHardwareSerial';
 import { calculatePinPosition } from '../utils/pinPositionCalculator';
 import { useOscilloscopeStore } from './useOscilloscopeStore';
 import { RaspberryPi3Bridge } from '../simulation/RaspberryPi3Bridge';
@@ -1898,13 +1896,9 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
   /**
    * Handler for a backend `error` on a QEMU-Linux (Pi family) or STM32
    * socket. The message is the server's answer to a start that will not
-   * happen — the board is Pro-gated for this session, a quota ran out,
-   * the box is full — and until 2026-09 it went nowhere: the bridges have
-   * an onError slot, nothing filled it, so the UI showed a board that was
-   * "running" and a terminal that never booted. Same treatment as the ESP32
-   * branch: write it to the serial monitor, stop the board, open the
-   * monitor. Then tell the gate's owner (an overlay keys its verdict on
-   * state the server just contradicted).
+   * happen — this build ships no Pi or STM32 emulator, or the box is full.
+   * Same treatment as the ESP32 branch: write it to the serial monitor,
+   * stop the board, open the monitor.
    *
    * `disconnect` closes the bridge's socket. The server refuses without
    * closing, and both bridges send their start message from `onopen` and
@@ -1918,8 +1912,8 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
     boardKind: BoardKind,
     serialCallback: (ch: string) => void,
     disconnect: () => void,
-  ): (message: string, code?: string) => void {
-    return (message: string, code?: string) => {
+  ): (message: string) => void {
+    return (message: string) => {
       console.error(`[${boardKind}:${id}] ${message}`);
       serialCallback(`\r\n[Velxio] ${message}\r\n`);
       set((s) => {
@@ -1936,7 +1930,6 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
       } catch (e) {
         console.warn(`[${boardKind}:${id}] disconnect after refusal failed:`, e);
       }
-      reportBoardRunRefused({ boardId: id, kind: boardKind, message, code });
     };
   }
 
@@ -3019,12 +3012,6 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
           ),
         }));
       }
-
-      // Pro gate, 'run' action. This is THE gate for a Pro board: placing one
-      // is free (the 'add' action normally allows, and examples / loaded
-      // projects never asked), so every path that starts a board comes
-      // through here. Non-paid web users get the prompt instead of a run.
-      if (blockedByBoardGate(board.boardKind, 'run')) return;
 
       if (isPiBoardKind(board.boardKind)) {
         // Engine routing: most projects are a Python script driving GPIO and
@@ -4722,13 +4709,6 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
     serialWriteToBoard: (boardId: string, text: string) => {
       const board = get().boards.find((b) => b.id === boardId);
       if (!board) return;
-      // A connected hardware serial monitor (pro overlay) takes the input
-      // instead of the board's simulator.
-      const hardwareTx = getSerialTxInterceptor(boardId);
-      if (hardwareTx) {
-        hardwareTx(text);
-        return;
-      }
       if (isPiBoardKind(board.boardKind)) {
         const bridge = getBoardBridge(boardId);
         if (bridge) {

@@ -5,9 +5,11 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { startSimulation } from '../simulation/spice/start';
-import { useSEO } from '../utils/useSEO';
+import { useDocumentTitle } from '../utils/useDocumentTitle';
 import { getLocaleFromPath, localizedPath } from '../i18n/path';
-import { restoreStashedWorkspace } from '../utils/workspaceDraft';
+import { restoreDraft } from '../utils/workspaceDraft';
+import { loadProjectFromUrl, projectParam } from '../utils/loadFromUrl';
+import { showMessageDialog } from '../store/useMessageDialogStore';
 import { CodeEditor } from '../components/editor/CodeEditor';
 import { EditorToolbar } from '../components/editor/EditorToolbar';
 import { FileExplorer } from '../components/editor/FileExplorer';
@@ -19,9 +21,6 @@ import { SimulatorCanvas } from '../components/simulator/SimulatorCanvas';
 import { SerialMonitor } from '../components/simulator/SerialMonitor';
 import { Oscilloscope } from '../components/simulator/Oscilloscope';
 import { AppHeader } from '../components/layout/AppHeader';
-import { triggerSaveAction } from '../lib/proSaveAction';
-import { GitHubStarBanner } from '../components/layout/GitHubStarBanner';
-import { NewsAnnouncer } from '../components/layout/NewsAnnouncer';
 import { useSimulatorStore } from '../store/useSimulatorStore';
 import { useEditorStore } from '../store/useEditorStore';
 import { useCompileLogsStore } from '../store/useCompileLogsStore';
@@ -31,9 +30,8 @@ import {
   NewProjectDialog,
   clearWorkspaceForStarter,
 } from '../components/editor/NewProjectDialog';
-import { useAutoSaveProject } from '../hooks/useAutoSaveProject';
-import { registerEditorCommand } from '../lib/editorCommands';
-import { whenNewsClear } from '../lib/newsGate';
+import { useWorkspaceDraft } from '../hooks/useWorkspaceDraft';
+import { registerEditorCommand, runEditorCommand } from '../lib/editorCommands';
 import { EditorMenuBar } from '../components/editor/EditorMenuBar';
 import type { CompilationLog } from '../utils/compilationLogger';
 import '../App.css';
@@ -53,10 +51,10 @@ const EXPLORER_MAX = 500;
 // editor.
 const EXPLORER_DEFAULT = 124;
 
-// Once per full page load: the pristine-visit starter dialog must not pop
-// again when the user closes it and later navigates away from and back to
-// /editor within the same SPA session.
-let starterDialogShownThisLoad = false;
+// Once per full page load: the `?project=` load, the draft restore and the
+// pristine-visit starter dialog must not run again when the user later
+// navigates away from and back to /editor within the same SPA session.
+let workspaceInitDoneThisLoad = false;
 
 const resizeHandleStyle: React.CSSProperties = {
   height: 5,
@@ -69,16 +67,12 @@ const resizeHandleStyle: React.CSSProperties = {
 
 export const EditorPage: React.FC = () => {
   const { t } = useTranslation();
-  useSEO({
-    title: 'Multi-Board Simulator Editor — Arduino, ESP32, RP2040, RISC-V | Velxio',
-    description:
-      'Write, compile and simulate Arduino, ESP32, Raspberry Pi Pico, ESP32-C3, and Raspberry Pi 3 code in your browser. 19 boards, 5 CPU architectures, 48+ components. Free and open-source.',
-    url: 'https://velxio.dev/editor',
-  });
+  useDocumentTitle('Velxio');
 
-  // Silent auto-save for the loaded project (only fires when authed AND
-  // currentProject has a UUID — see useAutoSaveProject for the gating rules).
-  const autoSave = useAutoSaveProject();
+  // Local draft autosave; armed once the workspace init below has decided
+  // what the canvas shows.
+  const [draftReady, setDraftReady] = useState(workspaceInitDoneThisLoad);
+  const autoSave = useWorkspaceDraft(draftReady);
 
   const [editorWidthPct, setEditorWidthPct] = useState(45);
   // Desktop-only 3-way layout switch (code-only / circuit-only / both).
@@ -94,14 +88,11 @@ export const EditorPage: React.FC = () => {
   const activeBoardId = useSimulatorStore((s) => s.activeBoardId);
   const oscilloscopeOpen = useOscilloscopeStore((s) => s.open);
   const [consoleOpen, setConsoleOpen] = useState(false);
-  // compileLogs live in a Zustand store so the velxio-pro agent overlay
-  // (mounted in a separate React tree via slotMounter) can subscribe and
-  // build a "diagnose this failure" prompt without prop-drilling.
+  // compileLogs live in a Zustand store so any consumer can subscribe
+  // without prop-drilling.
   const compileLogs = useCompileLogsStore((s) => s.logs);
   const setCompileLogs = useCompileLogsStore((s) => s.setLogs);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(BOTTOM_PANEL_DEFAULT);
-  const [showStarBanner, setShowStarBanner] = useState(false);
-  const [starRound, setStarRound] = useState<1 | 2>(1);
 
   // ── Electrical simulation (one-time mount) ────────────────────────────────
   // `startSimulation()` is the single entry point: it constructs the
@@ -112,122 +103,54 @@ export const EditorPage: React.FC = () => {
     return startSimulation();
   }, []);
 
-  // Restore an in-progress workspace stashed before a login redirect, so a
-  // user who was building something and signed in lands back on their circuit
-  // (not the empty starter board). One-shot; see utils/workspaceDraft.
-  useEffect(() => {
-    restoreStashedWorkspace();
-  }, []);
-
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
 
-  // Pristine-visit starter dialog: a bare /editor landing still holds the
-  // hardcoded Uno + LED starter (see useSimulatorStore INITIAL_BOARD /
-  // builtin components). Clear it and offer the template picker over an
-  // EMPTY canvas instead of silently dropping the user into the Arduino
-  // blink (cancelling the dialog leaves a blank workspace). Guarded so it
-  // never fires over a loaded project/example URL, a restored login draft
-  // (both leave the stores non-pristine), or twice per page load. Declared
-  // AFTER the restoreStashedWorkspace effect — mount order is what makes
-  // the pristine check see the restored draft.
-  //
-  // Sequenced BEHIND the news announcement: the canvas is cleared right
-  // away, but the dialog itself waits until NewsAnnouncer reports the
-  // announcement flow is done (nothing to show, or its modal was closed).
-  // The 2.5s bound applies only while the news decision is pending, so a
-  // dead feed can't hold the dialog hostage — see lib/newsGate.ts.
+  // What the canvas shows on arrival, in order:
+  //   1. `/editor?project=<name>`: the project folder served at /projects/
+  //      (re-read on every load, so the files on disk stay the truth);
+  //   2. plain `/editor`: the local draft from the last session;
+  //   3. otherwise, on the untouched default canvas (the hardcoded Uno + LED
+  //      of useSimulatorStore's INITIAL_BOARD), the starter-template picker
+  //      over an emptied canvas (cancelling leaves a blank workspace).
+  // Example routes (/example/<id>) load their own workspace and skip all
+  // three. The draft autosave is armed only after this has run.
   useEffect(() => {
-    if (starterDialogShownThisLoad) return;
+    if (workspaceInitDoneThisLoad) return;
+    workspaceInitDoneThisLoad = true;
     const locale = getLocaleFromPath(window.location.pathname);
-    // /editor is prerendered, so a fresh load arrives as /editor/ (nginx
-    // adds the slash); client-side navigation lands on /editor. Both count.
-    if (window.location.pathname.replace(/\/+$/, '') !== localizedPath('/editor', locale)) return;
-    if (window.location.search) return;
-    if (useProjectStore.getState().currentProject) return;
-    const sim = useSimulatorStore.getState();
-    const pristine =
-      sim.boards.length === 1 &&
-      sim.boards[0].id === 'arduino-uno' &&
-      sim.components.length === 2 &&
-      sim.components.every((c) => c.id === 'led_builtin' || c.id === 'r_builtin');
-    if (!pristine) return;
-    starterDialogShownThisLoad = true;
-    clearWorkspaceForStarter();
-    let cancelled = false;
-    void whenNewsClear(2500).then(() => {
-      if (!cancelled) setShowNewProjectDialog(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // ── GitHub star prompt (show twice at most: 2nd visit OR after 3 min) ──────
-  // Three localStorage flags drive this:
-  //   velxio_star_prompted     → dismissed the first ask
-  //   velxio_star_prompted_v2  → dismissed the follow-up ask (stop forever)
-  //   velxio_star_clicked      → clicked through to the repo (stop forever)
-  // Anyone who dismissed the first ask WITHOUT clicking through gets one
-  // follow-up (round 2) with a stronger message; clicking the repo link at
-  // any time opts them out permanently.
-  useEffect(() => {
-    const STAR_KEY = 'velxio_star_prompted';
-    const STAR_KEY_V2 = 'velxio_star_prompted_v2';
-    const STAR_CLICKED_KEY = 'velxio_star_clicked';
-    const VISITS_KEY = 'velxio_editor_visits';
-    const FIRST_VISIT_KEY = 'velxio_editor_first_visit';
-    const THREE_MIN = 3 * 60 * 1000;
-
-    // Never bother people who already starred or already saw the follow-up.
-    if (localStorage.getItem(STAR_CLICKED_KEY)) return;
-    if (localStorage.getItem(STAR_KEY_V2)) return;
-
-    // Round 2 = they dismissed the first ask (without clicking through).
-    const round = localStorage.getItem(STAR_KEY) ? 2 : 1;
-    setStarRound(round);
-
-    // Increment visit counter
-    const visits = parseInt(localStorage.getItem(VISITS_KEY) ?? '0', 10) + 1;
-    localStorage.setItem(VISITS_KEY, String(visits));
-
-    // Record timestamp of first visit
-    if (!localStorage.getItem(FIRST_VISIT_KEY)) {
-      localStorage.setItem(FIRST_VISIT_KEY, String(Date.now()));
-    }
-    const firstVisit = parseInt(localStorage.getItem(FIRST_VISIT_KEY)!, 10);
-
-    // Show immediately on second+ visit
-    if (visits >= 2) {
-      setShowStarBanner(true);
-      return;
-    }
-
-    // Otherwise schedule after the 3-minute mark
-    const elapsed = Date.now() - firstVisit;
-    const delay = Math.max(0, THREE_MIN - elapsed);
-    const timer = setTimeout(() => {
-      if (!localStorage.getItem(STAR_CLICKED_KEY) && !localStorage.getItem(STAR_KEY_V2)) {
-        setShowStarBanner(true);
+    const onEditor =
+      window.location.pathname.replace(/\/+$/, '') === localizedPath('/editor', locale);
+    const init = async () => {
+      if (!onEditor) return;
+      const project = projectParam();
+      if (project) {
+        try {
+          const warnings = await loadProjectFromUrl(project);
+          for (const w of warnings) console.warn(`[project] ${w}`);
+        } catch (err) {
+          showMessageDialog(
+            `Could not load project "${project}": ${err instanceof Error ? err.message : String(err)}`,
+            { kind: 'error' },
+          );
+        }
+        return;
       }
-    }, delay);
-    return () => clearTimeout(timer);
+      if (window.location.search) return;
+      if (await restoreDraft()) return;
+      if (useProjectStore.getState().currentProject) return;
+      const sim = useSimulatorStore.getState();
+      const pristine =
+        sim.boards.length === 1 &&
+        sim.boards[0].id === 'arduino-uno' &&
+        sim.components.length === 2 &&
+        sim.components.every((c) => c.id === 'led_builtin' || c.id === 'r_builtin');
+      if (!pristine) return;
+      clearWorkspaceForStarter();
+      setShowNewProjectDialog(true);
+    };
+    void init().finally(() => setDraftReady(true));
   }, []);
 
-  const handleDismissStarBanner = () => {
-    // First dismiss → mark round 1; second dismiss → mark round 2 (stop forever).
-    if (localStorage.getItem('velxio_star_prompted')) {
-      localStorage.setItem('velxio_star_prompted_v2', '1');
-    } else {
-      localStorage.setItem('velxio_star_prompted', '1');
-    }
-    setShowStarBanner(false);
-  };
-
-  const handleStarClick = () => {
-    // They went to the repo — opt them out of any further prompts.
-    localStorage.setItem('velxio_star_clicked', '1');
-    setShowStarBanner(false);
-  };
   const [explorerWidth, setExplorerWidth] = useState(EXPLORER_DEFAULT);
   const [isMobile, setIsMobile] = useState(
     () => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches,
@@ -246,12 +169,11 @@ export const EditorPage: React.FC = () => {
   const simulatorHidden =
     (isMobile && mobileView !== 'circuit') || (!isMobile && viewMode === 'code');
 
-  // Save is dispatched to the pro overlay, which inspects auth state and
-  // shows the right modal (Save vs Login prompt). In OSS without the
-  // overlay this is a no-op today and becomes the .vlx Export entry
-  // point in Phase 4 of the OSS split.
+  // The workspace autosaves to the local draft; Save downloads it as a
+  // Wokwi .zip (diagram.json + sources), the layout of a firmware/<name>/
+  // project folder. Export .vlx in the File menu keeps multi-board projects.
   const handleSaveClick = useCallback(() => {
-    triggerSaveAction();
+    runEditorCommand('project.export');
   }, []);
 
   // "New workspace" opens the starter-template dialog. Destruction moved
@@ -438,17 +360,6 @@ export const EditorPage: React.FC = () => {
      there used to be 44+38. On narrow widths the strip wraps internally
      and the header grows; the docked AI chat is avoided by the same
      padding-right the strip always had. */
-  /* Account block. Fused as the explorer panel's footer so a long file
-     tree scrolls ABOVE it instead of disappearing underneath a floating
-     box; when the explorer is collapsed it falls back to the small fixed
-     corner box (avatar only there — no room for a name). */
-  const accountBlock = !isMobile ? (
-    // Just the account button. Language lives in the menubar's Language
-    // menu (for everyone) and inside the account menu (for signed-in
-    // users) — the standalone globe crowded the footer for no gain.
-    <div data-velxio-slot="header-auth" style={{ display: 'contents' }} />
-  ) : undefined;
-
   const unifiedToolbar = !isMobile ? (
         <div className="unified-toolbar">
           {/* View-mode toggle: explorer | Code / Both / Circuit — one
@@ -643,9 +554,6 @@ export const EditorPage: React.FC = () => {
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
                   <FileExplorer onSaveClick={handleSaveClick} onNewClick={handleNewClick} autoSave={autoSave} />
                 </div>
-                {accountBlock && (
-                  <div className="explorer-account-footer">{accountBlock}</div>
-                )}
               </div>
               {!isMobile && (
                 <div
@@ -654,10 +562,6 @@ export const EditorPage: React.FC = () => {
                 />
               )}
             </>
-          )}
-
-          {!explorerOpen && accountBlock && (
-            <div className="editor-corner-box">{accountBlock}</div>
           )}
 
           {/* Editor main area */}
@@ -801,21 +705,10 @@ export const EditorPage: React.FC = () => {
         </div>
       </div>
 
-      {showStarBanner && (
-        <GitHubStarBanner
-          onClose={handleDismissStarBanner}
-          onStarClick={handleStarClick}
-          round={starRound}
-        />
-      )}
-      <NewsAnnouncer />
       <NewProjectDialog
         isOpen={showNewProjectDialog}
         onClose={() => setShowNewProjectDialog(false)}
       />
-      {/* Slot reserved for the private pro overlay (e.g. agent chat panel).
-          Self-hosted builds without an overlay see nothing here. */}
-      <div data-velxio-slot="agent-chat" />
     </div>
   );
 };

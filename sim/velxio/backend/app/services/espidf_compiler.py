@@ -33,16 +33,13 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Callable, Optional
 
-from app.core.hooks import materialize_library_scope, scope_retry_allowed
-
 logger = logging.getLogger(__name__)
 
 # Per-task timing of the LAST compile() call: how long it waited for its build
-# dir, whether the configure was skipped, and how long cmake / ninja ran. The
-# compile route reads it right after `await compile()` (same asyncio task, so
-# the ContextVar is visible) and folds it into the usage metric. Kept out of
-# the result dict on purpose: the result is what the client receives, and the
-# wait behind another build is an operator number, not a user one.
+# dir, whether the configure was skipped, and how long cmake / ninja ran. A
+# caller can read it right after `await compile()` (same asyncio task, so the
+# ContextVar is visible). Kept out of the result dict on purpose: the result is
+# what the client receives, and these are diagnostics, not user-facing.
 build_timing: ContextVar[Optional[dict]] = ContextVar('espidf_build_timing', default=None)
 
 
@@ -415,10 +412,9 @@ def _nice_preexec(nice: int | None):
     """preexec_fn that lowers the child's CPU priority. None = inherit.
 
     The API and the simulation WebSockets share the box with the compilers;
-    a positive nice keeps them responsive under a full CPU, and a per-job
-    value lets the overlay rank a paid build's processes above an anonymous
-    one's (weights 1024 vs 110 between nice 0 and nice 10) without ever
-    stopping or interrupting anyone.
+    a positive nice keeps them responsive under a full CPU. Background
+    replica warm-ups run at nice 10 so they never compete with a build
+    someone is waiting on.
     """
     if not nice or os.name == 'nt':
         return None
@@ -525,7 +521,7 @@ _MAX_BUILD_VARIANTS = 6
 def _max_build_variants(idf_target: str) -> int:
     """Variant cap for one target: VELXIO_BUILD_VARIANTS_<TARGET> (e.g.
     VELXIO_BUILD_VARIANTS_ESP32), else VELXIO_BUILD_VARIANTS, else the module
-    default. Per target because the hot target on velxio.dev rotates through
+    default. Per target because on a busy server the hot target rotates through
     10 distinct variants in half an hour while the others idle at two."""
     for name in (f'VELXIO_BUILD_VARIANTS_{idf_target.upper()}', 'VELXIO_BUILD_VARIANTS'):
         raw = os.environ.get(name, '').strip()
@@ -539,8 +535,8 @@ def _max_build_variants(idf_target: str) -> int:
 
 # ── Replicas of a hot variant ────────────────────────────────────────────────
 # Two compiles that hash to the SAME variant serialise on its lock, and on
-# velxio.dev the dominant configuration (the default esp32 blink, no
-# libraries) is 78% of all ESP-IDF builds: the second heavy slot spent its time
+# a busy multi-user server the dominant configuration (the default esp32 blink,
+# no libraries) was 78% of all ESP-IDF builds: the second heavy slot spent its time
 # holding a slot while waiting for the first one's directory. A replica is a
 # second full copy of the variant (`v_<hash>_r1`), configured on first use and
 # then as warm as the original, with its own lock. A compile picks the first
@@ -696,10 +692,9 @@ def _evict_cold_variants(target_dir: Path, keep: int, idf_target: str | None = N
 def _ninja_parallelism_args() -> list[str]:
     """`-j N` / `-l L` for ninja from VELXIO_NINJA_JOBS / VELXIO_NINJA_LOAD_LIMIT.
 
-    Unset (the OSS default) leaves ninja's own choice, nproc + 2. velxio.dev
-    runs two heavy slots on 6 vCPU, where two such ninjas plus the light lane
-    measured 34 runnable compiler threads at peak; the deployment caps them
-    in docker-compose.yml. `-l` throttles on the 1-minute load average, so a
+    Unset (the default) leaves ninja's own choice, nproc + 2. Two heavy slots
+    on 6 vCPU, where two such ninjas plus the light lane measured 34 runnable
+    compiler threads at peak, are what these knobs are for. `-l` throttles on the 1-minute load average, so a
     build alone still gets the whole box.
     """
     args: list[str] = []
@@ -1063,31 +1058,6 @@ _NETMASK = '255.255.255.0'
 # (the lcgamboa QEMU fork). "Espressif" is on channel 5 in that array.
 _QEMU_WIFI_SSID = 'Espressif'
 _QEMU_WIFI_CHANNEL = 5
-
-
-def effective_scope(allowed: set[str] | None, scope: tuple | None) -> set[str] | None:
-    """The allow-list the merge filters by, given the manifest and what the
-    overlay materialised for it.
-
-    - No manifest (None): scan-all, as always.
-    - A manifest with a materialised scope dir: the dir IS the allow-list, so
-      the manifest names plus the transitive closure the overlay reported
-      (third tuple element, `closure_names`) are all admitted. Before
-      2026-09-11 only the bare names were, every depends= entry was "not
-      found", and only the scan-all retry rescued the build.
-    - An EMPTY manifest with no scope dir (the overlay did not materialise
-      one): scan-all, exactly as an empty manifest behaved before it could
-      be told apart from a missing one. Closing the scope for `[]` is the
-      overlay's decision, expressed by materialising an empty dir.
-    """
-    if allowed is None:
-        return None
-    scope_dir = scope[0] if scope else None
-    if scope_dir is None:
-        return allowed if allowed else None
-    stats = scope[2] if len(scope) > 2 and isinstance(scope[2], dict) else None
-    closure = set(stats.get('closure_names') or []) if stats else set()
-    return allowed | closure
 
 
 class ESPIDFCompiler:
@@ -2122,17 +2092,8 @@ class ESPIDFCompiler:
     def _find_arduino_libraries_dir(self) -> Path | None:
         """Find the Arduino global user-libraries directory (installed via arduino-cli).
 
-        P2.1h: when the pro overlay sets VELXIO_FALLBACK_LIBRARIES_DIR (the
-        content-addressed cache root, itself a valid libraries dir whose children
-        are library folders), prefer it — so the no-manifest scan + the scan-all
-        retry resolve from the cache instead of the shared global volume, letting
-        the global volume be retired. Unset (OSS self-host) -> legacy global.
         """
-        candidates: list[Path] = []
-        _fb = os.environ.get('VELXIO_FALLBACK_LIBRARIES_DIR')
-        if _fb:
-            candidates.append(Path(_fb))
-        candidates += [
+        candidates: list[Path] = [
             Path.home() / 'Arduino' / 'libraries',
             Path.home() / 'Documents' / 'Arduino' / 'libraries',
             Path('/root/Arduino/libraries'),              # Docker / CI as root
@@ -5184,7 +5145,6 @@ class ESPIDFCompiler:
         board_options: dict | None = None,
         spiffs_files: list[dict] | None = None,
         allowed_libraries: set[str] | None = None,
-        owner_id: str | None = None,
         pure_idf: bool = False,
         custom_wifi_ssids: list[str] | None = None,
         cpu_nice: int | None = None,
@@ -5332,33 +5292,15 @@ class ESPIDFCompiler:
             denied: set[str] | None = None,
             speculative: set[str] | None = None,
         ) -> dict:
-            # P2.1e — materialize a per-compile library scope: the manifest's
-            # libs symlinked from the content-addressed cache (with a legacy-dir
-            # fallback for any not yet cached). A no-op overlay / scan-all
-            # fallback (allowed=None) returns None -> the compiler uses the
-            # single default libraries dir. The scope's content token is folded
-            # into the build-dir hash so a content change (cache vs legacy, or a
-            # cache update) gets its own clean build dir — and the throwaway
-            # scope dir is removed after the attempt (its files were already
-            # copied into the build's user_libs_all by _compile_in_dir).
-            scope = materialize_library_scope(allowed, owner_id)
-            scope_dir = scope[0] if scope else None
-            scope_token = scope[1] if scope else ''
-            # The materialiser walks depends= and symlinks the transitive
-            # closure into the scope dir, and reports it as a third element.
-            # Until 2026-09-11 the merge below still filtered by the bare
-            # manifest names, so every closure entry was "not found" and only
-            # the scan-all retry rescued the build. When a scope dir exists it
-            # IS the allow-list (what the arduino-cli lane already does by
-            # pointing the sketchbook at it); the build-variant token keeps
-            # hashing the manifest so no variant moves.
-            effective_allowed = effective_scope(allowed, scope)
-            # Fold the effective library set + resolved content into the build-dir
-            # hash. A different manifest, the scan-all fallback (allowed=None), or
-            # changed lib CONTENT gets its own clean build dir — resetting at
-            # _prepare time (before any cmake), the well-tested wipe path.
+            # An empty manifest scans every installed library, exactly like a
+            # missing one; a non-empty manifest is the merge's allow-list.
+            effective_allowed = allowed if allowed else None
+            # Fold the library set into the build-dir hash. A different manifest
+            # or the scan-all fallback (allowed=None) gets its own clean build
+            # dir — resetting at _prepare time (before any cmake), the
+            # well-tested wipe path.
             _libs_token = (
-                ('m:' + ','.join(sorted(allowed)) + ('|s:' + scope_token if scope_token else ''))
+                ('m:' + ','.join(sorted(allowed)))
                 if allowed is not None else 'scanall'
             )
             # Pure ESP-IDF mode gets its own build-dir variant: same bytes
@@ -5380,79 +5322,74 @@ class ESPIDFCompiler:
                     + (f'|c:{_components_token}' if _components_token else '')
                 ).encode()
             ).hexdigest()[:12]
-            try:
-                if _USE_PERSISTENT_DIR:
-                    # Prepare AND build under the variant lock: prepare wipes main/ and
-                    # user_libs, and the configure populates managed_components/ - neither
-                    # survives a second compile landing in the same dir mid-way.
-                    if _force_replica is not None:
-                        replica = _force_replica
-                    else:
-                        replica, warm = self._pick_replica(idf_target, eff_hash)
-                        if warm is not None:
-                            self._warm_replica_in_background(
-                                warm, idf_target, eff_hash, files, board_fqbn,
-                                board_options=board_options,
-                                allowed_libraries=allowed, owner_id=owner_id,
-                                pure_idf=pure_idf, custom_wifi_ssids=custom_wifi_ssids,
-                            )
-                    lock_key = _variant_lock_key(idf_target, eff_hash, replica)
-                    wait_t0 = time.monotonic()
-                    async with _variant_lock(lock_key):
-                        waited = time.monotonic() - wait_t0
-                        _timing_note(
-                            variant_wait_ms=int(waited * 1000),
-                            replica=replica,
-                            variant=f'{idf_target}/{eff_hash}',
+            if _USE_PERSISTENT_DIR:
+                # Prepare AND build under the variant lock: prepare wipes main/ and
+                # user_libs, and the configure populates managed_components/ - neither
+                # survives a second compile landing in the same dir mid-way.
+                if _force_replica is not None:
+                    replica = _force_replica
+                else:
+                    replica, warm = self._pick_replica(idf_target, eff_hash)
+                    if warm is not None:
+                        self._warm_replica_in_background(
+                            warm, idf_target, eff_hash, files, board_fqbn,
+                            board_options=board_options,
+                            allowed_libraries=allowed,
+                            pure_idf=pure_idf, custom_wifi_ssids=custom_wifi_ssids,
                         )
-                        if waited > 0.5:
-                            logger.info(
-                                f'[espidf] waited {waited:.1f}s for build dir '
-                                f'{lock_key} (replica {replica})'
-                            )
-                        # Prepare does rmtree + copytree on a 100-500 MB tree
-                        # and the LRU eviction: off the event loop, or every
-                        # WebSocket frame on the box stalls behind it.
-                        project_dir = await asyncio.to_thread(
-                            _prepare_persistent_project_dir, idf_target, eff_hash, replica,
-                        )
-                        logger.info(f'[espidf] Using persistent build dir: {project_dir}')
-                        try:
-                            return await self._compile_in_dir(
-                                project_dir, files, idf_target,
-                                progress_callback, normalized_opts, spiffs_files,
-                                allowed_libraries=effective_allowed, libraries_dir=scope_dir,
-                                arduino_mode=arduino_mode, use_idf5=use_idf5,
-                                pure_idf=pure_idf, board_fqbn=board_fqbn,
-                                custom_wifi_ssids=custom_wifi_ssids,
-                                denied_libraries=denied, speculative_out=speculative,
-                                cpu_nice=cpu_nice,
-                            )
-                        finally:
-                            # Re-stamp at the END of the build too: eviction
-                            # sorts by this, and a long build must not be the
-                            # coldest sibling because it started long ago.
-                            try:
-                                os.utime(project_dir.parent, None)
-                            except OSError:
-                                pass
-                with tempfile.TemporaryDirectory(prefix='espidf_') as temp_dir:
-                    project_dir = Path(temp_dir) / 'project'
-                    shutil.copytree(_TEMPLATE_DIR, project_dir)
-                    logger.info(f'[espidf] Using ephemeral build dir: {project_dir}')
-                    return await self._compile_in_dir(
-                        project_dir, files, idf_target,
-                        progress_callback, normalized_opts, spiffs_files,
-                        allowed_libraries=effective_allowed, libraries_dir=scope_dir,
-                        arduino_mode=arduino_mode, use_idf5=use_idf5,
-                        pure_idf=pure_idf, board_fqbn=board_fqbn,
-                        custom_wifi_ssids=custom_wifi_ssids,
-                        cpu_nice=cpu_nice,
+                lock_key = _variant_lock_key(idf_target, eff_hash, replica)
+                wait_t0 = time.monotonic()
+                async with _variant_lock(lock_key):
+                    waited = time.monotonic() - wait_t0
+                    _timing_note(
+                        variant_wait_ms=int(waited * 1000),
+                        replica=replica,
+                        variant=f'{idf_target}/{eff_hash}',
                     )
-            finally:
-                if scope_dir is not None:
-                    # rmtree unlinks the symlinks, never their cache/legacy targets.
-                    shutil.rmtree(scope_dir.parent, ignore_errors=True)
+                    if waited > 0.5:
+                        logger.info(
+                            f'[espidf] waited {waited:.1f}s for build dir '
+                            f'{lock_key} (replica {replica})'
+                        )
+                    # Prepare does rmtree + copytree on a 100-500 MB tree
+                    # and the LRU eviction: off the event loop, or every
+                    # WebSocket frame on the box stalls behind it.
+                    project_dir = await asyncio.to_thread(
+                        _prepare_persistent_project_dir, idf_target, eff_hash, replica,
+                    )
+                    logger.info(f'[espidf] Using persistent build dir: {project_dir}')
+                    try:
+                        return await self._compile_in_dir(
+                            project_dir, files, idf_target,
+                            progress_callback, normalized_opts, spiffs_files,
+                            allowed_libraries=effective_allowed,
+                            arduino_mode=arduino_mode, use_idf5=use_idf5,
+                            pure_idf=pure_idf, board_fqbn=board_fqbn,
+                            custom_wifi_ssids=custom_wifi_ssids,
+                            denied_libraries=denied, speculative_out=speculative,
+                            cpu_nice=cpu_nice,
+                        )
+                    finally:
+                        # Re-stamp at the END of the build too: eviction
+                        # sorts by this, and a long build must not be the
+                        # coldest sibling because it started long ago.
+                        try:
+                            os.utime(project_dir.parent, None)
+                        except OSError:
+                            pass
+            with tempfile.TemporaryDirectory(prefix='espidf_') as temp_dir:
+                project_dir = Path(temp_dir) / 'project'
+                shutil.copytree(_TEMPLATE_DIR, project_dir)
+                logger.info(f'[espidf] Using ephemeral build dir: {project_dir}')
+                return await self._compile_in_dir(
+                    project_dir, files, idf_target,
+                    progress_callback, normalized_opts, spiffs_files,
+                    allowed_libraries=effective_allowed,
+                    arduino_mode=arduino_mode, use_idf5=use_idf5,
+                    pure_idf=pure_idf, board_fqbn=board_fqbn,
+                    custom_wifi_ssids=custom_wifi_ssids,
+                    cpu_nice=cpu_nice,
+                )
 
         async def _attempt_safe(
             allowed: set[str] | None,
@@ -5489,16 +5426,6 @@ class ESPIDFCompiler:
         # method, so the retry safely reuses the same build dir.
         if allowed_libraries is not None and not pure_idf and not result.get('success'):
             missing = self._missing_library_headers(result)
-            if missing and not scope_retry_allowed.get():
-                # The overlay closed this scope (an unmodified gallery compile
-                # whose manifest is proven complete): a retry could only hide
-                # a lock bug. Say what went missing instead.
-                result['gallery_scope_miss'] = sorted(missing)
-                logger.error(
-                    f'[espidf] scoped compile missing {missing} and the scan-all retry '
-                    f'is disabled for this compile (closed scope)'
-                )
-                missing = []
             if missing:
                 # Widen the scope by exactly the libraries that provide what was
                 # missing — never by "everything on the server". A scan-all

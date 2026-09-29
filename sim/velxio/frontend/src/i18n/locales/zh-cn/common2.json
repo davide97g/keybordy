@@ -455,9 +455,6 @@
       "retryCompile": "重新编译并烧录",
       "cancel": "取消",
       "hide": "隐藏",
-      "paidOnlyTitle": "烧录实体板属于 Velxio Desktop 付费许可的功能",
-      "paidOnlyBody": "把程序上传到 USB 连接的实体板，需要 Personal、Commercial 或 Enterprise 许可。模拟器本身仍然免费。",
-      "seePlans": "查看方案",
       "log": {
         "compiling": "烧录前先编译程序...",
         "recompiling": "上次构建后代码有改动：烧录前重新编译...",

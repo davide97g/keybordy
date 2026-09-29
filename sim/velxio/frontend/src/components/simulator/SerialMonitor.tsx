@@ -261,15 +261,8 @@ export const SerialMonitor: React.FC = () => {
           >
             {t('editor.serial.clear')}
           </button>
-          {/* Overlay slot for per-board terminal actions (empty in OSS). */}
-          <span data-velxio-slot="serial-actions" />
         </div>
       </div>
-
-      {/* Overlay slot for a full-width notice about the LINK itself — e.g. the
-          terminal's baud not matching the rate the board is clocking, which is
-          why the text below is unreadable (empty in OSS). */}
-      <div data-velxio-slot="serial-banner" />
 
       {/* Output area. QEMU-Linux boards get the interactive xterm (shell
           input, line editing, ANSI) instead of the read-only mirror — this

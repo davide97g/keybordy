@@ -148,20 +148,6 @@
 }
 
 /* Gold PRO pill — same look as the component picker's badge. */
-.new-project-pro {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  color: #1a1205;
-  background: linear-gradient(180deg, #ffd566, #f5a623);
-  box-shadow: var(--shadow-1);
-}
 
 .new-project-foot {
   padding: 12px 24px 16px;

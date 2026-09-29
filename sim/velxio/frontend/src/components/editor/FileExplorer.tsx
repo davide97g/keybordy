@@ -2,15 +2,14 @@ import React, { useState, useRef, useEffect, useCallback, useSyncExternalStore }
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useEditorStore, chipFileGroupId } from '../../store/useEditorStore';
-import type { AutoSaveState } from '../../hooks/useAutoSaveProject';
+import type { AutoSaveState } from '../../hooks/useWorkspaceDraft';
 import type { WorkspaceFile } from '../../store/useEditorStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { installChipFileSync, ensureChipWasm, flushChipFileSync } from '../../services/chipFiles';
 import { getChipActions, getChipActionsVersion, subscribeChipActions } from '../../lib/chipActions';
 import type { BoardKind } from '../../types/board';
-import { boardDisplayName, isKnownBoardKind, isPiBoardKind } from '../../types/board';
-import { importProjectFile, PROJECT_FILE_ACCEPT } from '../../utils/importProject';
-import { retargetBoardWires } from '../../utils/wokwiZip';
+import { boardDisplayName, isPiBoardKind } from '../../types/board';
+import { applyWokwiImport, importProjectFile, PROJECT_FILE_ACCEPT } from '../../utils/importProject';
 import { showMessageDialog, showConfirmDialog } from '../../store/useMessageDialogStore';
 import { registerEditorCommand } from '../../lib/editorCommands';
 import './FileExplorer.css';
@@ -94,8 +93,8 @@ const IcoNewWorkspace = () => (
   </svg>
 );
 
-/** Tooltip for the Save button: the plain action when no project is
- *  loaded, otherwise the auto-save status and the last save time. */
+/** Tooltip for the Save button: the action, plus the local draft's
+ *  auto-save status and last save time. */
 function saveButtonTitle(t: TFunction, autoSave?: AutoSaveState): string {
   const base = t('editor.fileExplorer.saveProject');
   if (!autoSave) return base;
@@ -403,10 +402,9 @@ interface ContextMenu {
 interface FileExplorerProps {
   onSaveClick: () => void;
   onNewClick: () => void;
-  /** Auto-save state of the loaded project. When present, the Save button
+  /** Auto-save state of the local draft. When present, the Save button
    *  is the save indicator: green = saved, orange = unsaved changes,
-   *  pulsing = saving, red = save failed. Replaces the text pill the header
-   *  used to render ("Unsaved changes"), which ate toolbar width. */
+   *  pulsing = saving, red = save failed. */
   autoSave?: AutoSaveState;
 }
 
@@ -454,49 +452,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
       // don't have that modal, so we apply the payload silently and just
       // warn in the console if the project references uninstalled libs.
       if (result.kind === 'zip') {
-        const { loadFiles } = useEditorStore.getState();
-        const { setComponents, setWires, setBoardType, setBoardPosition, stopSimulation } =
-          useSimulatorStore.getState();
-        stopSimulation();
-        // Same rule as the toolbar's importer: an unknown board kind is left
-        // alone, not coerced into an Uno (#268).
-        // Same as the toolbar's importer: put the board on the canvas (an
-        // empty one had nothing for setBoardType to re-kind, so the project
-        // arrived without its chip — #268) and never coerce an unknown kind.
-        let boardId: string | null = null;
-        if (result.boardType && isKnownBoardKind(result.boardType)) {
-          const sim = useSimulatorStore.getState();
-          const current =
-            sim.boards.find((b) => b.id === sim.activeBoardId) ?? sim.boards[0] ?? null;
-          if (current) {
-            setBoardType(result.boardType);
-            boardId = current.id;
-          } else {
-            boardId = sim.addBoard(
-              result.boardType,
-              result.boardPosition.x,
-              result.boardPosition.y,
-            );
-            // addBoard promotes the first board to active but does not sync the
-            // flat legacy fields; setActiveBoardId is where that happens, and
-            // whatever still reads `boardType` would otherwise see the board
-            // this import just replaced.
-            useSimulatorStore.getState().setActiveBoardId(boardId);
-          }
-        } else if (result.boardType) {
-          console.warn(
-            `[FileExplorer] Project is for a "${result.boardType}" board, which this build does not have — kept the current board.`,
-          );
-        }
-        for (const w of result.warnings) console.warn(`[FileExplorer] ${w}`);
-        setBoardPosition(result.boardPosition);
-        setComponents(result.components);
-        setWires(
-          boardId && result.boardType
-            ? retargetBoardWires(result.wires, result.boardType, boardId)
-            : result.wires,
-        );
-        if (result.files.length > 0) loadFiles(result.files);
+        for (const w of applyWokwiImport(result)) console.warn(`[FileExplorer] ${w}`);
         if (result.libraries.length > 0) {
           console.warn(
             '[FileExplorer] Imported Wokwi zip references libraries you may need to install:',

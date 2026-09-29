@@ -455,9 +455,6 @@
       "retryCompile": "Ricompila e flash",
       "cancel": "Annulla",
       "hide": "Nascondi",
-      "paidOnlyTitle": "Il flash su schede reali fa parte della licenza a pagamento di Velxio Desktop",
-      "paidOnlyBody": "Caricare uno sketch su una scheda reale collegata via USB è disponibile con una licenza Personal, Commercial o Enterprise. Il simulatore resta gratuito.",
-      "seePlans": "Vedi i piani",
       "log": {
         "compiling": "Compilazione dello sketch prima del flash...",
         "recompiling": "Il codice è cambiato dall'ultima build: ricompilazione prima del flash...",

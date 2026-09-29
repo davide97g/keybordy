@@ -10,7 +10,6 @@ import { useSimulatorStore } from '../store/useSimulatorStore';
 import { useProjectStore } from '../store/useProjectStore';
 import { fqbnForLanguage, type BoardInstance } from '../types/board';
 import { isNoiseBuildLine } from './compilationLogger';
-import { publishCompileOutput } from '../lib/intellisenseRegistry';
 import { fingerprintSources } from './sourceFingerprint';
 
 /** Per-board compile extras (ESP32 options, SPIFFS, manifest, language, analytics). */
@@ -121,10 +120,6 @@ export async function compileBoardForFlash(
         }
       },
       compileOptionsForBoard(board),
-    );
-    // Intellisense seam: file:line markers in the editor (cleared on green).
-    publishCompileOutput(
-      result.success ? '' : [result.stderr, result.error].filter(Boolean).join('\n'),
     );
     const elapsedMs = performance.now() - t0;
     if (!result.success) {

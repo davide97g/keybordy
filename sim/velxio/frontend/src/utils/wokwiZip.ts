@@ -163,6 +163,35 @@ export function wokwiTypeToBoardKind(type: string): string | null {
   return registeredBoardKinds.get(type) ?? null;
 }
 
+/**
+ * Wokwi's own board part types for boards Velxio simulates under another
+ * name, so a diagram from wokwi.com or the Wokwi VS Code extension imports
+ * as a running board instead of a dead shell. Registered once at startup
+ * (main.tsx).
+ */
+const DEFAULT_WOKWI_BOARD_MAPPINGS: Array<{ type: string; kind: string }> = [
+  // Only boards whose Wokwi pin names wokwiBoardPinName below translates:
+  // a mapping without that would attach wires to pins that do not exist.
+  { type: 'wokwi-esp32-devkit-v1', kind: 'esp32' },
+];
+
+export function registerDefaultWokwiBoardMappings(): void {
+  registerWokwiBoardMappings(DEFAULT_WOKWI_BOARD_MAPPINGS);
+}
+
+/**
+ * Wokwi's esp32-devkit-v1 names its header pins `D<n>`, `GND.1`/`GND.2`;
+ * Velxio's ESP32 element calls them `<n>`, `GND` (left) and `GND2` (right).
+ * Other names (TX0, RX2, VN, 3V3, ...) are already shared.
+ */
+function wokwiBoardPinName(type: string, pin: string): string {
+  if (type !== 'wokwi-esp32-devkit-v1') return pin;
+  if (pin === 'GND.1') return 'GND';
+  if (pin === 'GND.2') return 'GND2';
+  const d = pin.match(/^D(\d+)$/);
+  return d ? d[1] : pin;
+}
+
 // ── Pin name aliases ─────────────────────────────────────────────────────────
 
 // Maps Wokwi connection "signal" pin names to wokwi-element physical pin names.
@@ -427,7 +456,7 @@ export async function exportToWokwiZip(
   zip.file('diagram.json', JSON.stringify(diagram, null, 2));
   zip.file(
     'wokwi-project.txt',
-    `Exported from Velxio\n\nSimulate this project on https://velxio.dev\n`,
+    'Exported from Velxio\n',
   );
   if (libraries.length > 0) {
     zip.file(
@@ -485,15 +514,36 @@ export function retargetBoardWires(wires: Wire[], fromId: string, toId: string):
 
 // ── Import ────────────────────────────────────────────────────────────────────
 
-export async function importFromWokwiZip(file: File): Promise<ImportResult> {
+/** A Wokwi project as plain text files: diagram.json, sketch sources,
+ *  libraries.txt, <name>.chip.c / .chip.json. Names may carry folders. */
+export type WokwiSourceFile = { name: string; content: string };
+
+export async function importFromWokwiZip(file: File | Blob): Promise<ImportResult> {
   const zip = await JSZip.loadAsync(file);
+  const files: WokwiSourceFile[] = [];
+  for (const [name, entry] of Object.entries(zip.files)) {
+    if (!entry.dir) files.push({ name, content: await entry.async('string') });
+  }
+  return importFromWokwiSources(files);
+}
+
+/**
+ * Import a Wokwi project from its files. Shared by the .zip importer and the
+ * `?project=` URL loader, which fetches the same files one by one.
+ */
+export function importFromWokwiSources(sources: WokwiSourceFile[]): ImportResult {
+  const byBasename = new Map<string, string>();
+  for (const f of sources) byBasename.set(f.name.split('/').pop() ?? f.name, f.content);
 
   // diagram.json is required
-  const diagramEntry = zip.file('diagram.json');
-  if (!diagramEntry) throw new Error('No diagram.json found in the zip file.');
-
-  const diagramText = await diagramEntry.async('string');
+  const diagramText = byBasename.get('diagram.json');
+  if (diagramText === undefined) throw new Error('No diagram.json found in the project.');
   const diagram: WokwiDiagram = JSON.parse(diagramText);
+  // Wokwi's virtual parts ($serialMonitor, ...) have no canvas component;
+  // Velxio's serial monitor needs no wire, so their connections are dropped.
+  diagram.connections = diagram.connections.filter(
+    ([a, b]) => !a.startsWith('$') && !b.startsWith('$'),
+  );
 
   const warnings: string[] = [];
 
@@ -554,14 +604,12 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
   // <name>.chip.c / <name>.chip.json files. Load them up front so the part
   // mapping below can be synchronous.
   const chipFiles = new Map<string, { c?: string; json?: string }>();
-  for (const [filename, entry] of Object.entries(zip.files)) {
-    if (entry.dir) continue;
-    const basename = filename.split('/').pop() ?? filename;
+  for (const [basename, content] of byBasename) {
     const m = basename.match(/^(.+)\.chip\.(c|json)$/);
     if (!m) continue;
     const slot = chipFiles.get(m[1]) ?? {};
-    if (m[2] === 'c') slot.c = await entry.async('string');
-    else slot.json = await entry.async('string');
+    if (m[2] === 'c') slot.c = content;
+    else slot.json = content;
     chipFiles.set(m[1], slot);
   }
 
@@ -630,13 +678,17 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
     // Remap board part id → Velxio internal board id
     const startId = startCompRaw === boardId ? velxioBoardId : startCompRaw;
     const endId = endCompRaw === boardId ? velxioBoardId : endCompRaw;
+    // A Wokwi board's pins spelled the way the Velxio element names them.
+    const boardPin = (pin: string) => (boardPart ? wokwiBoardPinName(boardPart.type, pin) : pin);
+    const startBoardPin = startCompRaw === boardId ? boardPin(startPin) : startPin;
+    const endBoardPin = endCompRaw === boardId ? boardPin(endPin) : endPin;
 
     // Normalize pin names: Wokwi uses signal names (SDA, SCL, VCC) while
     // wokwi-elements use physical/board pin names (DATA, CLK, VIN).
     const startMetadataId = components.find((c) => c.id === startId)?.metadataId ?? '';
     const endMetadataId = components.find((c) => c.id === endId)?.metadataId ?? '';
-    const normalizedStartPin = normalizePinName(startMetadataId, startPin);
-    const normalizedEndPin = normalizePinName(endMetadataId, endPin);
+    const normalizedStartPin = normalizePinName(startMetadataId, startBoardPin);
+    const normalizedEndPin = normalizePinName(endMetadataId, endBoardPin);
 
     return {
       id: `wire-${i}-${Date.now()}`,
@@ -682,18 +734,13 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
   const CODE_EXTS = new Set(['.ino', '.h', '.hpp', '.cpp', '.cc', '.cxx', '.c', '.py', '.s']);
   const files: Array<{ name: string; content: string }> = [];
 
-  for (const [filename, entry] of Object.entries(zip.files)) {
-    if (entry.dir) continue;
-    const basename = filename.split('/').pop() ?? filename;
+  for (const [basename, content] of byBasename) {
     // Chip sources belong to their chip's file group (loaded above), not to
     // the board sketch — without this exclusion every <name>.chip.c would
     // also land in the editor AND get fed to arduino-cli.
     if (/\.chip\.(c|json)$/.test(basename)) continue;
     const ext = '.' + basename.split('.').pop()!.toLowerCase();
-    if (CODE_EXTS.has(ext)) {
-      const content = await entry.async('string');
-      files.push({ name: basename, content });
-    }
+    if (CODE_EXTS.has(ext)) files.push({ name: basename, content });
   }
 
   // Sort: .ino first, then alphabetically
@@ -707,10 +754,8 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
 
   // Parse libraries.txt
   const libraries: string[] = [];
-  const libEntry = zip.file('libraries.txt');
-  if (libEntry) {
-    libraries.push(...parseLibrariesTxt(await libEntry.async('string')));
-  }
+  const librariesTxt = byBasename.get('libraries.txt');
+  if (librariesTxt !== undefined) libraries.push(...parseLibrariesTxt(librariesTxt));
 
   return { boardType, boardPosition, components, wires, files, libraries, warnings };
 }

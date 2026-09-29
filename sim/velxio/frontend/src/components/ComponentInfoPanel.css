@@ -113,16 +113,6 @@
   border-radius: 10px;
 }
 
-.cip-pro {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  color: #1a1205;
-  background: linear-gradient(180deg, #ffd566, #f5a623);
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-
 /* A chip from the user's own My Chips library. */
 .cip-custom {
   font-size: 9px;

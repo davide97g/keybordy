@@ -10,8 +10,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppHeader } from '../components/layout/AppHeader';
-import { useSEO } from '../utils/useSEO';
-import { getSeoMeta } from '../seoRoutes';
+import { useDocumentTitle } from '../utils/useDocumentTitle';
 import {
   DEFAULT_MONO_OPTIONS,
   OLED_LIT_RGB,
@@ -83,7 +82,7 @@ async function decodeImageFile(file: File): Promise<DecodedImage> {
 
 export const ImageToCodePage: React.FC = () => {
   const { t } = useTranslation();
-  useSEO(getSeoMeta('/tools/image-to-code')!);
+  useDocumentTitle('Image to C Array — Velxio');
 
   const [image, setImage] = useState<DecodedImage | null>(null);
   const [error, setError] = useState('');

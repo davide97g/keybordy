@@ -5,11 +5,9 @@ import {
   searchLibraries,
   installLibrary,
   getInstalledLibraries,
-  getCustomLibraries,
-  deleteCustomLibrary,
+  uninstallLibrary,
 } from '../../services/libraryService';
 import type { ArduinoLibrary, InstalledLibrary } from '../../services/libraryService';
-import { trackInstallLibrary } from '../../utils/analytics';
 import {
   BUILTIN_MPY_MODULES,
   FEATURED_MPY_PACKAGES,
@@ -32,7 +30,7 @@ interface LibraryManagerModalProps {
  *  so the UI's "in project" state agrees with what the compiler scopes. */
 const normLib = (s: string): string => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** One row of the single unified list. A search result and an installed/custom
+/** One row of the single unified list. A search result and an installed
  *  library both normalise to this so they render identically. */
 interface LibRow {
   name: string;
@@ -40,7 +38,6 @@ interface LibRow {
   author: string;
   desc: string;
   installed: boolean;
-  custom: boolean;
   releases?: Record<string, unknown>;
 }
 
@@ -48,7 +45,7 @@ interface LibRow {
  * Library Manager — ONE list, no tabs. Each row is state-aware:
  *   + Add to project   (installs if needed, then declares it on this board)
  *   In project ✓       (click to remove from this board's libraries.json)
- *   Uninstall / Remove (free the cache / remove your custom upload)
+ *   Uninstall          (remove it from the server's arduino-cli)
  *
  * The per-board manifest (board.libraries) IS the compile scope and is what the
  * read-only `libraries.json` file in the explorer shows. This modal is the only
@@ -129,14 +126,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
   const fetchInstalled = useCallback(async () => {
     setLoadingInstalled(true);
     try {
-      // The shared index libs PLUS the user's per-user custom uploads (which
-      // live in their per-user store). Custom first; de-duped by name.
-      const [libs, custom] = await Promise.all([getInstalledLibraries(), getCustomLibraries()]);
-      const customNames = new Set(custom.map((c) => (c.name || '').toLowerCase()));
-      setInstalledLibraries([
-        ...custom,
-        ...libs.filter((l) => !customNames.has((l.library?.name || l.name || '').toLowerCase())),
-      ]);
+      setInstalledLibraries(await getInstalledLibraries());
     } catch (e: unknown) {
       setStatusMsg({
         type: 'error',
@@ -156,7 +146,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
     }
   }, [isOpen]);
 
-  // Load the installed/custom list whenever the modal opens.
+  // Load the installed list whenever the modal opens.
   useEffect(() => {
     if (isOpen) fetchInstalled();
   }, [isOpen, fetchInstalled]);
@@ -204,19 +194,6 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
     };
   }, [searchQuery, isOpen, isMpy]);
 
-  // A custom .zip upload (pro) lands in the user's per-user store; auto-declare
-  // it on the active board and refresh the list. The upload BUTTON is injected
-  // into .lib-modal-header by the pro overlay (libraryUploadInjector).
-  useEffect(() => {
-    const onUploaded = (e: Event) => {
-      const name = (e as CustomEvent).detail?.library;
-      if (name) addToManifest(name);
-      fetchInstalled();
-    };
-    window.addEventListener('velxio-custom-library-installed', onUploaded);
-    return () => window.removeEventListener('velxio-custom-library-installed', onUploaded);
-  }, [addToManifest, fetchInstalled]);
-
   // ── actions ────────────────────────────────────────────────────────────────
   const install = useCallback(
     async (name: string): Promise<boolean> => {
@@ -225,7 +202,6 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
       try {
         const result = await installLibrary(name, selectedVersions[name]);
         if (result.success) {
-          trackInstallLibrary(name);
           fetchInstalled();
           return true;
         }
@@ -254,20 +230,20 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
     [install, addToManifest, activeBoard],
   );
 
-  // A CUSTOM lib lives in the user's per-user store, so removing it hits the
-  // per-user delete endpoint and also drops it from the manifest.
-  const removeCustom = useCallback(
+  // Uninstalling also drops it from this board's manifest: a declared
+  // library that is no longer installed would fail the next compile.
+  const uninstall = useCallback(
     async (name: string) => {
       setBusyLib(name);
       setStatusMsg(null);
       try {
-        const result = await deleteCustomLibrary(name);
+        const result = await uninstallLibrary(name);
         if (result.success) {
-          setStatusMsg({ type: 'success', text: `Removed your custom "${name}".` });
+          setStatusMsg({ type: 'success', text: `Uninstalled "${name}".` });
           removeFromManifest(name);
           fetchInstalled();
         } else {
-          setStatusMsg({ type: 'error', text: result.error || `Failed to remove "${name}"` });
+          setStatusMsg({ type: 'error', text: result.error || `Failed to uninstall "${name}"` });
         }
       } finally {
         setBusyLib(null);
@@ -276,7 +252,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
     [removeFromManifest, fetchInstalled],
   );
 
-  // ── unified rows: search results when typing, else the installed/custom list ─
+  // ── unified rows: search results when typing, else the installed list ─
   const rows: LibRow[] = useMemo(() => {
     if (searchQuery.trim()) {
       return searchResults.map((lib) => ({
@@ -285,7 +261,6 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
         author: lib.latest?.author || lib.author || '',
         desc: lib.latest?.sentence || lib.sentence || '',
         installed: isInstalled(lib.name || ''),
-        custom: false,
         releases: lib.releases,
       }));
     }
@@ -295,7 +270,6 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
       author: lib.library?.author || lib.author || '',
       desc: lib.library?.sentence || lib.sentence || '',
       installed: true,
-      custom: !!lib.custom,
     }));
   }, [searchQuery, searchResults, installedLibraries, isInstalled]);
 
@@ -309,7 +283,6 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
       try {
         const files = await fetchMpyPackage(name);
         const written = writeFilesIntoGroup(mpyGroupId, files);
-        trackInstallLibrary(`mpy:${name}`);
         setStatusMsg({
           type: 'success',
           text: `"${name}" added to the workspace: ${written.join(', ')}. main.py can import it now.`,
@@ -385,7 +358,6 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
   return createPortal(
     <div className="lib-modal-overlay" onClick={onClose}>
       <div className="lib-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Header — the pro custom-upload button injects into .lib-modal-header */}
         <div className="lib-modal-header">
           <div className="lib-modal-title">
             <svg
@@ -561,22 +533,9 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
                   <div className="lib-item-info">
                     <div className="lib-item-header">
                       <span className="lib-item-name">{row.name}</span>
-                      {row.custom && (
-                        <span
-                          style={{
-                            fontSize: 10,
-                            color: '#ffd60a',
-                            background: 'var(--color-feedback-warning-soft)',
-                            borderRadius: 6,
-                            padding: '0 6px',
-                          }}
-                        >
-                          custom
-                        </span>
-                      )}
                       {row.author && (
                         <span className="lib-item-author">
-                          {t('editor.libraryManager.byAuthor', { author: row.custom ? 'you' : row.author })}
+                          {t('editor.libraryManager.byAuthor', { author: row.author })}
                         </span>
                       )}
                     </div>
@@ -616,18 +575,14 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
                         {busy ? '…' : '+ Add to project'}
                       </button>
                     )}
-                    {/* Only CUSTOM uploads can be removed (per-user store). Index
-                        libraries live in the shared content-addressed cache — you
-                        add/remove them from THIS project, but never "uninstall" a
-                        copy everyone shares, so no Uninstall button for them. */}
-                    {row.custom && (
+                    {row.installed && (
                       <button
                         className="lib-uninstall-btn"
-                        onClick={() => removeCustom(row.name)}
+                        onClick={() => uninstall(row.name)}
                         disabled={busy}
-                        title="Remove your custom upload"
+                        title="Uninstall from the server"
                       >
-                        {busy ? '…' : 'Remove'}
+                        {busy ? '…' : 'Uninstall'}
                       </button>
                     )}
                   </div>

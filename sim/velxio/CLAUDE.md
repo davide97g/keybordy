@@ -4,17 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Velxio** — a fully local, open-source Arduino emulator 
-- GitHub: https://github.com/davidmonterocrespo24/velxio
+**Velxio** — a fully local, open-source Arduino emulator. This directory is
+keybordy's fork of it (see [NOTICE.md](NOTICE.md)): vendored without git
+history, with every hosted-service seam removed — no Pro walls, accounts,
+sharing, news, analytics, SEO prerender, desktop (Tauri) or MCP. Boards whose
+emulator only exists in upstream's private backend (Raspberry Pi Linux,
+STM32) are hidden from the picker, the new-project dialog and the gallery.
+- Upstream: https://github.com/davidmonterocrespo24/velxio
 - Frontend: React + Vite + TypeScript with Monaco Editor and visual simulation canvas
 - Backend: FastAPI + Python for Arduino code compilation via arduino-cli
 - Simulation: Real AVR8 emulation using avr8js with full GPIO/timer/USART support
 - Components: Visual electronic components from wokwi-elements (LEDs, resistors, buttons, etc.)
-- Auth: None — OSS is single-user anonymous. Accounts + OAuth live in the
-  velxio-prod private overlay that powers velxio.dev.
-- Project persistence: `.vlx` file export/import (`utils/vlxFile.ts`) —
-  zero server-side state. Server-side persistence (SQLite or Postgres
-  via SQLAlchemy) lives in the velxio-prod overlay.
+- Auth: none. Single user, local only.
+- Project persistence, all client-side:
+  - `/editor?project=<name>` imports the Wokwi project folder nginx serves at
+    `/projects/<name>/` (`utils/loadFromUrl.ts`, JSON autoindex listing).
+  - The workspace autosaves to IndexedDB (`utils/workspaceDraft.ts`,
+    `hooks/useWorkspaceDraft.ts`) and plain `/editor` restores it.
+  - Save (Ctrl+S) downloads a Wokwi `.zip`; File > Export .vlx is lossless.
 
 The project uses **local clones of official Wokwi repositories** in `third-party/` instead of npm packages.
 
@@ -170,8 +177,7 @@ The simulation runs at ~60 FPS using `requestAnimationFrame`:
 Main stores:
 - `useEditorStore`: Multi-file workspace (files[], activeFileId, openFileIds)
 - `useSimulatorStore`: Simulation state, components, wires, compiled hex, serialMonitorOpen
-- `useProjectStore`: Current loaded project metadata (id, slug, name) — used by the `.vlx` exporter to pick a download filename
-- `useAuthStore` (overlay-only) lives in `pro/frontend/src/pro/store/` in the velxio-prod repo. Pure OSS builds do not include it.
+- `useProjectStore`: Current loaded project (id, slug) — the `?project=` folder; used for download filenames
 
 **6. Component-Pin Mapping**
 
@@ -197,7 +203,7 @@ Wire positions auto-update when components move via `updateWirePositions()`.
 ## Key File Locations
 
 ### Backend (OSS — stateless)
-- [backend/app/main.py](backend/app/main.py) - FastAPI app entry point, CORS, lifespan hooks
+- [backend/app/main.py](backend/app/main.py) - FastAPI app entry point, CORS, routers, /health
 - [backend/app/api/routes/compile.py](backend/app/api/routes/compile.py) - Compilation endpoints (multi-file, sync + async)
 - [backend/app/api/routes/compile_chip.py](backend/app/api/routes/compile_chip.py) - Custom-chip WASM compile
 - [backend/app/api/routes/libraries.py](backend/app/api/routes/libraries.py) - arduino-cli library search/install proxy
@@ -205,24 +211,18 @@ Wire positions auto-update when components move via `updateWirePositions()`.
 - [backend/app/api/routes/iot_gateway.py](backend/app/api/routes/iot_gateway.py) - HTTP proxy for ESP32 web servers
 - [backend/app/services/arduino_cli.py](backend/app/services/arduino_cli.py) - arduino-cli wrapper
 - [backend/app/services/espidf_compiler.py](backend/app/services/espidf_compiler.py) - ESP-IDF compile wrapper
-- [backend/app/services/build_queue.py](backend/app/services/build_queue.py) - Priority admission gate for compile jobs (two lanes, unbounded, one slot per lane reserved for standard builds). Exposes only a coarse load level — queue depth and position never reach a client.
+- [backend/app/services/build_queue.py](backend/app/services/build_queue.py) - FIFO admission gate for compile jobs (heavy ESP-IDF lane + light arduino-cli lane, unbounded queue, capped concurrent builds). Exposes only a coarse load level.
 - [backend/app/core/config.py](backend/app/core/config.py) - Minimal Settings (FRONTEND_URL only)
-- [backend/app/core/hooks.py](backend/app/core/hooks.py) - Extension hooks (record_compile, get_current_user_id, lifespan_startup) that the velxio-prod overlay fills in. OSS-default = no-op.
-
-**Removed in the OSS/pro split (Phase 1-4):** auth.py, projects.py,
-admin.py, metrics.py, models/*, schemas/*, services/metrics.py,
-services/odoo_mail.py, services/project_files.py, database/session.py,
-core/dependencies.py, core/security.py, utils/{geo,slug,boards}.py. All
-of these live in [velxio-prod](https://github.com/velxio/velxio-prod)'s
-private overlay and are COPYed onto the image at Docker build time when
-deploying velxio.dev.
 
 ### Frontend - Core
-- [frontend/src/App.tsx](frontend/src/App.tsx) - Main app component, routing (with overlay route injection via `useProRoutes`)
-- [frontend/src/lib/proRoutes.ts](frontend/src/lib/proRoutes.ts) - Registry for routes the overlay registers at runtime
-- [frontend/src/lib/proSession.ts](frontend/src/lib/proSession.ts) - Optional session-check hook installed by the overlay
-- [frontend/src/lib/proSaveAction.ts](frontend/src/lib/proSaveAction.ts) - Save-button registry. Default = download `.vlx`; overlay overrides with SaveProjectModal.
+- [frontend/src/App.tsx](frontend/src/App.tsx) - Main app component, routing (`/` redirects to `/editor`)
 - [frontend/src/utils/vlxFile.ts](frontend/src/utils/vlxFile.ts) - Portable project export/import (no server needed)
+- [frontend/src/utils/wokwiZip.ts](frontend/src/utils/wokwiZip.ts) - Wokwi import (`importFromWokwiSources`, `.zip` wrapper, board/pin mappings) and `.zip` export
+- [frontend/src/utils/importProject.ts](frontend/src/utils/importProject.ts) - `.vlx`/`.zip` dispatcher + `applyWokwiImport` (replaces the workspace)
+- [frontend/src/utils/loadFromUrl.ts](frontend/src/utils/loadFromUrl.ts) - `?project=<name>` loader
+- [frontend/src/utils/workspaceDraft.ts](frontend/src/utils/workspaceDraft.ts) - IndexedDB draft (autosave/restore)
+- [frontend/src/lib/unsupportedBoards.ts](frontend/src/lib/unsupportedBoards.ts) - Board kinds hidden because no emulator ships (Pi Linux, STM32)
+- [frontend/src/lib/proBoardRegistry.ts](frontend/src/lib/proBoardRegistry.ts) - Runtime board registry; empty here (upstream's overlay filled it), kept because ~25 modules consult it
 - [frontend/src/store/useEditorStore.ts](frontend/src/store/useEditorStore.ts) - Multi-file workspace state
 - [frontend/src/store/useSimulatorStore.ts](frontend/src/store/useSimulatorStore.ts) - Simulation state, components, wires
 - [frontend/src/store/useProjectStore.ts](frontend/src/store/useProjectStore.ts) - Current loaded project metadata
@@ -235,8 +235,6 @@ deploying velxio.dev.
 
 ### Frontend - Layout
 - [frontend/src/components/layout/AppHeader.tsx](frontend/src/components/layout/AppHeader.tsx) - Top header (no Save button — moved to FileExplorer)
-- [frontend/src/components/layout/SaveProjectModal.tsx](frontend/src/components/layout/SaveProjectModal.tsx) - Save/update project (reads files[], uses sketch.ino content)
-- [frontend/src/components/layout/LoginPromptModal.tsx](frontend/src/components/layout/LoginPromptModal.tsx) - Prompt anon users
 
 ### Frontend - Simulation
 - [frontend/src/simulation/AVRSimulator.ts](frontend/src/simulation/AVRSimulator.ts) - AVR8 CPU emulator wrapper
@@ -245,24 +243,13 @@ deploying velxio.dev.
 - [frontend/src/components/simulator/SimulatorCanvas.tsx](frontend/src/components/simulator/SimulatorCanvas.tsx) - Canvas + Serial button next to board selector
 
 ### Frontend - Pages
-- [frontend/src/pages/EditorPage.tsx](frontend/src/pages/EditorPage.tsx) - Main editor layout (resizable file explorer + panels)
-- [frontend/src/pages/LoginPage.tsx](frontend/src/pages/LoginPage.tsx)
-- [frontend/src/pages/RegisterPage.tsx](frontend/src/pages/RegisterPage.tsx)
-- [frontend/src/pages/UserProfilePage.tsx](frontend/src/pages/UserProfilePage.tsx) - Profile with project grid
-- [frontend/src/pages/ProjectPage.tsx](frontend/src/pages/ProjectPage.tsx) - Loads project into editor
+- [frontend/src/pages/EditorPage.tsx](frontend/src/pages/EditorPage.tsx) - Main editor layout; on arrival loads `?project=`, else the draft, else the starter dialog
 - [frontend/src/pages/ImageToCodePage.tsx](frontend/src/pages/ImageToCodePage.tsx) - `/tools/image-to-code`: image to monochrome C byte array for SSD1306 OLEDs (logic in [frontend/src/utils/imageToCArray.ts](frontend/src/utils/imageToCArray.ts))
 
-### Frontend - SEO & Public Files
-- `frontend/index.html` — Full SEO meta tags, OG, Twitter Card, JSON-LD. **Domain is `https://velxio.dev`** — update if domain changes.
-- `frontend/public/favicon.svg` — SVG chip favicon (scales to all sizes)
-- `frontend/public/og-image.svg` — 1200×630 social preview image (OG/Twitter). Export as PNG for max compatibility.
-- `frontend/public/robots.txt` — Allow all crawlers, points to sitemap
-- `frontend/public/sitemap.xml` — All public routes with priorities
-- `frontend/public/manifest.webmanifest` — PWA manifest, theme color `#007acc`
-
 ### Docker & CI
-- [Dockerfile.standalone](Dockerfile.standalone) - Multi-stage Docker build
-- [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml) - Publishes to GHCR + Docker Hub on push to master
+- [Dockerfile](Dockerfile) - Multi-stage Docker build (needs the QEMU runtime in `prebuilt/qemu/`: run `scripts/fetch-qemu.sh` once)
+- [docker/nginx.conf](docker/nginx.conf) - Serves the SPA, proxies `/api` to uvicorn, serves `/projects/` (host folders) with a JSON autoindex
+- Built and run from keybordy's `sim/compose.yaml`
 
 ## Important Implementation Notes
 
@@ -413,14 +400,11 @@ There are known pre-existing TS errors that do NOT block the app from running:
 
 ### 8. Docker Build — third-party
 
-`Dockerfile.standalone` does NOT clone any wokwi-* repos. The frontend stage
+`Dockerfile` does NOT clone any wokwi-* repos. The frontend stage
 just does `COPY frontend/ scripts/` then `npm install && npm run build:docker`,
 which pulls `@wokwi/elements`, `avr8js`, `rp2040js` from npm. Board SVGs live
 in `frontend/public/boards/`, component SVGs in `frontend/public/component-svgs/`,
 and `components-metadata.json` is committed.
-
-The frontend-tests CI workflow only clones `wokwi-elements` (for the
-metadata staleness check), not the other two.
 
 ### 9. Backend Gotchas
 
@@ -500,8 +484,7 @@ Enable verbose logging:
 - Example projects gallery
 - **Portable project persistence**: `.vlx` file export/import — single-file JSON snapshot of the whole workspace, no server, no DB
 - **Resizable file explorer** panel (drag handle, collapse toggle)
-- Docker standalone image published to GHCR + Docker Hub
-- **OSS / pro split**: auth, accounts, public profiles, admin panel, server-side project URLs and analytics live in the private [velxio-prod](https://github.com/velxio/velxio-prod) overlay that runs velxio.dev. OSS is single-user, anonymous, fully self-hostable.
+- Single-user, local-only fork: no accounts, sharing, analytics or plan gates
 
 **In Progress:**
 - Functional wire connections (electrical signal routing)
@@ -516,8 +499,6 @@ Enable verbose logging:
 - Probes: `instr-voltmeter`, `instr-ammeter` metadata IDs.
 - Build-time flag: `VITE_ELECTRICAL_SIM=false` to disable completely.
 - Tests: `frontend/src/__tests__/spice-*.test.ts`, `netlist-builder.test.ts`, `component-to-spice.test.ts`, `instruments.test.ts` (39+ tests).
-- Reference sandbox: `test/test_circuit/` (47 tests proving the approach).
-- Docs: `docs/wiki/circuit-emulation.md` (implementation details), `docs/wiki/electrical-simulation-user-guide.md` (user-facing).
 
 **Planned:**
 - Undo/redo functionality
@@ -526,8 +507,7 @@ Enable verbose logging:
 
 ## Additional Resources
 
-- Main README: [README.md](README.md)
-- Architecture Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Upstream docs (not vendored): https://github.com/davidmonterocrespo24/velxio/tree/master/docs
 - Wokwi Elements Repo: https://github.com/wokwi/wokwi-elements
 - AVR8js Repo: https://github.com/wokwi/avr8js
 - Arduino CLI Docs: https://arduino.github.io/arduino-cli/

@@ -4,7 +4,7 @@ A small keyboard built on a classic ESP32 DevKit: eight MX-style switches wired 
 
 - `firmware/keys8/`: current firmware. Reads 8 keys and prints `key N down` / `key N up` on serial at 115200. Also holds the Wokwi `diagram.json`.
 - `firmware/switches_oled/`, `firmware/rotary_oled/`: earlier sketches with the SSD1306 OLED.
-- `sim/`: fully local simulator (Velxio in Docker). `docker compose -f sim/compose.yaml up -d`, then open http://localhost:3080/editor. See `sim/README.md`.
+- `sim/`: fully local simulator, a vendored fork of Velxio (AGPLv3) in Docker. Run `sim/velxio/scripts/fetch-qemu.sh` once, then `docker compose -f sim/compose.yaml up -d --build` and open http://localhost:3080/editor?project=keys8. See `sim/README.md`.
 - `docs/`: board and bench notes.
 - `guide/`: interactive wiring guide (Vite + React).
 

@@ -22,7 +22,6 @@ import re
 import httpx
 from fastapi import APIRouter, Request, Response
 
-from app.core.hooks import dispatch_gateway_proxy, iot_gateway_gate
 from app.services.esp32_lib_manager import esp_lib_manager
 
 router = APIRouter()
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ── Serving a root-relative page under a path prefix ────────────────────────
 # A sketch's page is written for a board that owns its whole origin, so it
 # asks for "/led?state=1". Served from /api/gateway/<client_id>/ that resolves
-# against velxio.dev, misses the proxy entirely, and hits the SPA — which
+# against the app's own origin, misses the proxy entirely, and hits the SPA — which
 # answers with its own index.html. The request "succeeds", so the page's own
 # .catch() never fires: buttons respond, nothing reaches the board, no error
 # anywhere (reported as "webinterface shows the webpage but doesn't send
@@ -50,8 +49,8 @@ logger = logging.getLogger(__name__)
 _GATEWAY_SHIM = """<script>(function(){
 var P=%PREFIX%;
 if(window.__velxioGatewayShim)return;window.__velxioGatewayShim=P;
-/* The emulated subnets: ESP32 via QEMU slirp, Pico W via the virtual net.
-   A sketch that prints its own IP into the page hard-codes one of these. */
+/* The emulated subnets (ESP32 via QEMU slirp, and the in-browser virtual
+   net). A sketch that prints its own IP into the page hard-codes one of these. */
 var BOARD=/^(192\\.168\\.4\\.\\d{1,3}|10\\.13\\.37\\.\\d{1,3})$/;
 function rw(u){
   try{
@@ -150,20 +149,15 @@ _HTML_RE = re.compile(rb'<html[^>]*>', re.IGNORECASE)
 # ── Saying "there is no server here" so the user can read it ────────────────
 # Two things ate every word of the old answer.
 #
-# The status: a proxy with nothing to proxy to is a textbook 502, and that is
-# what this route returned. But velxio.dev is behind Cloudflare, and Cloudflare
-# replaces an origin 502 (and 504) with its own branded interstitial — "Bad
-# gateway / Error code 502 / velxio.dev Host Error". The careful explanation
-# below never left the building. Reported by a user running the 100-days
-# "Smart Indoor Security System": a MicroPython sketch that joins WiFi and
-# POSTs to a cloud API, starting no server at all, so the WiFi badge's gateway
-# link was always going to land here. So these answers carry a 4xx, which
-# every CDN passes through untouched; the machine-readable `error` key keeps
-# the distinction a 502 used to carry.
+# The status: a proxy with nothing to proxy to is a textbook 502, but a CDN
+# or reverse proxy in front of this server may replace an origin 502 (and 504)
+# with its own interstitial, eating the careful explanation below. So these
+# answers carry a 4xx, which proxies pass through untouched; the
+# machine-readable `error` key keeps the distinction a 502 used to carry.
 #
 # The body: the frontend opens the gateway with window.open(_blank), so a JSON
-# body dumps as raw text in a fresh tab. Same content negotiation the plan gate
-# above already does — HTML to a browser navigation, JSON to fetch/XHR.
+# body dumps as raw text in a fresh tab. Content-negotiate: HTML to a browser
+# navigation, JSON to fetch/XHR.
 _ERROR_PAGE_CSS = (
     'body{background:#1e1e1e;color:#ddd;font-family:-apple-system,'
     'BlinkMacSystemFont,sans-serif;display:flex;min-height:100vh;margin:0;'
@@ -225,12 +219,7 @@ _NO_SERVER_HTML = (
 
 
 def no_server_response(request: Request) -> Response:
-    """The board is reachable, but nothing is listening on port 80.
-
-    Exported because the overlay resolver for browser-side lwIP boards (Pico W
-    and the esp32*js engines) reaches the same dead end and must not answer it
-    with a 502 either.
-    """
+    """The board is reachable, but nothing is listening on port 80."""
     return _gateway_error(
         request,
         error='no_server_on_board',
@@ -287,47 +276,9 @@ def _rewrite_html(resp: Response, prefix: str) -> Response:
 )
 async def gateway_proxy(client_id: str, path: str, request: Request) -> Response:
     """Reverse-proxy an HTTP request to the ESP32's web server."""
-    # Plan gate (overlay-supplied). OSS image has no gate → allow everyone.
-    # When the velxio-prod overlay is loaded, the gateway is a Maker+ feature;
-    # free / anonymous callers get a 402 with an upgrade pointer.
-    block_detail = await iot_gateway_gate(request)
-    if block_detail is not None:
-        # The frontend opens the gateway via window.open(_blank), so a raw
-        # JSON 402 would dump in a new tab. Content-negotiate: serve a tiny
-        # HTML upgrade page to browser navigations, JSON to programmatic
-        # (fetch/XHR) callers.
-        accepts_html = 'text/html' in (request.headers.get('accept') or '')
-        upgrade_url = block_detail.get('upgrade_url', '/pricing')
-        msg = block_detail.get('message', 'This is a paid feature.')
-        if accepts_html:
-            html = (
-                '<!doctype html><html><head><meta charset="utf-8">'
-                '<title>Velxio — upgrade required</title>'
-                '<meta name="viewport" content="width=device-width, initial-scale=1">'
-                '<style>body{background:#1e1e1e;color:#ddd;font-family:-apple-system,'
-                'BlinkMacSystemFont,sans-serif;display:flex;min-height:100vh;margin:0;'
-                'align-items:center;justify-content:center;text-align:center}'
-                '.box{max-width:440px;padding:32px}h1{font-size:20px;color:#fff}'
-                'p{color:#aaa;line-height:1.6}a{display:inline-block;margin-top:16px;'
-                'background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;'
-                'text-decoration:none;font-weight:600}</style></head><body><div class="box">'
-                '<h1>IoT gateway is a Maker feature</h1>'
-                f'<p>{msg} Upgrade to access live ESP32 web servers running in your '
-                'simulated circuit.</p>'
-                f'<a href="https://velxio.dev{upgrade_url}">See plans</a>'
-                '</div></body></html>'
-            )
-            return Response(content=html, status_code=402, media_type='text/html')
-        return Response(
-            content=json.dumps({'error': 'pro_required', 'detail': block_detail}),
-            status_code=402,
-            media_type='application/json',
-        )
-
-    # Registration races the sketch printing its URL: the in-browser engines
-    # dial their net bridge only on 'got_ip', which lands at the same moment
-    # "Server started at: ..." appears in the serial monitor — a fast click
-    # reaches here before the bridge exists. Poll briefly before giving up.
+    # Registration races the sketch printing its URL: a fast click on the
+    # link the serial monitor shows can reach here before the instance has
+    # registered its hostfwd port. Poll briefly before giving up.
     for attempt in range(5):
         if attempt:
             await asyncio.sleep(0.25)
@@ -339,15 +290,6 @@ async def gateway_proxy(client_id: str, path: str, request: Request) -> Response
                 await _proxy_esp32(inst, path, request),
                 _gateway_prefix(request, path),
             )
-
-        # ── Pico W (and any other overlay-provided board): the server runs in
-        #    the browser-side lwIP, reachable only by the overlay proxying TCP
-        #    into the chip over the WS bridge. OSS has no resolver -> None. ──
-        overlay_resp = await dispatch_gateway_proxy(client_id, path, request)
-        if overlay_resp is not None:
-            # Same treatment for the Pico W path: its lwIP server serves
-            # root-relative pages through this very prefix too.
-            return _rewrite_html(overlay_resp, _gateway_prefix(request, path))
 
     # Wording matters here. The old text said "make sure your sketch connected
     # to WiFi", which reads as an accusation to the one sketch that most often

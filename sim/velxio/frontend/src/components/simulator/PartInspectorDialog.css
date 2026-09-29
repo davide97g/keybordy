@@ -103,15 +103,6 @@
   color: var(--wb-12);
 }
 
-.pid-pro {
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 8px;
-  background: #7c5cff;
-  color: var(--color-fg-on-action);
-  font-weight: 700;
-}
-
 .pid-brand {
   font-size: 11px;
   color: var(--wb-10);

@@ -224,32 +224,3 @@ export function webFlashHardwareRevisions(boardKind: string): HardwareRevision[]
     return null;
   }
 }
-
-// ── Hardware-flash entitlement gate ─────────────────────────────────────
-// Whether THIS build may flash real hardware at all. OSS default: allowed.
-// The desktop overlay installs a gate that requires a paid (non-trial)
-// license — issue #207 "upload to board" ships in the paid desktop app.
-// The Flash dialog keeps its menu entry either way and, when blocked,
-// renders the upgrade panel instead of the port picker.
-
-export interface HardwareFlashGate {
-  /** Called at open time (and re-evaluated on each render). */
-  allowed(): boolean;
-  /** Where "See plans" goes; opened externally on desktop. */
-  upgradeUrl: string;
-}
-
-let _gate: HardwareFlashGate | null = null;
-
-export function installHardwareFlashGate(gate: HardwareFlashGate | null): void {
-  _gate = gate;
-}
-
-export function hardwareFlashAllowed(): boolean {
-  return _gate ? _gate.allowed() : true;
-}
-
-export function hardwareFlashUpgradeUrl(): string {
-  return _gate?.upgradeUrl ?? '/pricing';
-}
-

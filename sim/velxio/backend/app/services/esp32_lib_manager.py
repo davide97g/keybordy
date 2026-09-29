@@ -53,9 +53,9 @@ logger = logging.getLogger(__name__)
 _SERVICES_DIR = pathlib.Path(__file__).parent
 
 # Per-platform shared library extension. The build-libqemu CI publishes
-# .so for Linux, .dll for Windows MINGW64, .dylib for macOS — and the
-# release-download step in Dockerfile.standalone / native installers
-# renames the arch-specific asset to the bare name expected here.
+# .so for Linux, .dll for Windows MINGW64, .dylib for macOS, always under
+# the bare name expected here (the Docker image takes them from
+# prebuilt/qemu/, see scripts/fetch-qemu.sh).
 if sys.platform == 'win32':
     _LIB_EXT = '.dll'
 elif sys.platform == 'darwin':
@@ -78,19 +78,16 @@ def _resolve_lib(env_var: str, lib_name: str, default_path: str) -> str:
     1. Explicit env var (`QEMU_ESP32_LIB` / `QEMU_RISCV32_LIB`) — full
        path including filename, used by Docker images that download the
        library to a fixed location at build time.
-    2. `VELXIO_QEMU_PATH` directory — set by the Tauri desktop wrapper
-       when the user runs the in-app "Install ESP32 support" download.
-       The Tauri side drops the file as `libqemu-xtensa.<ext>` /
-       `libqemu-riscv32.<ext>` inside that directory; we just join.
+    2. `VELXIO_QEMU_PATH` directory holding `libqemu-xtensa.<ext>` /
+       `libqemu-riscv32.<ext>`; we just join.
     3. Beside this module (`_DEFAULT_LIB_*`) — the legacy layout for
        hand-installed dev environments.
 
     First match wins. Empty string when nothing is found, in which case
     the manager reports the ESP32 board kind as unavailable.
 
-    Resolved on every call (not cached) so the desktop's in-app
-    installer can drop the library after the sidecar boots without
-    requiring a sidecar restart.
+    Resolved on every call (not cached) so a library dropped in after
+    boot is picked up without a restart.
     """
     direct = os.environ.get(env_var, '')
     if direct and os.path.isfile(direct):

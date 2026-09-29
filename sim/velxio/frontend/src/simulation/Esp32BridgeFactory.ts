@@ -11,7 +11,7 @@
  *
  * In the open-source build no factory is installed, so `createEsp32Bridge`
  * always returns the QEMU-backed bridge. Mirrors the install-impl + safe
- * dispatch shape of `PioPeripheral.ts` / `src/lib/proBoardGate.ts`.
+ * dispatch shape of `PioPeripheral.ts`.
  */
 
 import type { BoardKind } from '../types/board';

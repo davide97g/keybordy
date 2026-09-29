@@ -192,9 +192,9 @@ class PadModel:
         strong: set[int] = set()
         if self._dir.get(pin) == 1:
             if pin not in self._latch:
-                # An output whose level QEMU has not reported yet (the STM32
-                # reports the direction before the level): the guest drives
-                # it, and QEMU writes that level in a moment.
+                # An output whose level QEMU has not reported yet (a guest
+                # may report the direction before the level): the guest
+                # drives it, and QEMU writes that level in a moment.
                 return None
             strong.add(self._latch[pin])
         held = self._chips.get(pin)

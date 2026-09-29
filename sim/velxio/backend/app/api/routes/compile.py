@@ -9,23 +9,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi.responses import JSONResponse
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 
-from app.core.hooks import (
-    compile_admission,
-    scope_fingerprint,
-    scope_retry_allowed,
-    scope_stats,
-    compile_priority,
-    get_current_user_id,
-    get_project_libraries,
-    resolve_compile_owner,
-    record_compile,
-)
 from app.services import build_queue
-from app.services import espidf_compiler as espidf_compiler_module
 from app.services.arduino_cli import ArduinoCLIService
 from app.services.espidf_compiler import espidf_compiler
 
@@ -36,23 +23,22 @@ arduino_cli = ArduinoCLIService()
 
 # ── Async compile job registry ───────────────────────────────────────────────
 # In-process job dict for /compile/start + /compile/status/{job_id}. Cold ESP-IDF
-# builds can take 5-7 minutes — far longer than Cloudflare's 100s edge timeout
-# that hits any single HTTP request. The async path lets the client poll a
-# short-lived status endpoint instead of holding one long-lived POST open.
+# builds can take 5-7 minutes — longer than a typical proxy read timeout on a
+# single HTTP request. The async path lets the client poll a short-lived status
+# endpoint instead of holding one long-lived POST open.
 #
-# Single-instance only: if velxio ever scales to multiple FastAPI workers, this
-# needs to move to Redis or the sqlite database. For now one process is fine.
+# Single process only (one uvicorn worker), which is all a local install runs.
 COMPILE_JOBS: dict[str, dict[str, Any]] = {}
 JOB_BY_KEY: dict[str, str] = {}  # content_hash → job_id, for deduplication
 JOB_TTL_S = 1800  # purge results 30 min after completion
 
 # ── Artifact cache ────────────────────────────────────────────────────────
 # The dedup above only collapses builds that are still in flight, so hitting
-# Run twice on the same gallery example rebuilt it from scratch: measured 28 s
-# cold and 27 s warm for an ESP-IDF P4 example, all of it before the emulator
-# even starts. Gallery examples are byte-identical for every visitor, so the
-# first build can serve everyone. Results are stored under the build volume,
-# keyed by the same content hash the dedup uses.
+# Run twice on the same sketch rebuilt it from scratch: measured 28 s cold and
+# 27 s warm for an ESP-IDF P4 example, all of it before the emulator even
+# starts. Identical sources build identical bytes, so the first build can be
+# served again. Results are stored under the build volume, keyed by the same
+# content hash the dedup uses.
 ARTIFACT_CACHE_DIR = Path(
     os.environ.get("VELXIO_ARTIFACT_CACHE", "/var/lib/velxio-build/artifacts")
 )
@@ -68,9 +54,8 @@ def _env_int(name: str, default: int, lo: int, hi: int) -> int:
 
 
 # Entries are bimodal — a 2 KB AVR hex or a 5 MB merged ESP32 flash image —
-# so the cache is capped both by count and by bytes. 400 entries turned over
-# in under five hours of velxio.dev traffic; the deployment raises it (see
-# docker-compose.yml). 0 bytes = no byte cap.
+# so the cache is capped both by count and by bytes (env-tunable).
+# 0 bytes = no byte cap.
 ARTIFACT_CACHE_MAX_ENTRIES = _env_int("VELXIO_ARTIFACT_CACHE_MAX_ENTRIES", 400, 10, 100_000)
 ARTIFACT_CACHE_MAX_BYTES = _env_int("VELXIO_ARTIFACT_CACHE_MAX_BYTES", 0, 0, 1 << 40)
 ARTIFACT_CACHE_MAX_AGE_S = 14 * 24 * 3600
@@ -79,13 +64,6 @@ ARTIFACT_CACHE_MAX_AGE_S = 14 * 24 * 3600
 # many stores. The cap is therefore soft by up to this many entries.
 _ARTIFACT_PRUNE_EVERY = 25
 _artifact_stores_since_prune = 0
-
-# A request carrying this header with the deployment's token skips the
-# artifact cache LOOKUP (the result is still stored). It exists for the
-# nightly example smoke, which must exercise the compiler rather than read
-# yesterday's binaries back. Unset (the OSS default) = the header is ignored.
-_CACHE_BYPASS_TOKEN = os.environ.get("VELXIO_CACHE_BYPASS_TOKEN", "").strip()
-
 
 def _toolchain_epoch() -> str:
     """Fingerprint everything that TURNS a request into build flags.
@@ -216,10 +194,9 @@ def _artifact_prune() -> None:
 # both, and a Uno blink could sit "compiling" for minutes while two ESP32 builds
 # ran.
 #
-# BuildQueue replaced the two semaphores when velxio.dev started queueing for
-# real: a semaphore is FIFO and anonymous, so a paid build could not get past a
-# wall of gallery clicks and the route had nothing to tell the waiting user. The
-# queue is unbounded on purpose — a build is never refused, only delayed.
+# BuildQueue replaced the two semaphores so the route can tell a waiting user
+# that their build is queued. The queue is unbounded on purpose — a build is
+# never refused, only delayed.
 #
 # There is NO per-target lock here any more. There used to be one, taken
 # INSIDE the lane slot, keyed on (idf_target, arduino variant): with 78% of
@@ -399,44 +376,14 @@ def _job_display_fields(job_id: str) -> dict[str, Any]:
 
     `_compile_job` replaces the whole job dict on completion (simpler than
     patching six keys under a race), which used to drop the queue metadata with
-    it — a finished build then reported the wrong tier to a late poll.
+    it.
     """
     job = COMPILE_JOBS.get(job_id) or {}
     return {
         key: job[key]
-        for key in ("tier", "priority", "lane", "estimate_s", "run_started_at")
+        for key in ("lane", "estimate_s", "run_started_at")
         if key in job
     }
-
-
-async def _resolve_queue_priority(
-    user_id: str | None, http_request: Request | None = None
-) -> tuple[int, str, int | None]:
-    """(priority, display tier, cpu_nice) for a compile. OSS default: everyone equal.
-
-    The tier string only ever reaches the client as a label ('pro' shows a
-    priority badge, 'free' shows the upgrade line). 'local' means no plan
-    vocabulary applies — a self-hosted OSS build — and the UI shows neither.
-
-    `cpu_nice` is the nice level for this build's compiler processes (None =
-    inherit). It only ranks CPU time between builds that are ALREADY running;
-    nobody is stopped or refused. Without an overlay every build inherits.
-    """
-    info = await compile_priority(user_id, http_request)
-    if not isinstance(info, dict):
-        return build_queue.PRIORITY_STANDARD, "local", None
-    try:
-        priority = int(info.get("priority", build_queue.PRIORITY_STANDARD))
-    except (TypeError, ValueError):
-        priority = build_queue.PRIORITY_STANDARD
-    tier = str(info.get("tier") or "standard")
-    cpu_nice: int | None
-    try:
-        raw_nice = info.get("cpu_nice")
-        cpu_nice = None if raw_nice is None else max(0, min(19, int(raw_nice)))
-    except (TypeError, ValueError):
-        cpu_nice = None
-    return priority, tier, cpu_nice
 
 
 def _job_key(
@@ -445,32 +392,16 @@ def _job_key(
     board_options: dict | None = None,
     spiffs_files: list[dict] | None = None,
     libraries: list[str] | None = None,
-    owner_id: str | None = None,
     language: str | None = None,
     custom_wifi_ssids: list[str] | None = None,
-    scope_fingerprint: str | None = None,
 ) -> str:
-    """Stable content hash of (files, board, options, spiffs, libraries, owner)
+    """Stable content hash of (files, board, options, spiffs, libraries)
     used as the deduplication key.
 
-    `scope_fingerprint`, when the overlay provides one, REPLACES the library
-    names and the owner in the key: it is a content-addressed digest of the
-    bytes the manifest resolves to, so a version bump, a re-upload or an
-    evicted sibling changes the key while two users with the same resolved
-    bytes share one build. Without it (OSS) the names are hashed as before.
-
-    Excludes project_id (analytics-only — different projects with identical
-    code should still dedup to one build). File order is normalised so the
-    same set of files in any order produces the same key. Board options
-    and SPIFFS files are included so a partition / scheme / file change
-    queues a fresh build rather than serving the previous cached job.
-
-    `owner_id` is folded in ONLY when a manifest is present (P2.1f/P2.2): a
-    manifest may reference a per-OWNER custom library, so two different owners
-    with byte-identical sketch + board + manifest can resolve DIFFERENT library
-    bytes and must not dedup to one another's build. Index-only / no-manifest
-    compiles pass owner_id=None and keep cross-owner dedup (the cache is shared,
-    so the build is owner-independent).
+    File order is normalised so the same set of files in any order produces
+    the same key. Board options and SPIFFS files are included so a partition /
+    scheme / file change queues a fresh build rather than serving the previous
+    cached job.
     """
     h = hashlib.sha256()
     # Bind every key to the code that generates build flags: a binary cached
@@ -504,23 +435,12 @@ def _job_key(
             h.update(b"\0")
             h.update(f["content_b64"].encode())
             h.update(b"\0")
-    if scope_fingerprint is not None:
-        h.update(b"\0scope-fp\0")
-        h.update(scope_fingerprint.encode())
-        h.update(b"\0")
-    elif libraries:
+    if libraries:
         # Manifest changes the resolved library set → different binary, so it
         # must not dedup to a job built with a different manifest.
         for name in sorted(libraries):
             h.update(name.encode())
             h.update(b"\0")
-    if scope_fingerprint is None and owner_id:
-        # Per-owner custom-lib disambiguation (see docstring). Only set when a
-        # manifest is present, so it never perturbs the owner-independent
-        # index-only case.
-        h.update(b"owner:")
-        h.update(owner_id.encode())
-        h.update(b"\0")
     if language and language != "arduino":
         # Pure ESP-IDF mode produces a different binary from the same bytes —
         # never dedup across language modes. Guarded so 'arduino' (explicit or
@@ -598,23 +518,13 @@ class CompileRequest(BaseModel):
     # Legacy single-file API (kept for backward compat)
     code: str | None = None
     board_fqbn: str = "arduino:avr:uno"
-    # Optional: associate this compile with a project for analytics
-    project_id: str | None = None
-    # Optional: the editor's BoardKind (e.g. 'badger-2350'). Purely for
-    # analytics — several distinct boards can share one FQBN (the Pimoroni
-    # RP2350 boards all compile as rpipico2), and only the kind can tell
-    # them apart. Rides into the metric hook's `extra`.
-    board_kind: str | None = None
-    # Optional: gallery example the workspace was loaded from. Analytics
-    # only ("which examples get compiled most"); rides in `extra` too.
-    example_id: str | None = None
     # Per-board ESP32 build options (Partition Scheme, CPU Freq, Flash Mode,
     # PSRAM, etc.). Loose dict so the frontend can add fields without a
     # backend deploy — espidf_compiler.compile validates known keys and
     # ignores the rest. None / missing on non-ESP32 boards.
     board_options: dict[str, str | int | bool] | None = None
     # Optional: the SSIDs of the project's custom WiFi access points (the
-    # velxio-wifi-ap parts on the canvas, overlay feature). When non-empty
+    # velxio-wifi-ap parts on the canvas). When non-empty
     # the compiler does NOT rewrite the sketch's SSID literals — the project
     # defines its own airspace, so what the user typed is what exists. Empty
     # / missing keeps the legacy behavior (rewrite to the built-in networks).
@@ -632,10 +542,6 @@ class CompileRequest(BaseModel):
     # the arduino-esp32 component is left out of the build entirely. None /
     # 'arduino' = classic Arduino sketch compile. ESP32 boards only.
     language: str | None = None
-    # Who triggered this compile: None/'user' = manual UI action,
-    # 'agent' = the AI assistant's compile_sketch tool. Metrics overlays
-    # use it to keep agent activity distinguishable from the user's own.
-    initiated_by: str | None = None
 
 
 class CompileResponse(BaseModel):
@@ -658,19 +564,12 @@ class CompileResponse(BaseModel):
     # can be auto-completed (P2.4) or the user prompted to add the lib.
     manifest_incomplete: bool = False
     manifest_suggested_libraries: dict | None = None
-    # How the libraries resolved (scope_kind, scope_src, locked_miss, lock_sha,
-    # ambiguous_headers, ...). Filled by the compilers from what the overlay's
-    # materialiser reported; None on OSS. Recorded with the compile event.
-    scope: dict | None = None
     # A stable class for the failure: missing_library | core_install_failed |
     # linker_error | syntax_error | compile_error | unknown. Filled in below
     # from stderr, so every caller gets it without grepping compiler output,
     # and every construction site gets it without remembering to. None when
     # the build succeeded.
     #
-    # It already existed for analytics; agents were the one caller that had to
-    # re-derive the failure class from the log on every retry, which is the
-    # one place where the distinction decides what to do next:
     # core_install_failed is the build server's problem and rewriting the
     # sketch cannot fix it.
     error_kind: str | None = None
@@ -684,43 +583,11 @@ class CompileResponse(BaseModel):
         return self
 
 
-_SCOPE_RESULT_KEYS = (
-    "scope_kind", "scope_src", "scope_retry", "gallery_scope_miss", "locked_miss",
-    "pinned_miss", "pin_fallback", "shadowed_by_upload", "ambiguous_headers", "lock_sha",
-    "scope_retry_headers",
-)
-
-
-def _scope_of(result: dict) -> dict | None:
-    # What the overlay's materialiser reported for this compile (hooks
-    # scope_stats): the result's own keys win, the report fills the rest.
-    reported = scope_stats.get() or {}
-    out = {k: reported[k] for k in _SCOPE_RESULT_KEYS if k in reported and reported[k]}
-    out.update({k: result[k] for k in _SCOPE_RESULT_KEYS if k in result})
-    # manifest_incomplete is ALSO set on a plain scan-all build that merged
-    # libraries (the client uses it to suggest a manifest), so it cannot mean
-    # "the scoped attempt failed and the retry ran". The compilers say that
-    # explicitly with scope_retry_failed / a retry that succeeded.
-    if result.get("scope_retry_failed"):
-        out.setdefault("scope_retry", True)
-    # A retry that SUCCEEDED marks the result manifest_incomplete; when a
-    # scoped attempt preceded it (the overlay reported one) that is a scoped
-    # miss rescued by scan-all, and the headers the compiler suggested
-    # libraries for are the ones the scope lacked.
-    if result.get("manifest_incomplete") and reported:
-        out.setdefault("scope_retry", True)
-        suggested = result.get("manifest_suggested_libraries")
-        if isinstance(suggested, dict) and suggested:
-            out.setdefault("scope_retry_headers", sorted(suggested))
-    return out or None
-
-
 def _classify_compile_error(stderr: str, error: str | None) -> str:
     """Map raw compiler output to a stable error_kind.
 
-    Rides CompileResponse.error_kind (so every API caller gets it) and the
-    compile analytics event. The vocabulary is closed on purpose: callers
-    branch on it.
+    Rides CompileResponse.error_kind so every API caller gets it. The
+    vocabulary is closed on purpose: callers branch on it.
     """
     haystack = f"{error or ''}\n{stderr or ''}".lower()
     if "no such file or directory" in haystack or "fatal error:" in haystack:
@@ -751,13 +618,11 @@ def _resolve_files(request: CompileRequest) -> list[dict[str, str]]:
 def _manifest_specs(names) -> set[str] | None:
     """The manifest as sent, three-state. None (no field) -> no manifest, the
     compilers scan every installed library. [] -> a manifest that declares
-    nothing: an empty set, handed to the overlay as such (it decides whether
-    that is a closed scope). Otherwise the specs, trimmed, empties dropped.
+    nothing: an empty set (the ESP-IDF lane treats it as scan-all too).
+    Otherwise the specs, trimmed, empties dropped.
 
-    Specs KEEP their pin ("Lib@1.2.3", "Lib@1.2.3-<sha12>", "Lib@wokwi:<hash>")
-    since 2026-09-11. The overlay's resolver reads the pin and the ESP-IDF
-    name filter splits the base name itself; stripping it here (P2.1h) is
-    what made a manifest fix the SET of libraries but never their BYTES."""
+    Specs KEEP their pin ("Lib@1.2.3", "Lib@wokwi:<hash>"); the ESP-IDF name
+    filter splits the base name itself."""
     if names is None:
         return None
     out: set[str] = set()
@@ -766,8 +631,7 @@ def _manifest_specs(names) -> set[str] | None:
         if not n:
             continue
         # A Wokwi-hosted custom library is "Lib@wokwi:<hash>": that suffix is
-        # its install spec, not a pin, and the cache publishes the entry under
-        # the bare name (P2.2b). Keep the name, drop the spec.
+        # its install spec, not a pin. Keep the name, drop the spec.
         if "@wokwi:" in n:
             n = n.split("@wokwi:", 1)[0].strip()
         if n:
@@ -775,117 +639,10 @@ def _manifest_specs(names) -> set[str] | None:
     return out
 
 
-async def _admit_compile(
-    request: CompileRequest,
-    files: list[dict[str, str]],
-    allowed_libraries: set[str] | None,
-    owner_id: str | None,
-    requester_id: str | None,
-) -> tuple[set[str] | None, bool, dict | None, JSONResponse | None]:
-    """One question to the overlay before a compile is queued or run: may it
-    proceed, and with which scope. Returns (allowed_libraries, retry_allowed,
-    gallery, refusal). `refusal` is a ready-to-return response shaped like a
-    CompileResult (the client casts any 4xx/5xx body to one) and the refusal
-    has already been recorded as a compile event, so 0 refusals and 400 do
-    not look alike. OSS: the overlay is absent, nothing changes."""
-    decision = compile_admission(
-        files=files, board_fqbn=request.board_fqbn, example_id=request.example_id,
-        client_manifest=request.libraries, allowed_libraries=allowed_libraries,
-        owner_id=owner_id, requester_id=requester_id,
-    )
-    if not decision:
-        return allowed_libraries, True, None, None
-    refuse = decision.get("refuse")
-    if refuse:
-        body = {"success": False, "stderr": "", **refuse}
-        status = int(decision.get("http_status") or 422)
-        # /compile/start answers a job id on 2xx; a refusal carries none, so it
-        # must be an error status or the client polls a job that never existed.
-        if status < 400:
-            status = 422
-        await record_compile(
-            user_id=requester_id,
-            project_id=request.project_id,
-            board_fqbn=request.board_fqbn,
-            success=False,
-            duration_ms=0,
-            error_kind=str(decision.get("error_kind") or "refused"),
-            extra={
-                "file_count": len(files),
-                "refused": True,
-                "http_status": status,
-                "initiated_by": request.initiated_by,
-                "board_kind": request.board_kind,
-                "example_id": request.example_id,
-                **{k: v for k, v in refuse.items() if k not in ("success", "error", "stderr")},
-            },
-        )
-        return (
-            allowed_libraries, True, None,
-            JSONResponse(status_code=status, content=body, headers=decision.get("headers") or None),
-        )
-    if "allowed_libraries" in decision:
-        allowed_libraries = decision["allowed_libraries"]
-    return allowed_libraries, bool(decision.get("retry_allowed", True)), decision.get("gallery"), None
-
-
-async def _resolve_compile_scope(
-    request: CompileRequest, requester_id: str | None
-) -> tuple[set[str] | None, str | None]:
-    """Resolve the per-compile library SCOPE + owner. Used identically by the
-    actual build (_run_compile) AND the async dedup key (compile_start) so the
-    two can never diverge — a divergence would let one owner be served another's
-    in-flight binary, or rebuild needlessly.
-
-    Manifest = resolution SCOPE for BOTH compile paths (ESP-IDF and arduino-cli /
-    AVR / RP2040 / ATtiny). Manifests are PER-BOARD (each board carries its own
-    velxio.json); the client sends the COMPILING board's manifest in
-    request.libraries, so it takes precedence (two boards in one project can
-    scope to different libraries). Fall back to the project-level manifest (read
-    server-side) only when the client sends none — an anonymous compile or an old
-    client. None/empty → legacy scan-all.
-
-    Owner = whose per-user custom libraries the manifest may reference: the
-    project OWNER for a saved project (so a shared/embed compile finds that
-    owner's libs) — but ONLY when the requester is the owner or the project is
-    shareable (public/unlisted), so a private project's custom libs are never
-    reachable by another user (resolve_compile_owner enforces this gate). Falls
-    back to the REQUESTER for an unsaved / private-non-owner / anon compile (the
-    libs they just uploaded are their own).
-    """
-    # Resolve the visibility-gated owner FIRST: a non-None result means the
-    # requester may read THIS project's server-side state (it is their own, or
-    # public/unlisted). That same gate decides whether the saved-project manifest
-    # may be honored — so a PRIVATE project's declared library NAMES are never
-    # exposed to a non-owner via the server-side fallback (symmetry with the
-    # owner-bytes gate; P2.2-sec).
-    gated_owner = await resolve_compile_owner(request.project_id, requester_id)
-
-    # P2.1h: strip a trailing @version from each manifest name. norm_name fuses
-    # the version digits into the name otherwise ("ArduinoJson@6.21.5" ->
-    # "arduinojson6215"), which misses the cache entry ("arduinojson") and forces
-    # a global-dir scan-all. The per-board manifest (boards_json[].libraries,
-    # which the client sends in request.libraries) is the path that still carries
-    # @version. We don't version-pin today, so the bare name is what resolves.
-    allowed_libraries: set[str] | None = None
-    if request.libraries is not None:
-        allowed_libraries = _manifest_specs(request.libraries)
-    elif gated_owner is not None:
-        project_libs = await get_project_libraries(request.project_id)
-        if project_libs:
-            allowed_libraries = _manifest_specs(project_libs)
-
-    owner_id = gated_owner if gated_owner is not None else requester_id
-    return allowed_libraries, owner_id
-
-
 async def _run_compile(
     request: CompileRequest,
     files: list[dict[str, str]],
     progress_callback: Any = None,
-    requester_id: str | None = None,
-    scope: tuple[set[str] | None, str | None] | None = None,
-    cpu_nice: int | None = None,
 ) -> CompileResponse:
     """Do the actual compile (ESP-IDF for esp32:*, arduino-cli otherwise).
 
@@ -895,15 +652,10 @@ async def _run_compile(
     AVR / RP2040 builds via arduino-cli don't surface progress yet — those
     typically finish in seconds anyway.
 
-    `scope` is the pre-resolved (allowed_libraries, owner_id) from the async
-    path — passed so the build uses the SAME values the dedup key was built
-    from (no re-resolution, no divergence). The sync path passes None → we
-    resolve it here.
+    The per-board manifest (`request.libraries`) scopes ESP-IDF library
+    resolution; None / empty -> scan every installed library.
     """
-    if scope is None:
-        allowed_libraries, owner_id = await _resolve_compile_scope(request, requester_id)
-    else:
-        allowed_libraries, owner_id = scope
+    allowed_libraries = _manifest_specs(request.libraries)
 
     pure_idf = request.language == "espidf"
     if pure_idf and not request.board_fqbn.startswith("esp32:"):
@@ -921,8 +673,6 @@ async def _run_compile(
             error="ESP-IDF toolchain is not available on this server.",
         )
 
-    # One report per compile: never inherit the previous job's.
-    scope_stats.set(None)
     if request.board_fqbn.startswith("esp32:") and espidf_compiler.available:
         logger.info(
             f"[compile] Using ESP-IDF for {request.board_fqbn}"
@@ -932,17 +682,14 @@ async def _run_compile(
             [f.model_dump() for f in request.spiffs_files]
             if request.spiffs_files else None
         )
-        espidf_compiler_module.build_timing.set({})
         result = await espidf_compiler.compile(
             files, request.board_fqbn,
             progress_callback=progress_callback,
             board_options=request.board_options,
             spiffs_files=spiffs_dicts,
             allowed_libraries=allowed_libraries,
-            owner_id=owner_id,
             pure_idf=pure_idf,
             custom_wifi_ssids=request.custom_wifi_ssids,
-            cpu_nice=cpu_nice,
         )
         return CompileResponse(
             success=result["success"],
@@ -956,7 +703,6 @@ async def _run_compile(
             error=result.get("error"),
             manifest_incomplete=result.get("manifest_incomplete", False),
             manifest_suggested_libraries=result.get("manifest_suggested_libraries"),
-            scope=_scope_of(result),
         )
 
     # AVR, RP2040, and ESP32 fallback: use arduino-cli
@@ -972,13 +718,9 @@ async def _run_compile(
 
     # AVR / RP2040 / ATTiny path. `board_options` is accepted for API
     # symmetry but currently ignored — those toolchains don't expose the
-    # ESP32 partition / PSRAM knobs we're surfacing. P2.1f: the manifest scope
-    # + owner now flow through so arduino-cli reads the content-addressed cache
-    # (via a scoped ARDUINO_DIRECTORIES_USER sketchbook) instead of the shared
-    # global volume.
+    # ESP32 partition / PSRAM knobs we're surfacing.
     result = await arduino_cli.compile(
         files, request.board_fqbn, board_options=request.board_options,
-        allowed_libraries=allowed_libraries, owner_id=owner_id,
     )
     return CompileResponse(
         success=result["success"],
@@ -990,40 +732,6 @@ async def _run_compile(
         stderr=result.get("stderr", ""),
         error=result.get("error"),
         core_install_log=core_log if core_log else None,
-        # P2.1f: set when the scoped compile missed a header and recovered via a
-        # scan-all retry — signals the project's velxio.json manifest is
-        # incomplete (a needed / transitive lib not declared).
-        manifest_incomplete=result.get("manifest_incomplete", False),
-        scope=_scope_of(result),
-    )
-
-
-async def _record_async_metric(
-    *,
-    user_id: str | None,
-    project_id: str | None,
-    board_fqbn: str,
-    success: bool,
-    duration_ms: int,
-    error_kind: str | None,
-    extra: dict[str, Any],
-) -> None:
-    """Forward a background-task compile metric to the registered hook.
-
-    Wrapper kept for the async path's signature symmetry with the sync path.
-    The hook owns its own DB session (the request-scoped one is gone by now)
-    and request=None means country/IP tagging is dropped — only user_id and
-    timing flow through.
-    """
-    await record_compile(
-        user_id=user_id,
-        project_id=project_id,
-        board_fqbn=board_fqbn,
-        success=success,
-        duration_ms=duration_ms,
-        error_kind=error_kind,
-        extra=extra,
-        request=None,
     )
 
 
@@ -1031,27 +739,9 @@ async def _compile_job(
     job_id: str,
     request: CompileRequest,
     files: list[dict[str, str]],
-    user_id: str | None,
-    scope: tuple[set[str] | None, str | None] | None = None,
-    priority: int = build_queue.PRIORITY_STANDARD,
-    cpu_nice: int | None = None,
-    retry_allowed: bool = True,
-    gallery: dict | None = None,
 ) -> None:
     """Background worker: acquire a build slot, run the compile (which takes
     its own build-dir lock), store result in COMPILE_JOBS.
-
-    `retry_allowed` is the overlay's admission decision (an unmodified gallery
-    compile gets no scan-all retry); it is set on the context variable INSIDE
-    this task so it cannot leak into another request.
-
-    `scope` is the (allowed_libraries, owner_id) already resolved by
-    compile_start for the dedup key — threaded through so the build uses the
-    exact same scope the key was computed from (no second resolution that could
-    disagree under a transient owner-lookup failure).
-
-    `priority` decides where this job sits in its lane's queue (lower runs
-    first); it comes from the plan resolved at /compile/start.
 
     `state=pending` while waiting on either gate; transitions to `running`
     only once the actual build is about to start, so clients polling
@@ -1063,7 +753,6 @@ async def _compile_job(
     line-by-line as cmake + ninja emit it, so /compile/status responses
     stream a growing log instead of returning everything at the end.
     """
-    started = time.monotonic()
     job = COMPILE_JOBS[job_id]
     started_at = job["started_at"]
     job_key = job.get("key")
@@ -1090,12 +779,9 @@ async def _compile_job(
     heavy = _is_heavy_compile(request.board_fqbn)
     lane_name = "heavy" if heavy else "light"
     lane = build_queue.lane_for(heavy)
-    build_started = started
 
     def on_queued() -> None:
-        # Tell the user WHY nothing is happening yet. Deliberately says
-        # nothing about how many builds are ahead: a queue depth is worse
-        # than no number at all, and it publishes how busy the service is.
+        # Tell the user WHY nothing is happening yet.
         current = COMPILE_JOBS.get(job_id)
         if current is not None:
             current["stage"] = "queued"
@@ -1104,11 +790,8 @@ async def _compile_job(
             "automatically, and is never dropped.\n"
         )
 
-    slot_acquired = started
-    compiler_timing: dict[str, Any] = {}
     try:
-        async with lane.slot(priority=priority, key=job_id, on_queued=on_queued):
-            slot_acquired = time.monotonic()
+        async with lane.slot(on_queued=on_queued):
             # Job may have been purged or replaced while we were queued.
             # Re-fetch and bail out if so.
             if COMPILE_JOBS.get(job_id) is None:
@@ -1124,12 +807,9 @@ async def _compile_job(
                 lane_name, request.board_fqbn
             )
             build_started = time.monotonic()
-            scope_retry_allowed.set(retry_allowed)
             response = await _run_compile(
                 request, files, progress_callback=on_progress_line,
-                requester_id=user_id, scope=scope, cpu_nice=cpu_nice,
             )
-            compiler_timing = dict(espidf_compiler_module.build_timing.get() or {})
         if response.success:
             _record_duration(
                 lane_name, request.board_fqbn, time.monotonic() - build_started
@@ -1142,9 +822,6 @@ async def _compile_job(
             "finished_at": time.time(),
             "result": response.model_dump(),
             "key": job_key,
-            # The overlay's classification of a gallery compile, kept on the
-            # finished record: the nightly reads it from the status payload.
-            "gallery": gallery,
             # Preserve the streamed buffer post-completion so a late poll
             # still has access to the live log (clients usually display
             # result.stdout once state=done, but having both costs nothing).
@@ -1152,51 +829,6 @@ async def _compile_job(
         }
         if job_key:
             await _artifact_store(job_key, response.model_dump())
-        error_kind = response.error_kind
-        await _record_async_metric(
-            user_id=user_id,
-            project_id=request.project_id,
-            board_fqbn=request.board_fqbn,
-            success=response.success,
-            duration_ms=int((time.monotonic() - started) * 1000),
-            error_kind=error_kind,
-            extra={
-                "file_count": len(files),
-                "has_wifi": response.has_wifi,
-                "async": True,
-                "initiated_by": request.initiated_by,
-                "board_kind": request.board_kind,
-                "example_id": request.example_id,
-                "gallery": gallery,
-                # scope_kind / scope_src / locked_miss / lock_sha ... whatever
-                # the compilers learned about how the libraries resolved.
-                **(response.scope or {}),
-                "partition_scheme": (request.board_options or {}).get("partitionScheme"),
-                "spiffs_file_count": len(request.spiffs_files or []),
-                # duration_ms is queue + build, which it always was (the old
-                # semaphore wait counted too). Splitting the wait out is what
-                # tells the operator whether a slow week means slow builds or a
-                # deep queue — i.e. whether to buy CPU or raise the lane caps.
-                "queue_ms": int((build_started - started) * 1000),
-                # queue_ms used to bundle the wait for a build slot with the
-                # wait for the build DIRECTORY (the old per-target lock). They
-                # answer different questions: slot_ms says the lane is full,
-                # variant_wait_ms says one variant is hot. Kept separate.
-                "slot_ms": int((slot_acquired - started) * 1000),
-                "variant_wait_ms": compiler_timing.get("variant_wait_ms"),
-                "configure_skipped": compiler_timing.get("configure_skipped"),
-                "configure_ms": compiler_timing.get("configure_ms"),
-                "ninja_ms": compiler_timing.get("ninja_ms"),
-                "replica": compiler_timing.get("replica"),
-                # target/variant-hash of the build dir, so a failure can be
-                # traced to the shared dir it came from.
-                "variant": compiler_timing.get("variant"),
-                "app_main_heal": compiler_timing.get("app_main_heal"),
-                "lane": lane_name,
-                "priority": priority,
-                "cpu_nice": cpu_nice,
-            },
-        )
     except Exception as exc:
         logger.exception(f"[compile] async job {job_id} failed")
         COMPILE_JOBS[job_id] = {
@@ -1207,61 +839,32 @@ async def _compile_job(
             "finished_at": time.time(),
             "error": str(exc)[:500],
             "key": job_key,
-            "gallery": gallery,
             "stdout_buffer": COMPILE_JOBS.get(job_id, {}).get("stdout_buffer", ""),
         }
-        await _record_async_metric(
-            user_id=user_id,
-            project_id=request.project_id,
-            board_fqbn=request.board_fqbn,
-            success=False,
-            duration_ms=int((time.monotonic() - started) * 1000),
-            error_kind="exception",
-            extra={"file_count": len(files), "exception": str(exc)[:200], "async": True, "initiated_by": request.initiated_by, "board_kind": request.board_kind, "example_id": request.example_id},
-        )
 
 
 @router.post("/", response_model=CompileResponse)
-async def compile_sketch(
-    request: CompileRequest,
-    http_request: Request,
-    user_id: str | None = Depends(get_current_user_id),
-):
+async def compile_sketch(request: CompileRequest):
     """
     Compile Arduino sketch and return hex/binary in a single response.
 
     Synchronous path: held open until the build finishes. Works for AVR /
     RP2040 builds (seconds), but ESP-IDF cold builds can run 5-7 minutes
-    and will hit Cloudflare's 100s edge timeout (HTTP 524). Use the async
-    path (`/compile/start` + `/compile/status/{job_id}`) for those.
+    and may hit a proxy timeout. Use the async path (`/compile/start` +
+    `/compile/status/{job_id}`) for those.
 
     Accepts either `files` (multi-file) or legacy `code` (single file).
     Auto-installs the required board core if not present.
     """
     files = _resolve_files(request)
-    started = time.monotonic()
-
-    priority, _tier, cpu_nice = await _resolve_queue_priority(user_id, http_request)
     lane = build_queue.lane_for(_is_heavy_compile(request.board_fqbn))
 
-    sync_allowed, sync_owner = await _resolve_compile_scope(request, user_id)
-    sync_allowed, sync_retry, _sync_gallery, sync_refusal = await _admit_compile(
-        request, files, sync_allowed, sync_owner, user_id,
-    )
-    if sync_refusal is not None:
-        return sync_refusal
-
     async def _gated_compile() -> CompileResponse:
-        # This path used to call _run_compile directly with no build slot, so
-        # an API caller bypassed the queue entirely while everyone in the
-        # editor waited. The build dir itself is protected inside the
-        # compiler (per-variant lock), the same as for the async path.
-        async with lane.slot(priority=priority):
-            scope_retry_allowed.set(sync_retry)
-            return await _run_compile(
-                request, files, requester_id=user_id, cpu_nice=cpu_nice,
-                scope=(sync_allowed, sync_owner),
-            )
+        # Takes a build slot like the async path, so an API caller cannot
+        # bypass the concurrency cap. The build dir itself is protected
+        # inside the compiler (per-variant lock).
+        async with lane.slot():
+            return await _run_compile(request, files)
 
     try:
         # Shielded: when the client (or a proxy timeout - nginx 504s a cold
@@ -1269,56 +872,24 @@ async def compile_sketch(
         # Starlette cancels this handler. Without the shield the cancellation
         # killed the build subprocess MID-WRITE and left truncated .obj files
         # in the persistent per-target build cache, poisoning every LATER
-        # build of that target ("ranlib: file truncated", seen twice on
-        # staging the day the P4 lane landed). The shield lets the build run
-        # to completion and keep the cache consistent; only the response is
-        # lost.
+        # build of that target ("ranlib: file truncated"). The shield lets the
+        # build run to completion and keep the cache consistent; only the
+        # response is lost.
         #
         # The shield covers the queue wait too. Dropping the slot on
         # disconnect and letting the shielded build run on would put a build
         # outside the concurrency cap — the one thing the lane exists to
         # prevent, so the whole gated coroutine is shielded together.
         #
-        # The cost is real and worth naming: this path neither reads nor writes
-        # the artifact cache (only the async job path does), so a request
-        # abandoned while queued still consumes a slot for a build whose result
-        # nobody receives and nothing caches. Acceptable because the sync
-        # endpoint is the API/legacy path — the editor uses /compile/start —
-        # and a corrupted shared build dir is far worse than a wasted slot.
-        response = await asyncio.shield(asyncio.ensure_future(_gated_compile()))
+        # The cost: this path neither reads nor writes the artifact cache
+        # (only the async job path does), so a request abandoned while queued
+        # still consumes a slot for a build whose result nobody receives.
+        # Acceptable because the sync endpoint is the API/legacy path — the
+        # editor uses /compile/start — and a corrupted shared build dir is far
+        # worse than a wasted slot.
+        return await asyncio.shield(asyncio.ensure_future(_gated_compile()))
     except Exception as e:
-        await record_compile(
-            user_id=user_id,
-            project_id=request.project_id,
-            board_fqbn=request.board_fqbn,
-            success=False,
-            duration_ms=int((time.monotonic() - started) * 1000),
-            error_kind="exception",
-            extra={"file_count": len(files), "exception": str(e)[:200], "initiated_by": request.initiated_by, "board_kind": request.board_kind, "example_id": request.example_id},
-            request=http_request,
-        )
         raise HTTPException(status_code=500, detail=str(e))
-
-    duration_ms = int((time.monotonic() - started) * 1000)
-    await record_compile(
-        user_id=user_id,
-        project_id=request.project_id,
-        board_fqbn=request.board_fqbn,
-        success=response.success,
-        duration_ms=duration_ms,
-        error_kind=response.error_kind,
-        extra={
-            "file_count": len(files),
-            "has_wifi": response.has_wifi,
-            "initiated_by": request.initiated_by,
-                "board_kind": request.board_kind,
-                "example_id": request.example_id,
-            "partition_scheme": (request.board_options or {}).get("partitionScheme"),
-            "spiffs_file_count": len(request.spiffs_files or []),
-        },
-        request=http_request,
-    )
-    return response
 
 
 class CompileStartResponse(BaseModel):
@@ -1345,9 +916,6 @@ class CompileStatusResponse(BaseModel):
     #   linking / packaging — the tail end of the build
     #   done       — finished, successfully or not
     stage: str = "preparing"
-    # The overlay's classification of a gallery compile ({example_id,
-    # unmodified, reason}), echoed so the nightly can assert it. None on OSS.
-    gallery: dict | None = None
     # 0..1, or null when there is nothing honest to draw (a queued job).
     # Measured from ninja's [done/total] where available, estimated from this
     # server's own recent build times otherwise.
@@ -1358,30 +926,24 @@ class CompileStatusResponse(BaseModel):
     # on screen matches the bar next to it.
     build_seconds: float = 0.0
     # Coarse build-server pressure: 'low' | 'moderate' | 'high' | 'peak'.
-    # Deliberately a bucket, never a count: queue depth and position stay
-    # server-side (see app/services/build_queue.py).
+    # A bucket, not a count (see app/services/build_queue.py).
     server_load: str = "low"
-    # Display label for the requester's plan — 'local' (self-hosted OSS, no
-    # plan vocabulary), 'anonymous', 'free', 'maker', 'pro'. The UI uses it to
-    # choose between a priority badge and an upgrade line; it grants nothing.
+    # Kept for response-shape compatibility with the frontend, which reads
+    # both with these same defaults. Single-user: every build is 'local' and
+    # none is prioritised.
     tier: str = "local"
-    # Whether this job was admitted ahead of standard builds.
     priority: bool = False
 
 
 @router.post("/start", response_model=CompileStartResponse)
-async def compile_start(
-    request: CompileRequest,
-    http_request: Request,
-    user_id: str | None = Depends(get_current_user_id),
-):
+async def compile_start(request: CompileRequest):
     """
     Queue a compile and return a `job_id` immediately.
 
     The actual compile runs in a background task; clients then poll
     `GET /compile/status/{job_id}` every couple of seconds until state is
-    `done` or `error`. This sidesteps Cloudflare's 100s HTTP edge timeout —
-    each individual request returns in milliseconds.
+    `done` or `error`. This sidesteps HTTP proxy timeouts — each individual
+    request returns in milliseconds.
 
     Deduplication: identical (files, board_fqbn) submissions while a
     matching job is still pending or running return the existing job_id
@@ -1395,71 +957,28 @@ async def compile_start(
     spiffs_dicts = (
         [f.model_dump() for f in request.spiffs_files] if request.spiffs_files else None
     )
-    # Resolve the EXACT scope the build will use (client manifest else the
-    # server-side project manifest; owner else requester) — the SAME helper
-    # _run_compile uses — and fold it into the dedup key so the key matches the
-    # bytes the build actually produces. The resolved set + owner (owner only
-    # when a manifest applies, to preserve owner-independent dedup for index-
-    # only / no-manifest compiles) is then threaded into the job so the build
-    # never re-resolves and the two can't diverge.
-    # Where this build sits in the queue. Resolved once, here, so a single
-    # plan lookup covers the whole job and the tier the UI displays is the
-    # same one the queue actually ordered on.
-    priority, tier, cpu_nice = await _resolve_queue_priority(user_id, http_request)
     heavy = _is_heavy_compile(request.board_fqbn)
-    queue_fields = {
-        "tier": tier,
-        "priority": priority,
-        "lane": "heavy" if heavy else "light",
-    }
+    queue_fields = {"lane": "heavy" if heavy else "light"}
 
-    allowed_libraries, owner_id = await _resolve_compile_scope(request, user_id)
-    allowed_libraries, retry_allowed, gallery, refusal = await _admit_compile(
-        request, files, allowed_libraries, owner_id, user_id,
-    )
-    if refusal is not None:
-        return refusal
-    fingerprint = scope_fingerprint(allowed_libraries, owner_id)
+    # Fold the same manifest the build will use into the dedup key, so the key
+    # matches the bytes the build actually produces.
+    allowed_libraries = _manifest_specs(request.libraries)
     key = _job_key(
         files, request.board_fqbn, request.board_options, spiffs_dicts,
         sorted(allowed_libraries) if allowed_libraries else None,
-        owner_id if allowed_libraries else None,
         language=request.language,
         custom_wifi_ssids=request.custom_wifi_ssids,
-        scope_fingerprint=fingerprint,
     )
     existing_id = JOB_BY_KEY.get(key)
     if existing_id is not None:
         existing = COMPILE_JOBS.get(existing_id)
         if existing is not None and existing.get("state") in ("pending", "running"):
-            # Two users submitting byte-identical sources for the same board
-            # share ONE build. The job keeps whoever asked first, which used to
-            # mean a pro user landing on a queued anonymous build of a popular
-            # gallery example waited at standard priority AND was shown the
-            # anonymous tier (upgrade prompt and all). Lift the shared job to
-            # the better entitlement instead — it never demotes, so the first
-            # submitter cannot lose ground either.
-            if priority < int(existing.get("priority", build_queue.PRIORITY_STANDARD)):
-                existing["priority"] = priority
-                existing["tier"] = tier
-                lane_for_existing = build_queue.lane_for(
-                    existing.get("lane") == "heavy"
-                )
-                lane_for_existing.reprioritize(existing_id, priority)
-                logger.info(
-                    "[compile] dedup hit — job %s lifted to %s priority",
-                    existing_id, tier,
-                )
             logger.info(f"[compile] dedup hit — reusing job {existing_id}")
             return CompileStartResponse(job_id=existing_id)
 
     # Same sources, same flags, already built: hand the stored artifact back as
     # an already-finished job so the client's normal poll loop just sees `done`.
-    bypass_cache = bool(
-        _CACHE_BYPASS_TOKEN
-        and http_request.headers.get("x-velxio-cache-bypass", "") == _CACHE_BYPASS_TOKEN
-    )
-    cached = None if bypass_cache else _artifact_load(key)
+    cached = _artifact_load(key)
     if cached is not None:
         job_id = uuid.uuid4().hex
         now = time.time()
@@ -1472,30 +991,9 @@ async def compile_start(
             "run_started_at": now,
             "result": cached,
             "key": key,
-            "gallery": gallery,
             "stdout_buffer": cached.get("stdout", ""),
         }
         logger.info("[compile] artifact cache hit — skipping the build")
-        await _record_async_metric(
-            user_id=user_id,
-            project_id=request.project_id,
-            board_fqbn=request.board_fqbn,
-            success=True,
-            duration_ms=0,
-            error_kind=None,
-            extra={
-                "file_count": len(files),
-                "async": True,
-                "cached": True,
-                "initiated_by": request.initiated_by,
-                "board_kind": request.board_kind,
-                "example_id": request.example_id,
-                "gallery": gallery,
-                # The bytes this hit was built from, so a cached compile reads
-                # like a built one in the usage rows.
-                **(cached.get("scope") or {}),
-            },
-        )
         return CompileStartResponse(job_id=job_id)
 
     job_id = uuid.uuid4().hex
@@ -1508,23 +1006,10 @@ async def compile_start(
         "stage": "queued",
         "started_at": time.time(),
         "key": key,
-        "gallery": gallery,
     }
     JOB_BY_KEY[key] = job_id
 
-    asyncio.create_task(
-        _compile_job(
-            job_id=job_id,
-            request=request,
-            files=files,
-            user_id=user_id,
-            scope=(allowed_libraries, owner_id),
-            priority=priority,
-            cpu_nice=cpu_nice,
-            retry_allowed=retry_allowed,
-            gallery=gallery,
-        ),
-    )
+    asyncio.create_task(_compile_job(job_id=job_id, request=request, files=files))
     return CompileStartResponse(job_id=job_id)
 
 
@@ -1559,10 +1044,6 @@ async def compile_status(job_id: str):
         estimated_seconds=estimate,
         build_seconds=build_seconds,
         server_load=build_queue.load_level(),
-        tier=job.get("tier", "local"),
-        priority=int(job.get("priority", build_queue.PRIORITY_STANDARD))
-        < build_queue.STANDARD_THRESHOLD,
-        gallery=job.get("gallery"),
     )
 
 

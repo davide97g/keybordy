@@ -45,17 +45,6 @@ frontend/dist/
 frontend/.vite/
 backend/dist/
 
-# Local-dev junctions to a private overlay repo (e.g. velxio-prod). Created
-# by the user when running the pro stack against the OSS dev server; never
-# committed because they point at out-of-tree code that isn't part of the
-# open-source project. The OSS Vite alias falls back to a no-op stub when
-# these aren't present.
-backend/app/pro
-frontend/src/pro
-
-# Temporary vitest config used to run pro overlay tests locally.
-frontend/pro-vitest.config.ts
-
 # Logs
 *.log
 npm-debug.log*
@@ -106,11 +95,8 @@ data/*
 .publicar_discord/*
 img/*
 
-# QEMU runtime binaries (too large for git, and Pro-gated — built/copied from
-# MSYS2/qemu-lcgamboa). These must NEVER be committed to the public OSS repo:
-# STM32 (libqemu-arm) + ESP32 emulation are paid/desktop-only features, the
-# velxio.dev/Pro image downloads them at build time behind a license key, and
-# the OSS image intentionally ships without them.
+# QEMU runtime binaries for local dev (too large for git; lcgamboa QEMU fork
+# builds and Espressif ROMs). The Docker build takes them from prebuilt/qemu/.
 backend/app/services/libqemu-arm.dll
 backend/app/services/libqemu-arm.dylib
 backend/app/services/libqemu-xtensa.dll
@@ -138,10 +124,12 @@ backend/app/services/libqemu-*.dll.bak
 # not part of the main repo — gitignored to keep the working tree clean.
 third-party/esp32-camera/
 
-# Pre-built QEMU .so for Docker (built by build-qemu.sh — ~30MB Linux binaries)
+# QEMU runtime for the Docker build (scripts/fetch-qemu.sh copies it in; ~90 MB)
 prebuilt/*
 !prebuilt/qemu/
 prebuilt/qemu/*
+prebuilt/qemu/*.so
+prebuilt/qemu/*.bin
 !prebuilt/qemu/.gitkeep
 
 # ESP32 build artifacts (ELF/MAP debug symbols — large, not needed for tests)

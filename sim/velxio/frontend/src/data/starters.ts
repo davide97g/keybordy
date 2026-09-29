@@ -40,14 +40,6 @@ export function starterBoard(id: string | undefined): string | undefined {
 
 /** <title> for a starter's editor page. */
 export function starterTitle(board: string): string {
-  return `New ${board} project — free online ${board} simulator | Velxio`;
+  return `New ${board} project — Velxio`;
 }
 
-/** Meta description for a starter's editor page. */
-export function starterDescription(board: string): string {
-  return (
-    `Start a new ${board} project in your browser: the editor opens with a ${board} ` +
-    `and a working blink sketch — edit the code, wire components and run the ` +
-    `simulation. Free, no install, no account needed.`
-  );
-}

@@ -32,7 +32,7 @@ interface CardHoverApi {
 }
 import type { BoardKind } from '../types/board';
 import { BOARD_KIND_LABELS } from '../types/board';
-import { isProBoardKind } from '../lib/proBoardGate';
+import { isUnsupportedBoardKind } from '../lib/unsupportedBoards';
 import { matchesSearch } from '../utils/searchMatch';
 import { boardSearchKeywords } from '../data/componentSearchKeywords';
 import {
@@ -53,14 +53,6 @@ import {
   subscribeProBoards,
   getProBoardsVersion,
 } from '../lib/proBoardRegistry';
-import {
-  ONLINE_ONLY_BOARD_ADS,
-  ONLINE_ONLY_COMPONENT_ADS,
-  ONLINE_EDITOR_URL,
-  isOnlineOnlyAdSuppressed,
-  type OnlineOnlyBoardAd,
-  type OnlineOnlyComponentAd,
-} from '../lib/onlineOnlyBoards';
 import raspberryPiZeroSvg from '../assets/Raspberry_Pi_Zero_illustration.svg';
 import raspberryPi1Svg from '../assets/Raspberry_Pi_1_illustration.svg';
 import raspberryPi2Svg from '../assets/Raspberry_Pi_2_illustration.svg';
@@ -228,12 +220,6 @@ const ALL_BOARDS: BoardKind[] = [
   'arduino-mega',
   'raspberry-pi-pico',
   'pi-pico-w',
-  'raspberry-pi-zero',
-  'raspberry-pi-1',
-  'raspberry-pi-2',
-  'raspberry-pi-3',
-  'raspberry-pi-4',
-  'raspberry-pi-5',
   'esp32',
   'esp32-devkit-c-v4',
   'esp32-cam',
@@ -244,14 +230,6 @@ const ALL_BOARDS: BoardKind[] = [
   'esp32-c3',
   'xiao-esp32-c3',
   'aitewinrobot-esp32c3-supermini',
-  'stm32-bluepill',
-  'stm32-blackpill',
-  'stm32-bluepill-f103cb',
-  'stm32-blackpill-f401',
-  'stm32-f4-discovery',
-  'stm32-olimex-h405',
-  'stm32-netduino-plus2',
-  'stm32-netduino2',
   'attiny85',
 ];
 
@@ -273,8 +251,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
   // Late-overlay registrations must re-render an already-mounted picker:
   // the @pro import is dynamic, so boards/components can register AFTER the
   // first render. Without these subscriptions the memos below freeze on the
-  // pre-registration state (boards missing, ONLINE ads instead of the real
-  // components - and which one you got depended on a reload race).
+  // pre-registration state.
   const proBoardsVersion = useSyncExternalStore(
     subscribeProBoards,
     getProBoardsVersion,
@@ -391,29 +368,11 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
 
   // Boards list: static OSS kinds + overlay-registered boards (proBoardRegistry).
   const allBoards = useMemo(() => {
-    return [...ALL_BOARDS, ...(listProBoards().map((d) => d.kind) as BoardKind[])];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proBoardsVersion]);
-
-  // Online-only component ads: shown where the real component would sit, and
-  // hidden automatically in any build whose registry has the real component
-  // (the hosted overlay merges it in) — same contract as VISIBLE_BOARD_ADS.
-  const visibleComponentAds = useMemo(() => {
-    if (isLoading) return [];
-    // An ad has no metadata object, so it is matched on its own category
-    // against whichever branch the rail has selected.
-    const selectedCat = selectedKey.startsWith('cat:')
-      ? selectedKey.slice(4).split('/')[0]
-      : null;
-    return ONLINE_ONLY_COMPONENT_ADS.filter(
-      (ad) =>
-        !registry.getById(ad.id) &&
-        !isOnlineOnlyAdSuppressed(ad.id) &&
-        (selectedKey === KEY_ALL || (!!selectedCat && normalizeCategory(ad.category) === selectedCat)) &&
-        matchesSearch(searchQuery, [ad.label]),
+    return [...ALL_BOARDS, ...(listProBoards().map((d) => d.kind) as BoardKind[])].filter(
+      (k) => !isUnsupportedBoardKind(k),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [registry, isLoading, searchQuery, selectedKey, registryVersion, proBoardsVersion]);
+  }, [proBoardsVersion]);
 
   /** Parts placed recently, in recency order, honouring the active search. */
   const recentComponents = useMemo(() => {
@@ -435,12 +394,6 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
         matchesSearch(searchQuery, [BOARD_KIND_LABELS[k], k, boardSearchKeywords(k)]),
       ),
     [allBoards, searchQuery],
-  );
-
-  const matchingBoardAds = useMemo(
-    () => visibleBoardAds().filter((ad) => matchesSearch(searchQuery, [ad.label])),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [searchQuery, proBoardsVersion],
   );
 
   /**
@@ -515,7 +468,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
       head.push({
         key: KEY_BOARDS,
         label: t('editor.componentPicker.boards'),
-        count: matchingBoards.length + matchingBoardAds.length,
+        count: matchingBoards.length,
       });
     }
     return [...head, ...categoryNodes];
@@ -524,7 +477,6 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
     isLoading,
     recentComponents,
     matchingBoards,
-    matchingBoardAds,
     onSelectBoard,
     t,
   ]);
@@ -560,7 +512,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
    * headers, so the grouping was invisible.
    */
   type GridSection =
-    | { kind: 'boards'; key: string; label: string; boards: BoardKind[]; ads: OnlineOnlyBoardAd[] }
+    | { kind: 'boards'; key: string; label: string; boards: BoardKind[] }
     | { kind: 'parts'; key: string; label: string; items: ComponentMetadata[] };
 
   const sections = useMemo<GridSection[]>(() => {
@@ -568,13 +520,12 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
     const out: GridSection[] = [];
 
     const wantsBoards = !!onSelectBoard && (selectedKey === KEY_ALL || selectedKey === KEY_BOARDS);
-    if (wantsBoards && (matchingBoards.length > 0 || matchingBoardAds.length > 0)) {
+    if (wantsBoards && matchingBoards.length > 0) {
       out.push({
         kind: 'boards',
         key: KEY_BOARDS,
         label: t('editor.componentPicker.boards'),
         boards: matchingBoards,
-        ads: matchingBoardAds,
       });
     }
     if (selectedKey === KEY_BOARDS) return out;
@@ -643,14 +594,13 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
     filteredComponents,
     recentComponents,
     matchingBoards,
-    matchingBoardAds,
     t,
   ]);
 
   /** How many items the footer should report for the active branch. */
   const shownCount =
     selectedKey === KEY_BOARDS
-      ? matchingBoards.length + matchingBoardAds.length
+      ? matchingBoards.length
       : selectedKey === KEY_RECENT
         ? recentComponents.length
         : filteredComponents.length;
@@ -684,21 +634,8 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
     });
   };
 
-  /**
-   * Place a part, and remember it. Pro overlays can intercept the click on a
-   * pro_only component by setting window.__velxio_pro_gate__; returning true
-   * means "handled - do not pass through", and nothing is recorded because
-   * nothing was placed.
-   */
+  /** Place a part, and remember it. */
   const handleSelectComponent = (component: ComponentMetadata) => {
-    if (component.pro_only) {
-      const gate = (
-        window as unknown as {
-          __velxio_pro_gate__?: (c: ComponentMetadata) => boolean;
-        }
-      ).__velxio_pro_gate__;
-      if (gate && gate(component)) return;
-    }
     setRecentIds(pushRecent(component.id));
     onSelectComponent(component);
   };
@@ -821,7 +758,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                   <div className="spinner"></div>
                   <p>{t('editor.componentPicker.loading')}</p>
                 </div>
-              ) : sections.length === 0 && visibleComponentAds.length === 0 ? (
+              ) : sections.length === 0 ? (
                 <div className="no-results">
                   <p>{t('editor.componentPicker.noResults')}</p>
                   <button
@@ -842,7 +779,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                         <span className="picker-section-title">{section.label}</span>
                         <span className="picker-section-count">
                           {section.kind === 'boards'
-                            ? section.boards.length + section.ads.length
+                            ? section.boards.length
                             : section.items.length}
                         </span>
                       </h3>
@@ -859,9 +796,6 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                                 }}
                                 hoverApi={hoverApi}
                               />
-                            ))}
-                            {section.ads.map((ad) => (
-                              <OnlineOnlyBoardCard key={ad.id} ad={ad} />
                             ))}
                           </>
                         ) : (
@@ -880,14 +814,6 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                       </div>
                     </section>
                   ))}
-
-                  {visibleComponentAds.length > 0 && (
-                    <div className="components-grid components-grid--inline">
-                      {visibleComponentAds.map((ad) => (
-                        <OnlineOnlyComponentCard key={ad.id} ad={ad} />
-                      ))}
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -979,32 +905,6 @@ const PI_BOARD_ART: Record<string, string> = {
   'velxio-raspberry-pi-5': raspberryPi5Png,
 };
 
-/** Gold PRO pill shown on cards for paid-gated boards (Pi Linux + STM32). */
-const ProBadge: React.FC = () => (
-  <span
-    title="Pro board — you can place and wire it; running it depends on your plan"
-    style={{
-      position: 'absolute',
-      top: 8,
-      right: 8,
-      zIndex: 1,
-      padding: '3px 10px',
-      borderRadius: 999,
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 0.6,
-      // Ink and fill both fixed: a gold PRO pill is gold on either theme,
-      // and --color-feedback-warning is a red-orange in light mode, which
-      // this gradient is not meant to be.
-      color: '#1a1205',
-      background: 'linear-gradient(180deg,#ffd566,#f5a623)',
-      boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
-    }}
-  >
-    PRO
-  </span>
-);
-
 /** Violet CUSTOM pill: a chip from the user's own My Chips library. */
 const CustomBadge: React.FC = () => (
   <span
@@ -1042,7 +942,6 @@ const ComponentCard: React.FC<ComponentCardProps> = ({ component, onSelect, hove
       properties: component.properties,
       tags: component.tags,
       thumbnail: component.thumbnail,
-      pro_only: component.pro_only,
       custom: component.custom,
     }),
     hoverApi,
@@ -1129,7 +1028,7 @@ const ComponentCard: React.FC<ComponentCardProps> = ({ component, onSelect, hove
       style={{ position: 'relative' }}
       {...hover}
     >
-      {component.custom ? <CustomBadge /> : isProBoardKind(component.id) && <ProBadge />}
+      {component.custom && <CustomBadge />}
       <div className="card-thumbnail">
         {boardArt ? (
           <img
@@ -1205,7 +1104,6 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect, hoverApi }) => {
       pinCount: 0,
       properties: [],
       tags: [],
-      pro_only: isProBoardKind(kind),
     }),
     hoverApi,
   );
@@ -1289,7 +1187,6 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect, hoverApi }) => {
       style={{ position: 'relative' }}
       {...hover}
     >
-      {isProBoardKind(kind) && <ProBadge />}
       <div className="card-thumbnail">
         {reactThumbnail ? reactThumbnail : <div ref={thumbnailRef} className="component-preview" />}
       </div>
@@ -1301,79 +1198,3 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect, hoverApi }) => {
   );
 };
 
-// ── Online-only board ads ───────────────────────────────────────────────────
-// Boards implemented by the hosted editor (velxio.com), free to use there.
-// Hidden automatically in any build that registers the real BoardKind.
-/** Recomputed on access (not module load): overlay board registration patches
- *  BOARD_KIND_LABELS at mount, which must hide the corresponding ad. */
-const visibleBoardAds = () =>
-  ONLINE_ONLY_BOARD_ADS.filter(
-    (ad) => !(ad.id in BOARD_KIND_LABELS) && !isOnlineOnlyAdSuppressed(ad.id),
-  );
-
-/** Teal "ONLINE" pill: the board runs (free) in the hosted editor. */
-const OnlineBadge: React.FC = () => (
-  <span
-    title="Free in the online editor — velxio.com"
-    style={{
-      position: 'absolute',
-      top: 8,
-      right: 8,
-      zIndex: 1,
-      padding: '3px 10px',
-      borderRadius: 999,
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 0.6,
-      color: '#04241a',
-      background: 'linear-gradient(180deg,#4ade80,#14b8a6)',
-      boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
-    }}
-  >
-    ONLINE
-  </span>
-);
-
-/** Advertisement card for a component only available in the hosted editor. */
-const OnlineOnlyComponentCard: React.FC<{ ad: OnlineOnlyComponentAd }> = ({ ad }) => (
-  <button
-    className="component-card"
-    style={{ position: 'relative' }}
-    title={`${ad.label} — available in the online editor at velxio.com`}
-    onClick={() => window.open(ONLINE_EDITOR_URL, '_blank', 'noopener')}
-  >
-    <OnlineBadge />
-    <div className="card-thumbnail">
-      <div
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        dangerouslySetInnerHTML={{ __html: ad.thumbnailSvg }}
-      />
-    </div>
-    <div className="card-content">
-      <div className="card-name">{ad.label}</div>
-      <div className="card-description">{ad.description}</div>
-    </div>
-  </button>
-);
-
-/** Advertisement card for a board only available in the hosted editor. */
-const OnlineOnlyBoardCard: React.FC<{ ad: OnlineOnlyBoardAd }> = ({ ad }) => (
-  <button
-    className="component-card"
-    style={{ position: 'relative' }}
-    title={`${ad.label} — free to use in the online editor at velxio.com`}
-    onClick={() => window.open(ONLINE_EDITOR_URL, '_blank', 'noopener')}
-  >
-    <OnlineBadge />
-    <div className="card-thumbnail">
-      <div
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        dangerouslySetInnerHTML={{ __html: ad.thumbnailSvg }}
-      />
-    </div>
-    <div className="card-content">
-      <div className="card-name">{ad.label}</div>
-      <div className="card-description">{ad.description}</div>
-    </div>
-  </button>
-);

@@ -344,16 +344,6 @@
   align-items: center;
   gap: 6px;
 }
-.sd-card-paid {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--wb-13);
-  background: var(--color-feedback-warning);
-  border-radius: 3px;
-  padding: 1px 4px;
-}
 .sd-card-hint {
   font-size: 11px;
   color: var(--wb-11);

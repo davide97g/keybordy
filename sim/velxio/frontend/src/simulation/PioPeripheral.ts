@@ -12,11 +12,7 @@
  * This is deliberately generic (no product-specific names): any private SPI
  * peripheral can register a factory. In the open-source build no factory is
  * installed, so `createPioPeripheral` returns null and a pi-pico-w board
- * simulates as a plain Pico (no WiFi). The velxio.dev pro overlay registers
- * a CYW43439 implementation, gated behind a paid plan.
- *
- * Mirrors the install-impl + safe-dispatch + has-check shape of the pro
- * gates in `src/lib/proBoardGate.ts`.
+ * simulates as a plain Pico (no WiFi).
  */
 
 export interface PioPeripheral {

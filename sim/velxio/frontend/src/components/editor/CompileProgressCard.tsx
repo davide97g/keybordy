@@ -18,10 +18,6 @@
  *     or a position: "you are 14th in line" is worse than saying nothing, and
  *     it publishes how busy the service is.
  *   - That a queued build is never dropped. We queue; we do not time people out.
- *
- * The upgrade line for free users is mounted by the pro overlay into the
- * `compile-queue-upsell` slot. OSS has no plans, so the slot stays empty and
- * collapses.
  */
 
 import { useEffect, useState } from 'react';
@@ -54,10 +50,6 @@ const LOAD_SEGMENTS: Record<ServerLoad, number> = {
 
 /** Load levels that colour the meter as "busy" rather than neutral. */
 const BUSY_LOADS = new Set<ServerLoad>(['high', 'peak']);
-
-/** Tiers that get the upgrade line. 'local' (self-hosted OSS) gets nothing —
- *  there is no plan to sell there. */
-const UPSELL_TIERS = new Set(['free', 'anonymous']);
 
 function Spinner() {
   return (
@@ -297,23 +289,12 @@ export function CompileProgressCard({ onShowOutput, inEditor }: CompileProgressC
           </span>
         </span>
 
-        {s.priority ? (
-          <span className="compile-card__badge">
-            {t('editor.compileProgress.priority', 'Priority build')}
-          </span>
-        ) : onShowOutput ? (
+        {onShowOutput ? (
           <button type="button" className="compile-card__details" onClick={onShowOutput}>
             {t('editor.compileProgress.showOutput', 'Show output')}
           </button>
         ) : null}
       </div>
-
-      {/* The pro overlay mounts the "skip the build queue" upgrade line here.
-          Rendered only for tiers that HAVE something to upgrade to — never in
-          a self-hosted OSS install, which has no plans at all. */}
-      {UPSELL_TIERS.has(s.tier) && (
-        <div className="compile-card__upsell" data-velxio-slot="compile-queue-upsell" />
-      )}
     </div>
   );
 }

@@ -1,23 +1,15 @@
 """
 Hardware flash router — `POST /api/flash/upload`.
 
-Wraps `arduino-cli upload` so the desktop frontend can write a
-compiled sketch to a real USB-attached board. Same arduino-cli the
-compile path uses, so AVR / RP2040 / ESP32 (Arduino-core) all share
-one code path — arduino-cli internally dispatches to avrdude /
-picotool / esptool based on the FQBN.
+Wraps `arduino-cli upload` so the frontend can write a compiled sketch
+to a real USB-attached board. Same arduino-cli the compile path uses, so
+AVR / RP2040 / ESP32 (Arduino-core) all share one code path — arduino-cli
+internally dispatches to avrdude / picotool / esptool based on the FQBN.
 
-Why a route (and not a pure Tauri command on the shell):
-  - Sidecar already has arduino-cli on PATH (see
-    `pro/desktop/sidecar/main.py::_expose_bundled_arduino_cli`) +
-    knows the bundled `binaries/arduino-data` location. Reusing it
-    avoids duplicating the resolution logic in Rust.
-  - Streaming stdout via SSE works the same shape the compile flow
-    already uses for live build output, so the frontend's modal
-    can reuse most of the rendering plumbing.
-  - The web build can later proxy to a WebSerial-based flasher
-    instead — keeping the surface as `/api/flash/*` lets us route
-    based on `isTauri()` without changing the call sites.
+Only useful when the backend runs on the machine the board is plugged
+into; a container sees no serial ports. Streaming stdout via SSE works the
+same shape the compile flow already uses for live build output, so the
+frontend's modal can reuse most of the rendering plumbing.
 
 Concurrency: one in-flight flash per port. A second request to the
 same port returns 409 Conflict immediately so the user gets a clear
@@ -90,13 +82,7 @@ MAX_PROGRAM_BYTES = 8 * 1024 * 1024
 
 
 def _arduino_cli_bin() -> str | None:
-    """Pick the arduino-cli binary the sidecar uses for compile.
-
-    Desktop bundle: `pro/desktop/sidecar/main.py::_expose_bundled_arduino_cli`
-    has already prepended `<resources>/binaries/arduino-cli/` to PATH,
-    so `shutil.which("arduino-cli")` resolves to the bundled one.
-    Self-host / dev: relies on the user's system arduino-cli.
-    """
+    """Pick the arduino-cli binary: ARDUINO_CLI_BIN, else the one on PATH."""
     explicit = os.environ.get("ARDUINO_CLI_BIN", "").strip()
     if explicit:
         return explicit if Path(explicit).is_file() else None
@@ -151,8 +137,7 @@ async def flash_upload(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
                 "arduino-cli not found. Set ARDUINO_CLI_BIN or install "
-                "it on the host. The desktop bundle ships one - this "
-                "error usually means the sidecar's PATH wasn't extended."
+                "it on the host."
             ),
         )
 

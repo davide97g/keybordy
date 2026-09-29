@@ -455,9 +455,6 @@
       "retryCompile": "Neu kompilieren und flashen",
       "cancel": "Abbrechen",
       "hide": "Ausblenden",
-      "paidOnlyTitle": "Das Flashen echter Boards gehört zur bezahlten Velxio-Desktop-Lizenz",
-      "paidOnlyBody": "Einen Sketch auf ein echtes, per USB angeschlossenes Board hochzuladen gibt es mit einer Personal-, Commercial- oder Enterprise-Lizenz. Der Simulator selbst bleibt kostenlos.",
-      "seePlans": "Pläne ansehen",
       "log": {
         "compiling": "Sketch wird vor dem Flashen kompiliert...",
         "recompiling": "Code seit dem letzten Build geändert: wird vor dem Flashen neu kompiliert...",

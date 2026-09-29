@@ -8,12 +8,6 @@ import { circuitExamples } from './examples-circuits';
 import { analogExamples } from './examples-analog';
 import { digitalExamples } from './examples-digital';
 import { hundredDaysExamples } from './examples-100-days';
-// Pro overlay examples (the Pico W WiFi showcase) — resolves to the real list
-// when built with the overlay (VITE_PRO_BUILD), else an empty stub in OSS.
-// Static import so the build-time SSR prerender + gallery + sitemap pick them
-// up. See pro/frontend/src/pro/data/proExamples.ts (overlay) and
-// src/__pro_stub__/data/proExamples.ts (OSS no-op).
-import { proExamples } from '@pro/data/proExamples';
 import { epaperExamples } from './examples-displays-epaper';
 import { retroIntelExamples } from './examples-retro-intel';
 import { robotDesktopExamples } from './examples-robot-desktop';
@@ -22,6 +16,7 @@ import { infraredExamples } from './examples-infrared';
 import { esp32MqttExamples } from './examples-esp32-mqtt';
 import { esp32s3TftExamples } from './examples-esp32s3-tft';
 import { jsemuChipExamples } from './examples-jsemu-chips';
+import { isUnsupportedBoardKind } from '../lib/unsupportedBoards';
 import eeprom24c01C from '../components/customChips/examples/eeprom-24c01.c?raw';
 import eeprom24c01J from '../components/customChips/examples/eeprom-24c01.chip.json?raw';
 
@@ -11805,17 +11800,23 @@ except KeyboardInterrupt:
   },
 ];
 
+/** True when every board the example needs has an emulator in this build. */
+function runsHere(example: ExampleProject): boolean {
+  const kinds = example.boards?.map((b) => b.boardKind) ?? [example.boardType ?? 'arduino-uno'];
+  return !kinds.some(isUnsupportedBoardKind);
+}
+
 // Merge legacy examples with circuit-focused examples (analog, digital gates,
 // electromechanical) plus the board-less analog SPICE suite. Declared after
 // all arrays exist so the export is a single immutable value — safe from
-// tree-shaking quirks.
+// tree-shaking quirks. Examples for boards without an emulator here
+// (Raspberry Pi Linux, STM32) are left out.
 export const exampleProjects: ExampleProject[] = [
   ...legacyExamples,
   ...circuitExamples,
   ...analogExamples,
   ...digitalExamples,
   ...hundredDaysExamples,
-  ...proExamples,
   ...epaperExamples,
   ...retroIntelExamples,
   ...robotDesktopExamples,
@@ -11824,7 +11825,7 @@ export const exampleProjects: ExampleProject[] = [
   ...esp32MqttExamples,
   ...esp32s3TftExamples,
   ...jsemuChipExamples,
-];
+].filter(runsHere);
 
 // Get examples by category
 export function getExamplesByCategory(category: ExampleProject['category']): ExampleProject[] {
@@ -11834,58 +11835,6 @@ export function getExamplesByCategory(category: ExampleProject['category']): Exa
 // Get example by ID
 export function getExampleById(id: string): ExampleProject | undefined {
   return exampleProjects.find((example) => example.id === id);
-}
-
-/**
- * Overlay seam: a private build can append gallery examples for the boards it
- * registers at runtime. Push-based (the exported array is the single source
- * the gallery and /example/:slug both read), idempotent per example id.
- */
-let proExamplesVersion = 0;
-const proExamplesListeners = new Set<() => void>();
-
-export function registerProExamples(examples: ExampleProject[]): void {
-  for (const ex of examples) {
-    if (!exampleProjects.some((e) => e.id === ex.id)) exampleProjects.push(ex);
-  }
-  // Overlay registration can land AFTER a direct-URL page render resolved the
-  // array (the @pro import is dynamic) — notify subscribers so example pages
-  // re-render instead of sticking on a 404 (same contract as proRoutes).
-  proExamplesVersion++;
-  for (const l of proExamplesListeners) l();
-}
-
-export function subscribeProExamples(cb: () => void): () => void {
-  proExamplesListeners.add(cb);
-  return () => proExamplesListeners.delete(cb);
-}
-
-/**
- * Has the pro overlay had its chance to register examples?
- *
- * A direct link to a PRO example (/example/pi5-opencv-vision) races the
- * overlay's dynamic import: the page resolves the gallery before
- * registerProExamples has run, concluded "not found", and flashed a 404 —
- * full marketing header included — before re-rendering into the editor.
- * The page needs to distinguish "not in the gallery" from "not in the
- * gallery YET". main.tsx flips this: immediately when no overlay is
- * configured, otherwise when the overlay's import settles (either way).
- */
-let proExamplesSettled = false;
-
-export function markProExamplesSettled(): void {
-  if (proExamplesSettled) return;
-  proExamplesSettled = true;
-  proExamplesVersion++;
-  for (const l of proExamplesListeners) l();
-}
-
-export function areProExamplesSettled(): boolean {
-  return proExamplesSettled;
-}
-
-export function getProExamplesVersion(): number {
-  return proExamplesVersion;
 }
 
 // Get all categories

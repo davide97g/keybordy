@@ -37,7 +37,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BoardInstance } from '../../store/useSimulatorStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
-import { isTauri, listSerialPorts, type SerialPortInfo } from '../../desktop/tauriBridge';
+import { isTauri, listSerialPorts, type SerialPortInfo } from '../../lib/nativeShell';
 import { streamFlash, type FlashEvent } from '../../services/flashService';
 import {
   getWebFlashImpl,
@@ -46,12 +46,9 @@ import {
   webFlashBootloaderHint,
   webFlashHardwareRevisions,
   isNotInBootloaderError,
-  hardwareFlashAllowed,
-  hardwareFlashUpgradeUrl,
   type BootloaderHint,
   type HardwareRevision,
 } from '../../lib/proWebFlash';
-import { openExternal } from '../../desktop/tauriBridge';
 import { useEditorStore } from '../../store/useEditorStore';
 import { useProjectStore } from '../../store/useProjectStore';
 import {
@@ -521,8 +518,6 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
 
   // ── Render ──────────────────────────────────────────────────────
   const boardLabel = board.boardKind;
-  // Entitlement (desktop: paid license only — see lib/proWebFlash.ts).
-  const flashAllowed = hardwareFlashAllowed();
 
   return (
     <div
@@ -570,10 +565,7 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
           </button>
         </div>
 
-        {!flashAllowed && <PaidGateView onClose={handleClose} />}
-
-        {flashAllowed &&
-          revisions &&
+        {revisions &&
           (state.kind === 'web-ready' ||
             state.kind === 'download-only' ||
             state.kind === 'picking') && (
@@ -593,13 +585,13 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
             </label>
           )}
 
-        {flashAllowed && state.kind === 'loading-ports' && (
+        {state.kind === 'loading-ports' && (
           <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--wb-10)' }}>
             {t('editor.flash.detectingPorts')}
           </div>
         )}
 
-        {flashAllowed && state.kind === 'picking' && (
+        {state.kind === 'picking' && (
           <PickerView
             board={board}
             ports={state.ports}
@@ -610,7 +602,7 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
           />
         )}
 
-        {flashAllowed && state.kind === 'web-ready' && (
+        {state.kind === 'web-ready' && (
           <WebReadyView
             board={board}
             mpyWebOk={mpyWebOk}
@@ -623,7 +615,7 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
           />
         )}
 
-        {flashAllowed && state.kind === 'download-only' && (
+        {state.kind === 'download-only' && (
           <DownloadOnlyView
             board={board}
             downloaded={state.downloaded}
@@ -633,7 +625,7 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
           />
         )}
 
-        {flashAllowed && (state.kind === 'compiling' ||
+        {(state.kind === 'compiling' ||
           state.kind === 'flashing' ||
           state.kind === 'success' ||
           state.kind === 'error') && (
@@ -659,8 +651,7 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
           />
         )}
 
-        {flashAllowed &&
-          hwUsesUf2 &&
+        {hwUsesUf2 &&
           !isMpy &&
           (state.kind === 'web-ready' ||
             state.kind === 'picking' ||
@@ -775,40 +766,6 @@ const DownloadOnlyView = ({ board, downloaded, drive, onDownload, onSaveToDrive 
         )}
         <button type="button" onClick={onDownload} style={primaryBtnStyle}>
           {status === 'fresh' ? t('editor.flash.downloadUf2') : t('editor.flash.compileDownload')}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// ── Paid-gate subview (desktop: flashing needs a paid license) ─────
-
-const PaidGateView = ({ onClose }: { onClose: () => void }) => {
-  const { t } = useTranslation();
-  const url = hardwareFlashUpgradeUrl();
-  const openPlans = () => {
-    if (isTauri()) {
-      void openExternal(url);
-    } else {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-  };
-  return (
-    <div>
-      <div style={{ ...insetBoxStyle, padding: 16, marginBottom: 12 }}>
-        <div style={{ color: 'var(--wb-13)', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-          {t('editor.flash.paidOnlyTitle')}
-        </div>
-        <div style={{ color: 'var(--wb-11)', fontSize: 12, lineHeight: 1.5 }}>
-          {t('editor.flash.paidOnlyBody')}
-        </div>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button type="button" onClick={onClose} style={secondaryBtnStyle}>
-          {t('editor.flash.close')}
-        </button>
-        <button type="button" onClick={openPlans} style={primaryBtnStyle}>
-          {t('editor.flash.seePlans')}
         </button>
       </div>
     </div>

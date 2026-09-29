@@ -25,7 +25,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { PropertyDescriptor } from '../types/component-metadata';
 import { loadDoc, productPageHref, productLinkKind, type ComponentDoc } from './componentDocs';
-import { trackProductPageClick } from '../utils/analytics';
 import { scalableSvgThumbnail } from '../utils/svgThumbnail';
 import './ComponentInfoPanel.css';
 
@@ -38,7 +37,6 @@ export interface PanelData {
   properties: PropertyDescriptor[];
   tags: string[];
   thumbnail?: string;
-  pro_only?: boolean;
   custom?: boolean;
 }
 
@@ -176,7 +174,6 @@ export const ComponentInfoBody: React.FC<{
             href={productPageHref(buyHref, data.id)}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => trackProductPageClick(data.id, doc?.brand, buyHref)}
           >
             <svg
               width="14"
@@ -308,7 +305,6 @@ export const ComponentInfoPanel: React.FC<ComponentInfoPanelProps> = ({
           <span className="cip-badges">
             <span className="cip-cat">{data.category}</span>
             {data.custom && <span className="cip-custom">CUSTOM</span>}
-            {data.pro_only && <span className="cip-pro">PRO</span>}
             {data.pinCount > 0 && <span className="cip-pins">{data.pinCount} pins</span>}
           </span>
           {brand && <span className="cip-brand">by {brand}</span>}

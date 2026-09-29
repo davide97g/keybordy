@@ -252,17 +252,6 @@
   background: var(--color-feedback-warning);
 }
 
-.compile-card__badge {
-  margin-left: auto;
-  padding: 2px var(--space-3);
-  border-radius: var(--radius-pill);
-  background: var(--color-action-primary);
-  color: var(--color-action-primary-fg);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
 .compile-card__details {
   margin-left: auto;
   padding: 0;
@@ -277,14 +266,4 @@
 
 .compile-card__details:hover {
   color: var(--color-fg-default);
-}
-
-/* The pro overlay mounts the "skip the queue" upgrade line here. Empty (and
-   zero-height) in the OSS image, where there are no plans to upgrade to. */
-.compile-card__upsell:empty {
-  display: none;
-}
-
-.compile-card__upsell {
-  margin-top: var(--space-4);
 }

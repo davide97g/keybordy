@@ -2,11 +2,9 @@
  * SdCardPanel — the "SD Card" file panel shown in the component property dialog
  * for the microsd-card component.
  *
- * Free: the project's text files are auto-copied onto the card (handled
- * elsewhere, at simulation start). This panel is the PAID path: uploading your
- * own files — binaries included (images, audio, data) — which the editor cannot
- * accept any other way. Gated via `proSdCardGate`: a non-paid user clicking
- * "Add files" gets the upgrade prompt instead of the file picker.
+ * The project's text files are auto-copied onto the card (handled elsewhere,
+ * at simulation start). This panel uploads your own files — binaries included
+ * (images, audio, data) — which the editor cannot accept any other way.
  *
  * Files are persisted on the component as `properties.sdFiles`
  * (`{ name, contentB64 }[]`), so they travel with the project (.vlx) and feed
@@ -21,7 +19,6 @@ import {
   type UploadedSdFile,
 } from '../../utils/sdCardFiles';
 import { normalizeSdPath, readFat16Image, type FatDirFile } from '../../utils/fatImage';
-import { sdCardUploadAllowed, triggerSdCardUpgradePrompt } from '../../lib/proSdCardGate';
 import {
   getEsp32Bridge,
   readCanvasSdCardImage,
@@ -62,11 +59,6 @@ export const SdCardPanel: React.FC<SdCardPanelProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const total = files.reduce((s, f) => s + fileBytes(f), 0);
-  // Whether THIS user may upload. Read at render so the panel can say so
-  // before the click: a "Paid" tag alone left people clicking "Add files"
-  // and only then learning it was gated, with no word about the free way
-  // (a data file in the project workspace lands on the card by itself).
-  const canUpload = sdCardUploadAllowed();
 
   // ── Live card contents: what is ON the card right now, including files
   //    the running sketch wrote (photos, logs), parsed with the same FAT16
@@ -121,11 +113,6 @@ export const SdCardPanel: React.FC<SdCardPanelProps> = ({
   };
 
   const openPicker = (which: 'files' | 'folder'): void => {
-    // Gate the PAID action: a non-paid user gets the upgrade prompt instead.
-    if (!sdCardUploadAllowed()) {
-      triggerSdCardUpgradePrompt();
-      return;
-    }
     (which === 'folder' ? folderInputRef : inputRef).current?.click();
   };
 
@@ -164,21 +151,13 @@ export const SdCardPanel: React.FC<SdCardPanelProps> = ({
   return (
     <div className="sd-card-section">
       <div className="sd-card-label">
-        SD Card files <span className="sd-card-paid">Paid</span>
+        SD Card files
       </div>
-      {files.length === 0 && canUpload && (
+      {files.length === 0 && (
         <div className="sd-card-hint">
           Upload your own files (images, audio, data), or a whole folder to keep
           its tree on the card. The project's data files are added automatically;
           source files (.ino, .h, .cpp, .py) stay off the card.
-        </div>
-      )}
-      {!canUpload && (
-        <div className="sd-card-hint">
-          Uploading your own files or folders (images, audio, data) to the card
-          is part of the paid plans. On the free plan, any data file you add to
-          the project workspace (a .txt, .csv, .json...) is copied onto the card
-          automatically; source files (.ino, .h, .cpp, .py) stay off it.
         </div>
       )}
       {files.map((f) => (
@@ -201,18 +180,13 @@ export const SdCardPanel: React.FC<SdCardPanelProps> = ({
           <button
             className="sd-card-add"
             onClick={() => openPicker('files')}
-            title={canUpload ? undefined : 'Uploading files to the card needs a paid plan'}
           >
-            {canUpload ? '+ Add files' : '+ Add files (paid)'}
+            + Add files
           </button>
           <button
             className="sd-card-add sd-card-add--secondary"
             onClick={() => openPicker('folder')}
-            title={
-              canUpload
-                ? 'Upload a folder; its files keep their paths on the card'
-                : 'Uploading folders to the card needs a paid plan'
-            }
+            title="Upload a folder; its files keep their paths on the card"
           >
             + Add folder
           </button>

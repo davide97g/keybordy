@@ -39,9 +39,8 @@ Which controller a target is on comes from, in this order:
 Owners link a map entry to a registration: a record's `owner` field, else its
 `component_id`, the same identity the tab's registry keys the target by.
 
-The table is plain Python with no QEMU in it, so the ESP32 worker and the
-STM32 worker (pro/backend/app/pro_boards/stm32_worker.py) share it and it is
-tested on its own.
+The table is plain Python with no QEMU in it, so the ESP32 worker uses it
+and it is tested on its own.
 """
 from __future__ import annotations
 

@@ -5,7 +5,6 @@ import type { editor as MonacoEditor } from 'monaco-editor';
 import { useEditorStore } from '../../store/useEditorStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { registerRetroAsm, LANGUAGE_ID as RETRO_ASM_ID } from './retroAsmLanguage';
-import { attachIntellisenseMonaco } from '../../lib/intellisenseRegistry';
 import { CHIP_JSON_SCHEMA, CHIP_JSON_SCHEMA_URI } from './chipJsonSchema';
 import { defineVelxioThemes, monacoThemeFor } from './monacoThemes';
 import { useResolvedTheme } from '../../hooks/useTheme';
@@ -116,10 +115,6 @@ export const CodeEditor = () => {
           // instance). Monaco adds the context-menu row and Shift+Alt+F by
           // itself once a provider exists.
           registerCodeFormatters(monaco);
-          // Hand the monaco instance to the intellisense seam. Inert in OSS;
-          // with the pro overlay loaded it registers the completion engine
-          // (idempotent per monaco instance, so per-file remounts are fine).
-          attachIntellisenseMonaco(monaco);
           // Validate chip.json manifests against the schema (idempotent per
           // monaco instance).
           const g = monaco as unknown as { __velxioChipJsonSchema?: boolean };

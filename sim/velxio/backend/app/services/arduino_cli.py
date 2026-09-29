@@ -4,35 +4,18 @@ import asyncio
 import base64
 import hashlib
 import shutil
-import re
 import os
 from pathlib import Path
-
-from app.core.hooks import materialize_library_scope, scope_retry_allowed
-
-
-# A preprocessor "fatal error: Foo.h: No such file or directory" — the signature
-# of a missing #include. Used to decide whether a FAILED manifest-scoped compile
-# should retry scan-all (the manifest omitted a needed / transitive library) vs
-# surface the failure as-is (a genuine source error).
-_MISSING_HEADER_RE = re.compile(
-    r"fatal error:\s*\S+\.h(?:pp)?:\s*No such file or directory", re.IGNORECASE
-)
-
-
-def _looks_like_missing_header(stderr: str | None) -> bool:
-    return bool(stderr and _MISSING_HEADER_RE.search(stderr))
 
 
 # ── arduino-cli error humanizer ──────────────────────────────────────────────
 # arduino-cli reports failures in two shapes: plain text on stderr, or (when
 # invoked with --format json) a JSON object {"error": "...", "warnings": [...]}
 # on stderr. We used to hand that raw blob straight to the caller, so a fresh
-# desktop install with no library index yet — and no way to reach
-# downloads.arduino.cc through the user's firewall / proxy — surfaced to the
-# in-app agent as "the library server returns a JSON error" (2026-08-17,
-# a Maker cancelled 16 minutes after subscribing). Turn the known shapes into
-# one actionable sentence and keep the raw text under a separate key.
+# install with no library index yet — and no way to reach downloads.arduino.cc
+# through the user's firewall / proxy — surfaced as "the library server returns
+# a JSON error". Turn the known shapes into one actionable sentence and keep
+# the raw text under a separate key.
 
 _INDEX_DOWNLOAD_MARKERS = (
     "error downloading index",
@@ -145,7 +128,7 @@ def _discard_sketch_build_cache(sketch_dir: Path) -> None:
     absolute path, and this service compiles every request in a fresh temp
     dir: the entry is never reused, and arduino-cli 1.5.x never purges it
     either (its purge scans /tmp/arduino, not the real cache dir). Measured
-    on velxio.dev: 17,000 directories and 15 GB in 15 days, growing 1 GB a
+    on a busy server: 17,000 directories and 15 GB in 15 days, growing 1 GB a
     day. The core cache next to it (`cores/`, keyed on the FQBN) is what makes
     warm builds fast and is left alone.
     """
@@ -158,90 +141,6 @@ def _discard_sketch_build_cache(sketch_dir: Path) -> None:
             shutil.rmtree(target, ignore_errors=True)
     except Exception:
         pass
-
-
-# ── Overlay seam: board cores an overlay ships ──────────────────────────────
-#
-# The cores below are the ones the OSS build compiles for. A private overlay
-# (velxio.com) ships boards whose cores are its own business - their index
-# URLs, their version pins, and any prelude a sketch needs before it will
-# build for them. It registers them here at import time instead of editing
-# this table, which keeps the OSS build free of boards it does not have.
-#
-# Default is an empty registry, so nothing changes for anyone who registers
-# nothing.
-
-_EXTRA_CORES: dict[str, dict] = {}
-
-
-def register_extra_core(
-    core_id: str,
-    index_url: str,
-    *,
-    version: str | None = None,
-    match: str | None = None,
-    sketch_prelude: str | None = None,
-) -> None:
-    """Register a board core the overlay ships.
-
-    core_id        "Vendor:arch", what `arduino-cli core install` takes.
-    index_url      the board-manager index that carries it.
-    version        pin passed as `<core>@<version>`, when the core needs one.
-    match          substring that identifies this core in an FQBN; defaults
-                   to core_id. The FQBN match is a plain `in`, so a bare
-                   architecture ("samd") would catch another vendor's board.
-    sketch_prelude text prepended to sketch.ino for this core's boards. The
-                   XIAO nRF52840 needs `#include <Adafruit_TinyUSB.h>` or the
-                   link fails with "undefined reference to `Serial'" - true on
-                   hardware too, but not something a user pasting a blink can
-                   be expected to know.
-    """
-    _EXTRA_CORES[core_id] = {
-        "index_url": index_url,
-        "version": version,
-        "match": match or core_id,
-        "sketch_prelude": sketch_prelude,
-    }
-
-
-def _strip_comments(source: str) -> str:
-    """The sketch with its // and /* */ comments blanked out.
-
-    Only used to ask whether a line is really THERE. A gallery sketch that
-    mentions `#include <Adafruit_TinyUSB.h>` in a comment ("on hardware you
-    also need...") used to read as if the include were present, so the prelude
-    was skipped and the XIAO nRF52840 examples failed to link with "undefined
-    reference to `Serial'" (production, 2026-09-17).
-    """
-    out: list[str] = []
-    i = 0
-    n = len(source)
-    while i < n:
-        two = source[i : i + 2]
-        if two == "//":
-            j = source.find("\n", i)
-            i = n if j < 0 else j
-        elif two == "/*":
-            j = source.find("*/", i + 2)
-            i = n if j < 0 else j + 2
-        else:
-            out.append(source[i])
-            i += 1
-    return "".join(out)
-
-
-def _has_prelude(content: str, prelude: str) -> bool:
-    """Is every line of `prelude` already in `content` as CODE, not in a comment?"""
-    lines = [ln.strip() for ln in prelude.splitlines() if ln.strip()]
-    code = _strip_comments(content)
-    return all(ln in code for ln in lines)
-
-
-def _extra_core_for_fqbn(fqbn: str) -> dict | None:
-    for core_id, entry in _EXTRA_CORES.items():
-        if entry["match"] in fqbn:
-            return {"core_id": core_id, **entry}
-    return None
 
 
 class ArduinoCLIService:
@@ -288,19 +187,8 @@ class ArduinoCLIService:
         self._ensure_board_urls()
         self._ensure_core_installed()
 
-    def _all_core_urls(self) -> dict[str, str]:
-        """Built-in cores plus whatever an overlay registered."""
-        urls = dict(self.CORE_URLS)
-        for core_id, entry in _EXTRA_CORES.items():
-            urls[core_id] = entry["index_url"]
-        return urls
-
     def _install_version_for(self, core_id: str) -> str | None:
-        pinned = self.CORE_INSTALL_VERSIONS.get(core_id)
-        if pinned:
-            return pinned
-        entry = _EXTRA_CORES.get(core_id)
-        return entry["version"] if entry else None
+        return self.CORE_INSTALL_VERSIONS.get(core_id)
 
     def _ensure_board_urls(self):
         """Register additional board-manager URLs in arduino-cli config."""
@@ -345,7 +233,7 @@ class ArduinoCLIService:
             elif isinstance(urls, list):
                 existing.update(urls)
 
-            wanted = set(self._all_core_urls().values())
+            wanted = set(self.CORE_URLS.values())
             for url in wanted:
                 if url not in existing:
                     print(f"[arduino-cli] Adding board manager URL: {url}")
@@ -393,10 +281,7 @@ class ArduinoCLIService:
         for prefix, core_id in self.ON_DEMAND_CORES.items():
             if prefix in fqbn:
                 return core_id
-        # An overlay-registered core. Checked after the built-in table so the
-        # OSS boards keep their exact routing.
-        extra = _extra_core_for_fqbn(fqbn)
-        return extra["core_id"] if extra else None
+        return None
 
     def _is_core_installed(self, core_id: str) -> bool:
         """Check whether a core is currently installed.
@@ -431,11 +316,9 @@ class ArduinoCLIService:
         if self._is_core_installed(core_id):
             return {"needed": False, "installed": True, "core_id": core_id, "log": ""}
 
-        # The service is built when compile.py is imported, which is before an
-        # overlay's register_extra_core() runs - so __init__'s URL pass never
-        # saw that core's index, and `core install` answered
-        # "Platform 'Seeeduino:nrf52' not found". Register it now.
-        index_url = self._all_core_urls().get(core_id)
+        # Make sure the core's board-manager index is registered before the
+        # install (__init__'s URL pass may have failed, e.g. offline at boot).
+        index_url = self.CORE_URLS.get(core_id)
         if index_url and index_url not in getattr(self, "_registered_urls", set()):
             print(f"[arduino-cli] Registering the index for {core_id} before installing it...")
             await asyncio.to_thread(self._ensure_board_urls)
@@ -534,8 +417,6 @@ class ArduinoCLIService:
         files: list[dict],
         board_fqbn: str = "arduino:avr:uno",
         board_options: dict | None = None,
-        allowed_libraries: set[str] | None = None,
-        owner_id: str | None = None,
     ) -> dict:
         """
         Compile Arduino sketch using arduino-cli.
@@ -550,14 +431,8 @@ class ArduinoCLIService:
         ignored — AVR / RP2040 / ATTiny toolchains don't expose those knobs.
         Reserved for future per-board options on those families.
 
-        `allowed_libraries` is the per-board manifest = library resolution SCOPE
-        (P2.1f). When set, ONLY those libraries are made visible to arduino-cli
-        (a throwaway scratch sketchbook of symlinks materialized by the pro
-        overlay from the content-addressed cache / owner store, pointed at via
-        ARDUINO_DIRECTORIES_USER), instead of the shared global volume.
-        `owner_id` is the project OWNER's id so a shared / embed compile resolves
-        that owner's custom libraries. None/empty manifest (or no overlay) ->
-        arduino-cli's default sketchbook -> scan-all (legacy parity).
+        Libraries resolve from arduino-cli's default sketchbook (every
+        installed library is visible).
 
         Returns:
             dict with keys: success, hex_content, stdout, stderr, error
@@ -590,14 +465,6 @@ class ArduinoCLIService:
                 if "rp2040" in board_fqbn and write_name == "sketch.ino":
                     content = "#define Serial Serial1\n" + content
 
-                # A core an overlay registered may need a line before the
-                # sketch will build for it at all (see register_extra_core).
-                if write_name == "sketch.ino":
-                    extra = _extra_core_for_fqbn(board_fqbn)
-                    prelude = extra["sketch_prelude"] if extra else None
-                    if prelude and not _has_prelude(content, prelude):
-                        content = prelude + content
-
                 # Folder support: names may carry '/' paths ("apps/badge/x.py").
                 # Resolve inside the sketch dir and REJECT anything that
                 # escapes it ('..' segments, absolute paths) — the name comes
@@ -619,40 +486,8 @@ class ArduinoCLIService:
             build_dir.mkdir()
             print(f"Build directory: {build_dir}")
 
-            # P2.1f — manifest-scoped library resolution. Symlink ONLY the
-            # declared libraries (resolved owner-store -> content-addressed
-            # cache -> legacy global dir) into a throwaway scratch sketchbook and
-            # point arduino-cli's USER directory at it, so it scans ONLY those
-            # libraries instead of the shared mutable global volume. None/empty
-            # manifest (or no pro overlay) -> no override -> arduino-cli's default
-            # sketchbook -> legacy global scan-all (parity).
-            #
-            # Mechanism: ARDUINO_DIRECTORIES_USER (the sketchbook), NOT the
-            # --libraries flag. Verified empirically that `--libraries` ADDS to
-            # the search path (the global sketchbook is STILL scanned, so it does
-            # not isolate), whereas pointing ARDUINO_DIRECTORIES_USER at the
-            # scratch root makes <scratch>/libraries the ONLY user-library dir.
-            # scope_dir == <scratch>/libraries, so its parent is the sketchbook
-            # root. Cores + board-manager URLs live in the DATA dir and are
-            # untouched, so RP2040 / ATTinyCore / AVR core resolution stays intact.
-            scope_dir = None
             try:
-                scope = materialize_library_scope(allowed_libraries, owner_id)
-                scope_dir = scope[0] if scope else None
                 compile_env = dict(os.environ)
-                if scope_dir is not None:
-                    compile_env["ARDUINO_DIRECTORIES_USER"] = str(scope_dir.parent)
-                else:
-                    # P2.1h: NO manifest -> point the default sketchbook at the
-                    # content-addressed cache (VELXIO_FALLBACK_SKETCHBOOK, whose
-                    # libraries/ is the cache root) instead of the shared global
-                    # volume, so a from-scratch / no-manifest compile (and the
-                    # scan-all retry, which re-enters here unscoped) resolves user
-                    # libraries from the cache. Unset (OSS self-host) -> arduino-
-                    # cli's default sketchbook (legacy global volume).
-                    _fb = os.environ.get("VELXIO_FALLBACK_SKETCHBOOK")
-                    if _fb:
-                        compile_env["ARDUINO_DIRECTORIES_USER"] = _fb
 
                 # Run compilation using subprocess.run in a thread (Windows compatible)
                 # ESP32 lcgamboa emulator requires DIO flash mode and
@@ -859,54 +694,6 @@ class ArduinoCLIService:
                             }
                 else:
                     print("=== Compilation failed ===\n")
-                    # P2.1f graceful fallback (mirrors the ESP-IDF path): a
-                    # manifest-scoped compile points ARDUINO_DIRECTORIES_USER at
-                    # a sketchbook holding ONLY the declared libraries, so the
-                    # global volume is not scanned. If the manifest omitted a
-                    # needed library or a transitive dependency, a header goes
-                    # missing and the build hard-fails where the legacy global
-                    # scan-all would have found it. So when a scope was applied
-                    # and the failure is a missing #include, retry ONCE without
-                    # the scope (global scan-all) and flag the manifest as
-                    # incomplete. A genuine source error fails both attempts and
-                    # returns the original scoped failure below.
-                    if (
-                        scope_dir is not None
-                        and _looks_like_missing_header(result.stderr)
-                        and not scope_retry_allowed.get()
-                    ):
-                        # Closed scope (an unmodified gallery compile): no
-                        # scan-all rescue, the miss is the finding.
-                        print("=== Closed scope: missing header, retry disabled ===\n")
-                        return {
-                            "success": False,
-                            "error": "Compilation failed",
-                            "stdout": result.stdout,
-                            "stderr": result.stderr,
-                            "gallery_scope_miss": sorted(set(
-                                re.findall(r"fatal error:\s*(\S+\.h(?:pp)?):", result.stderr or "")
-                            )),
-                        }
-                    if scope_dir is not None and _looks_like_missing_header(result.stderr):
-                        print("=== Incomplete manifest — retrying scan-all ===\n")
-                        retry = await self.compile(
-                            files, board_fqbn, board_options=board_options,
-                        )  # allowed_libraries=None -> no scope -> no further retry
-                        if retry.get("success"):
-                            retry["manifest_incomplete"] = True
-                            return retry
-                        # Both attempts failed. The retry ran in the SUPERSET
-                        # environment (every installed library visible), so its
-                        # error is the sketch's real one; the scoped attempt
-                        # stopped at the first undeclared transitive dependency,
-                        # which is an artifact of OUR scoping. Returning the
-                        # scoped error here reported a phantom missing-library
-                        # problem for a sketch whose actual bug was a typo'd
-                        # #include (2026-08-24: "Adafruit_I2CDevice.h: No such
-                        # file" for a manifest that simply never named BusIO).
-                        if (retry.get("stderr") or "").strip():
-                            retry["scope_retry_failed"] = True
-                            return retry
                     return {
                         "success": False,
                         "error": "Compilation failed",
@@ -924,11 +711,6 @@ class ArduinoCLIService:
                     "stdout": "",
                     "stderr": ""
                 }
-            finally:
-                if scope_dir is not None:
-                    # rmtree unlinks the symlinks, never their cache / store /
-                    # legacy targets.
-                    shutil.rmtree(scope_dir.parent, ignore_errors=True)
 
     async def list_boards(self) -> list:
         """
@@ -1219,22 +1001,12 @@ class ArduinoCLIService:
         """
         List all installed Arduino libraries.
 
-        P2.1h: when VELXIO_FALLBACK_SKETCHBOOK is set (pro overlay), list the
-        content-addressed cache (its libraries/ is the cache root) instead of the
-        shared global volume, so the Library Manager 'Installed' view survives the
-        global volume's retirement. Unset (OSS) -> arduino-cli's default sketchbook.
         """
         try:
-            list_env = dict(os.environ)
-            _fb = os.environ.get("VELXIO_FALLBACK_SKETCHBOOK")
-            if _fb:
-                list_env["ARDUINO_DIRECTORIES_USER"] = _fb
-
             def _run():
                 return subprocess.run(
                     [self.cli_path, "lib", "list", "--format", "json"],
                     capture_output=True, text=True, encoding='utf-8', errors='replace',
-                    env=list_env,
                 )
 
             result = await asyncio.to_thread(_run)
@@ -1281,15 +1053,6 @@ class ArduinoCLIService:
         uninstall had worked; it recompiled, hit the same error, and uninstalled
         the same library again. Three times, in the session that prompted this.
 
-        DELIBERATELY does NOT point at VELXIO_FALLBACK_SKETCHBOOK, even though
-        `list_installed_libraries` does. On velxio.dev that sketchbook's
-        libraries/ is a symlink to the shared content-addressed cache: every
-        library, for every user. Uninstall is a per-user operation and must
-        never be able to reach it. Making the two agree looked like a
-        consistency fix and was in fact a way to delete a library out from
-        under everyone (caught in review before it could be used, 2026-09-01).
-        The asymmetry is the safety property: listing is read-only, uninstall
-        is not.
         """
         try:
             print(f"Uninstalling library: {library_name}")
@@ -1309,11 +1072,8 @@ class ArduinoCLIService:
                     return {
                         "success": False,
                         "error": (
-                            f"{library_name} is not installed in this project, so "
-                            f"there is nothing to uninstall. If a compile is failing "
-                            f"inside it, the library came from the server-wide shared "
-                            f"cache: declare the libraries your sketch actually uses "
-                            f"in the project manifest instead."
+                            f"{library_name} is not installed, so there is "
+                            f"nothing to uninstall."
                         ),
                         "stdout": result.stdout,
                     }

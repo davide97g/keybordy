@@ -23,31 +23,11 @@ export type EditorCommandId =
   | 'project.import'
   | 'project.export'
   | 'project.exportVlx'
-  | 'project.exportBom'
-  | 'project.exportScreenshot'
   | 'file.new'
   // Monaco's own Format Document action, registered by CodeEditor while the
   // open file has a formatter (C/C++, Python, JSON) — see codeFormatters.ts.
   | 'edit.formatDocument'
-  // Account-scoped, registered ONLY by the pro overlay and only in the
-  // matching session state (myProjects when signed in, login when not).
-  // OSS has no auth at all, so both stay unregistered here and the menu
-  // hides them outright — see `optional` in EditorMenuBar.
-  | 'account.myProjects'
-  | 'account.login'
-  // Re-opens the last delivered "What's new" post. Registered by
-  // NewsAnnouncer once a post has actually arrived, so the Help row is
-  // absent while there is nothing to re-read.
-  | 'help.whatsNew'
-  | 'project.share'
-  | 'project.githubSync'
-  // Connect an external AI agent (Claude Code / Codex) to the saved
-  // project over MCP. Registered ONLY by the pro overlay (the OSS build
-  // has no accounts, tokens or MCP endpoint), so the menu row hides
-  // itself here — same pattern as the account.* commands.
-  | 'project.connectAgent'
   | 'firmware.upload'
-  | 'sim.record'
   | 'sim.compile'
   | 'sim.run'
   | 'sim.stop'

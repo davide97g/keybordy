@@ -122,13 +122,13 @@ describe('loadExample — multi-board to single-board leaves no residue (bug 3)'
   });
 
   it('a single-board example after a multi-board example ends with exactly one clean board', async () => {
-    // Multi-board example: STM32 Blue Pill + Arduino Uno.
-    await loadExample(findExample('stm32-uno-gpio-mirror'));
+    // Multi-board example: two Pico W boards.
+    await loadExample(findExample('dual-pico-digital-mirror'));
     expect(useSimulatorStore.getState().boards.length).toBe(2);
 
     // Single-board example must reduce the canvas back to one board, freshly
-    // built — its id must match its kind (no stale "stm32-bluepill" id left
-    // on what is now an Arduino Uno).
+    // built — its id must match its kind (no stale "pi-pico-w" id left on
+    // what is now an Arduino Uno).
     await loadExample(findExample('blink-led'));
     const after = useSimulatorStore.getState();
     expect(after.boards.length).toBe(1);

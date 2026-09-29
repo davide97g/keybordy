@@ -1,87 +1,62 @@
 /**
- * Workspace draft — keep an anonymous user's in-progress circuit + code across
- * a full-page navigation to /login and back.
+ * Workspace draft — the editor's local autosave.
  *
- * The Sign-in links mount in a separate React root without Router context, so
- * they navigate with `window.location.assign` (full page load), which wipes
- * the in-memory Zustand stores. Before that navigation we stash the whole
- * workspace (reusing the lossless `.vlx` serialisation) into sessionStorage;
- * when the editor remounts after login it restores the stash. sessionStorage
- * is same-tab and survives the reload, and is discarded when the tab closes.
- *
- * Scoped strictly to the login round-trip via a one-shot restore flag — it is
- * NOT a general autosave, so a normal reload never resurrects an old draft.
+ * The whole workspace (the lossless `.vlx` snapshot) plus the loaded
+ * project's name is kept in IndexedDB, so a reload of `/editor` comes back
+ * to the circuit and code that were on screen. Nothing leaves the browser.
+ * IndexedDB rather than localStorage because a snapshot can carry chip
+ * wasm and SD card files, well past localStorage's few megabytes.
  */
-
-import type { BoardInstance } from '../types/board';
+import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval';
 import { useProjectStore } from '../store/useProjectStore';
-import { useSimulatorStore } from '../store/useSimulatorStore';
-import { useEditorStore } from '../store/useEditorStore';
-import { isProBoardKind } from '../lib/proBoardGate';
-import { buildVlxPayload } from './vlxFile';
+import { flushChipFileSync } from '../services/chipFiles';
+import { buildVlxPayload, importVlxFile } from './vlxFile';
 
-const DRAFT_KEY = 'velxio_ws_draft';
-const RESTORE_FLAG = 'velxio_ws_restore';
+const DRAFT_KEY = 'velxio-workspace-draft';
 
-/** True when the workspace holds something worth preserving (a real build,
- *  not just the empty starter board).
- *
- *  Parts and wires were the only signals, and the most common reason to
- *  sign in mid-build has neither: a Pro board placed alone with its code
- *  written (the sign-in prompt on Run), or a second board on the canvas.
- *  So a board beyond the starter, a Pro board, or an edited file all count. */
-export function workspaceHasWork(): boolean {
-  const sim = useSimulatorStore.getState();
-  if (sim.components.length > 0 || sim.wires.length > 0) return true;
-  if (sim.boards.length > 1) return true;
-  if (sim.boards.some((b) => isProBoardKind(b.boardKind))) return true;
-  return useEditorStore.getState().files.some((f) => f.modified);
+interface StoredDraft {
+  /** The `.vlx` payload, as JSON text. */
+  vlx: string;
+  project: { id: string; slug: string } | null;
+  savedAt: number;
 }
 
-/**
- * Snapshot the current workspace and mark it for restore on the next editor
- * mount. Call right before a full-page navigation to /login. No-op when there
- * is nothing worth keeping or storage is unavailable.
- */
-export function stashWorkspaceForAuth(): void {
-  try {
-    if (!workspaceHasWork()) return;
-    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(buildVlxPayload()));
-    sessionStorage.setItem(RESTORE_FLAG, '1');
-  } catch {
-    // storage full / disabled — degrade to losing the draft, never throw.
-  }
+/** Snapshot the workspace into the draft slot. Resolves with the save time. */
+export async function saveDraft(): Promise<number> {
+  flushChipFileSync();
+  const draft: StoredDraft = {
+    vlx: JSON.stringify(buildVlxPayload()),
+    project: useProjectStore.getState().currentProject,
+    savedAt: Date.now(),
+  };
+  await idbSet(DRAFT_KEY, draft);
+  return draft.savedAt;
 }
 
-/**
- * If a stash is pending (set before the login redirect), load it into the
- * stores and clear it. Runs once on editor mount. Skips when a named project
- * is already loaded so it never clobbers one. Returns whether it restored.
- */
-export function restoreStashedWorkspace(): boolean {
-  let raw: string | null = null;
+/** Load the draft into the stores. Resolves false when there is none. */
+export async function restoreDraft(): Promise<boolean> {
+  let draft: StoredDraft | undefined;
   try {
-    if (sessionStorage.getItem(RESTORE_FLAG) !== '1') return false;
-    sessionStorage.removeItem(RESTORE_FLAG);
-    raw = sessionStorage.getItem(DRAFT_KEY);
-    sessionStorage.removeItem(DRAFT_KEY);
+    draft = await idbGet<StoredDraft>(DRAFT_KEY);
   } catch {
+    return false; // storage blocked (private window): start clean
+  }
+  if (!draft?.vlx) return false;
+  try {
+    await importVlxFile(new File([draft.vlx], 'draft.vlx', { type: 'application/json' }));
+  } catch (err) {
+    console.warn('[draft] discarding an unreadable draft:', err);
+    await clearDraft();
     return false;
   }
-  if (!raw) return false;
-  if (useProjectStore.getState().currentProject) return false;
+  if (draft.project) useProjectStore.getState().setCurrentProject(draft.project);
+  return true;
+}
+
+export async function clearDraft(): Promise<void> {
   try {
-    const payload = JSON.parse(raw);
-    useSimulatorStore.getState().loadProjectState({
-      boards: payload.boards as unknown as BoardInstance[],
-      fileGroups: payload.fileGroups,
-      folderGroups: payload.folderGroups,
-      components: payload.components,
-      wires: payload.wires,
-      activeBoardId: payload.activeBoardId,
-    });
-    return true;
+    await idbDel(DRAFT_KEY);
   } catch {
-    return false;
+    /* storage blocked: nothing to clear */
   }
 }

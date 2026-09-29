@@ -46,12 +46,6 @@ export interface ComponentMetadata {
   // DHT22). The OSS catalogue keeps its list in data/componentSearchKeywords.ts;
   // overlay parts can ship theirs here. Merged with tags at search time.
   keywords?: string[];
-  // Optional flag set by private overlays (e.g. velxio.dev) to mark a
-  // component as gated behind a paid subscription. The OSS image never
-  // sets this — self-hosters have everything unlocked. The picker can
-  // delegate the click on a pro_only component to a window-level gate
-  // (see ComponentPickerModal) which the overlay implements.
-  pro_only?: boolean;
   // Everyday parts (e.g. breadboards) surface at the top of the picker:
   // ComponentRegistry sorts featured components first after loading the
   // metadata, keeping the original order within each group.
