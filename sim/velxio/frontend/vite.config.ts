@@ -5,10 +5,10 @@ import react from '@vitejs/plugin-react'
 // avr8js / rp2040js / @wokwi/elements are resolved from npm via package.json.
 // (The third-party/ clones are reference-only — keep them updated for credits.)
 
-// Backend for `npm run dev`. Defaults to a local uvicorn on :8001; point it
-// at the running container (nginx proxies /api and serves /projects) with
-//   VELXIO_PROXY=http://127.0.0.1:3080 npm run dev
-const backend = process.env.VELXIO_PROXY ?? 'http://127.0.0.1:8001';
+// Backend for `bun run dev` (or `just dev`): the running container, whose
+// nginx proxies /api (with websockets) to uvicorn and serves /projects from
+// firmware/. Point it elsewhere with VELXIO_PROXY=http://host:port.
+const backend = process.env.VELXIO_PROXY ?? 'http://127.0.0.1:3080';
 
 export default defineConfig({
   plugins: [react()],

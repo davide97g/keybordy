@@ -3,11 +3,9 @@ node_modules/
 */node_modules/
 **/node_modules/
 
-# npm lock files. We deliberately do NOT commit these — they pin
-# platform-specific native binaries (Rollup, esbuild, swc) and a lock
-# generated on Windows breaks the Linux Docker build (and vice versa). The
-# Docker image always does a fresh `npm install` so reproducibility is
-# pinned by package.json's version ranges + the image tag. See npm/cli#4828.
+# npm lock files. The committed lock is frontend/bun.lock (cross-platform);
+# a package-lock.json pins host-specific Rollup/esbuild binaries, so keep
+# stray ones out of git.
 package-lock.json
 **/package-lock.json
 

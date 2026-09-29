@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import compile, compile_chip, compile_rom, flash, libraries, micropython_libs
 from app.core.config import settings
+from app.database.session import dispose_engine
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ def _asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -
 async def lifespan(_app: FastAPI):
     asyncio.get_event_loop().set_exception_handler(_asyncio_exception_handler)
     yield
+    await dispose_engine()
 
 
 app = FastAPI(
@@ -90,6 +92,11 @@ app.include_router(simulation.router, prefix="/api/simulation", tags=["simulatio
 # IoT Gateway — HTTP proxy for ESP32 web servers
 from app.api.routes import iot_gateway
 app.include_router(iot_gateway.router, prefix="/api/gateway", tags=["iot-gateway"])
+
+# Saved projects (Postgres). Answers 503 when DATABASE_URL is unset or the
+# database is down; the editor then keeps work in the browser.
+from app.api.routes import projects
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 
 @app.get("/")
 def root():

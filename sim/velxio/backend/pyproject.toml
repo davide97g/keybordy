@@ -1,0 +1,66 @@
+[project]
+name = "velxio-backend"
+version = "1.0.0"
+description = "keybordy's vendored Velxio backend: compile, libraries, ESP32 simulation, project store"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.32.0",
+    "websockets>=12.0",
+    "pydantic>=2.11.0",
+    "pydantic-settings>=2.6.0",
+    # iot_gateway proxy + micropython-lib index
+    "httpx>=0.27.1",
+    # Form/File parsing for POST /api/flash/upload
+    "python-multipart>=0.0.9",
+    "esptool>=4.7.0",
+    # WASM runtime for Custom Chips on ESP32 (the chip's WASM runs in the QEMU
+    # worker subprocess so I2C events get a synchronous response).
+    "wasmtime>=20.0",
+    # Project store (Postgres)
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+# Unit tests only need python; tests marked `db` also need TEST_DATABASE_URL
+# (`just test-backend` starts the compose Postgres and sets it).
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "integration: requires QEMU binary and/or arduino-cli (deselect with -m \"not integration\")",
+    "e2e: requires a running backend server",
+    "db: requires Postgres at TEST_DATABASE_URL",
+]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["app/services/esp-idf-template", "board-indexes", "sdk"]
+
+[tool.ruff.lint]
+# Deliberately narrow: this is vendored upstream code, and a mass reformat
+# would bury real changes in the diff against upstream.
+# Syntax errors and pyflakes only (undefined names, unused imports, ...).
+select = ["E9", "F"]
+ignore = ["F541"]
+
+[tool.ruff.lint.per-file-ignores]
+# Upstream leftovers, kept as-is to stay diffable against upstream.
+"app/services/asm8080.py" = ["F841"]
+"app/services/esp32_worker.py" = ["F841"]
+"app/services/wasm_chip_runtime.py" = ["F401", "F841"]

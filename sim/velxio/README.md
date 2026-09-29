@@ -6,8 +6,8 @@ This copy runs the keybordy simulator (`../compose.yaml`, see `../README.md`). W
 
 ## Layout
 
-- `frontend/`: React + Vite + TypeScript app (`npm install`, `npm run dev`, `npm test`)
-- `backend/`: FastAPI compile/simulation server (arduino-cli, ESP-IDF, QEMU workers)
+- `frontend/`: React + Vite + TypeScript app (`bun install`, `bun run dev`, `bun run test`)
+- `backend/`: FastAPI compile/simulation server (arduino-cli, ESP-IDF, QEMU workers) and the saved-projects API on Postgres (`uv sync`, `uv run pytest`, migrations in `migrations/`)
 - `docker/`: nginx config and entrypoint for the all-in-one image
 - `Dockerfile`: the image; needs `prebuilt/qemu/` filled by `scripts/fetch-qemu.sh`
 - `test/fixtures/`: data files some frontend tests read

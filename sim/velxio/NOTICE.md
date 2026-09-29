@@ -34,3 +34,12 @@ Changed or added:
 - Per-key trace colors: a pushbutton labeled `K<n>` shows its label in its own cap color, and the serial monitor colors the number in `key <n> down|up` lines to match.
 - Monaco uses a single `keybordy-dark` theme with custom token colors.
 - The Dockerfile installs frontend dependencies before copying the sources and copies the built frontend last, so a UI-only change rebuilds in minutes.
+
+## Tooling and project store (2026-09-29)
+
+- Frontend installs with Bun from a committed `frontend/bun.lock` (`bunfig.toml` keeps a flat `node_modules`); scripts run through `bun run`, while vitest, eslint and the SVG generator still run on Node. The unused `canvas` devDependency and the root `package.json` (tsx only) are removed.
+- The backend uses uv: `backend/pyproject.toml` and `backend/uv.lock` replace `requirements.txt`, and pytest and ruff are configured there (`pytest.ini` removed; it pointed at a folder that did not exist).
+- A server-side project store is back, rebuilt on Postgres: SQLAlchemy async + asyncpg models, Alembic migrations (`backend/migrations/`), and `/api/projects` (list, create, get, optimistic autosave with a revision check, rename, delete). The editor adds File > Projects… and Save to projects…, keeps `?id=<uuid>` in the URL for a saved project, and keeps a local copy in IndexedDB for offline edits and conflicts. `?project=` folders and scratch workspaces still use the browser draft.
+- Dockerfile: the frontend stage installs with Bun from the lockfile, the backend env is a uv venv at `/app/.venv`, and every app layer (sdk, nginx config, entrypoint, migrations, backend code, built UI) comes after the ESP-IDF layers, with BuildKit cache mounts for Bun and uv.
+- Entrypoint: arduino-cli cores are installed only when missing (a core that fails to install is remembered; `VELXIO_REFRESH_CORES=1` retries), migrations run before uvicorn when `DATABASE_URL` is set, uvicorn reloads with `UVICORN_RELOAD=1`, and nginx starts once `/health` answers. nginx accepts request bodies up to 64 MB on `/api/`.
+- The unused two-service files (`backend/Dockerfile`, `frontend/Dockerfile`, `frontend/nginx.conf`) are removed.

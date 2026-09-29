@@ -23,6 +23,9 @@ export type EditorCommandId =
   | 'project.import'
   | 'project.export'
   | 'project.exportVlx'
+  // Saved projects (Postgres): the list dialog, and save-as.
+  | 'project.browse'
+  | 'project.saveAs'
   | 'file.new'
   // Monaco's own Format Document action, registered by CodeEditor while the
   // open file has a formatter (C/C++, Python, JSON) — see codeFormatters.ts.

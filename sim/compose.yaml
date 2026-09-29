@@ -1,9 +1,11 @@
 # Local Wokwi-style simulator: a fork of Velxio (AGPLv3) vendored in ./velxio,
 # with the hosted-service parts (Pro walls, accounts, sharing, analytics)
-# removed. Build it once: ./velxio/scripts/fetch-qemu.sh, then
-#   docker compose -f sim/compose.yaml up -d --build
+# removed, plus a local Postgres for saved projects. Build it once:
+# ./velxio/scripts/fetch-qemu.sh, then `just sim-up`
+# (= docker compose -f sim/compose.yaml up -d --build --wait).
 # Open http://localhost:3080/editor?project=keys8 — every folder under
 # firmware/ with a diagram.json is a project, re-read on each page load.
+# Dev loop with hot reload: `just dev` (adds compose.dev.yaml).
 name: keybordy-sim
 
 services:
@@ -13,6 +15,8 @@ services:
     container_name: velxio
     ports:
       - "127.0.0.1:3080:80"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://velxio:${POSTGRES_PASSWORD:-velxio}@postgres:5432/velxio
     volumes:
       - ../firmware:/srv/projects:ro
       - velxio-arduino-libs:/root/.arduino15
@@ -20,12 +24,35 @@ services:
       # ccache + persistent ESP-IDF build dir: warm ESP32 builds take seconds.
       - velxio-ccache:/var/cache/ccache
       - velxio-build:/var/lib/velxio-build
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 90s
+      start_interval: 5s
+    restart: unless-stopped
+
+  # Saved projects (/api/projects). Not published on the host; the dev
+  # override exposes it on 127.0.0.1:5433 for tests and psql.
+  postgres:
+    image: postgres:17-alpine
+    container_name: velxio-postgres
+    environment:
+      POSTGRES_USER: velxio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-velxio}
+      POSTGRES_DB: velxio
+    volumes:
+      - velxio-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U velxio -d velxio"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
@@ -33,3 +60,4 @@ volumes:
   velxio-arduino-user-libs:
   velxio-ccache:
   velxio-build:
+  velxio-pgdata:

@@ -3,12 +3,14 @@
  *
  * The whole workspace (the lossless `.vlx` snapshot) plus the loaded
  * project's name is kept in IndexedDB, so a reload of `/editor` comes back
- * to the circuit and code that were on screen. Nothing leaves the browser.
+ * to the circuit and code that were on screen. This is the slot for scratch
+ * and firmware/ folder workspaces; saved projects autosave to the server
+ * (utils/workspacePersistence).
  * IndexedDB rather than localStorage because a snapshot can carry chip
  * wasm and SD card files, well past localStorage's few megabytes.
  */
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval';
-import { useProjectStore } from '../store/useProjectStore';
+import { useProjectStore, type CurrentProject } from '../store/useProjectStore';
 import { flushChipFileSync } from '../services/chipFiles';
 import { buildVlxPayload, importVlxFile } from './vlxFile';
 
@@ -17,7 +19,7 @@ const DRAFT_KEY = 'velxio-workspace-draft';
 interface StoredDraft {
   /** The `.vlx` payload, as JSON text. */
   vlx: string;
-  project: { id: string; slug: string } | null;
+  project: CurrentProject | null;
   savedAt: number;
 }
 

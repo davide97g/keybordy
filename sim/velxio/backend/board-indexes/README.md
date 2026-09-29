@@ -25,12 +25,10 @@ micronucleus tool both download from github.com, not drazzy.com/azduino.com).
 A missing index is not. So we vendor the index and seed it wherever it could
 be missing:
 
-- `Dockerfile.standalone` copies this directory to `/opt/arduino15-seed/`;
+- `Dockerfile` copies this directory to `/opt/arduino15-seed/`;
   `docker/entrypoint.sh` copies any missing `package_*.json` into
   `/root/.arduino15/` at boot. This also heals pre-existing named volumes
   created by older images (the actual trigger of issue #254).
-- `backend/Dockerfile` copies the index into `/root/.arduino15/` before
-  running a now-tolerant `core update-index`.
 
 ## Refreshing the snapshot
 

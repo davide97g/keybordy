@@ -64,12 +64,16 @@ export async function loadProjectFromUrl(name: string): Promise<string[]> {
     const result = await importProjectFile(file);
     const warnings = result.kind === 'zip' ? applyWokwiImport(result) : [];
     if (result.kind === 'zip' && result.libraries.length > 0) await ensureLibraries(result.libraries);
-    useProjectStore.getState().setCurrentProject({ id: name, slug: file.name.replace(/\.\w+$/, '') });
+    useProjectStore.getState().setCurrentProject({
+      id: name,
+      slug: file.name.replace(/\.\w+$/, ''),
+      source: 'folder',
+    });
     return warnings;
   }
   const result = importFromWokwiSources(await readFolder(name));
   const warnings = applyWokwiImport(result);
   if (result.libraries.length > 0) await ensureLibraries(result.libraries);
-  useProjectStore.getState().setCurrentProject({ id: name, slug: name.split('/').pop() ?? name });
+  useProjectStore.getState().setCurrentProject({ id: name, slug: name.split('/').pop() ?? name, source: 'folder' });
   return warnings;
 }

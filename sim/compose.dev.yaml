@@ -1,0 +1,18 @@
+# Dev override: `just dev` (docker compose -f compose.yaml -f compose.dev.yaml).
+# The backend reloads on edits to the bind-mounted sources, Postgres is
+# reachable from the host for tests/psql, and the UI runs from Vite on the host
+# (http://localhost:5173), proxying /api and /projects to nginx on 3080.
+services:
+  velxio:
+    environment:
+      UVICORN_RELOAD: "1"
+      # Docker Desktop bind mounts don't always deliver inotify events.
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./velxio/backend/app:/app/app
+      - ./velxio/backend/migrations:/app/migrations
+      - ./velxio/backend/alembic.ini:/app/alembic.ini:ro
+
+  postgres:
+    ports:
+      - "127.0.0.1:5433:5432"

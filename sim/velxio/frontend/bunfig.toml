@@ -1,0 +1,4 @@
+[install]
+# npm-style flat node_modules: copy-monaco.mjs and generate-component-svgs.cjs
+# read node_modules/monaco-editor and node_modules/@wokwi/elements directly.
+linker = "hoisted"

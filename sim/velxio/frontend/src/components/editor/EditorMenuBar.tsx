@@ -104,6 +104,8 @@ export const EditorMenuBar: React.FC = () => {
     { kind: 'command', id: 'file.new', label: t('editor.menu.newFile', 'New file') },
     { kind: 'separator' },
     { kind: 'command', id: 'project.open', label: t('editor.menu.open', 'Open project…') },
+    { kind: 'command', id: 'project.browse', label: t('editor.menu.projects', 'Projects…') },
+    { kind: 'command', id: 'project.saveAs', label: t('editor.menu.saveToProjects', 'Save to projects…') },
     {
       kind: 'command',
       id: 'project.save',

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # ---- Stage 0: QEMU .so + ROM binaries ----
 # ESP32 emulation needs libqemu-xtensa.so + libqemu-riscv32.so (QEMU built as
 # a shared library, simulating ESP32 / ESP32-S3 / ESP32-C3) plus the matching
@@ -77,31 +78,28 @@ RUN mkdir -p /root/.espressif/tools/mkspiffs/0.2.3/mkspiffs \
 
 
 # ---- Stage 1: Build frontend and third-party ----
-FROM node:20 AS frontend-builder
-
-WORKDIR /app
+# Bun installs from the committed, cross-platform bun.lock. Node stays in the
+# image because vite, copy-monaco.mjs and generate-component-svgs.cjs (which
+# patches Module._load) run under node.
+FROM node:24-bookworm-slim AS frontend-builder
+COPY --from=oven/bun:1.3.14-slim /usr/local/bin/bun /usr/local/bin/bun
 
 # avr8js, rp2040js and @wokwi/elements are pulled directly from the npm
 # registry (see frontend/package.json) — no upstream git clones needed.
 # Board SVGs live in frontend/public/boards/, component SVGs in
 # frontend/public/component-svgs/, and components-metadata.json is committed.
 # Dependencies first, sources second: a UI-only edit then reuses the cached
-# npm install layer instead of reinstalling ~1 GB of node_modules.
+# install layer instead of reinstalling ~1 GB of node_modules.
 # (postinstall runs frontend/scripts/copy-monaco.mjs, so that folder comes
 # along with package.json.)
-COPY frontend/package.json frontend/
-COPY frontend/scripts/ frontend/scripts/
 WORKDIR /app/frontend
-# Lock files aren't committed in this repo (they're gitignored) — see the
-# note in .gitignore. The `rm -f` below is defense-in-depth in case
-# someone runs `docker build .` from a tree where a local lock exists.
-RUN rm -f package-lock.json \
- && npm install --include=optional
-WORKDIR /app
-COPY frontend/ frontend/
-COPY scripts/ scripts/
-WORKDIR /app/frontend
-RUN rm -f package-lock.json && npm run build:docker
+COPY frontend/package.json frontend/bun.lock frontend/bunfig.toml ./
+COPY frontend/scripts/ scripts/
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile
+COPY frontend/ ./
+COPY scripts/ /app/scripts/
+RUN bun run build:docker
 
 
 # ---- Stage 2: Final Production Image ----
@@ -177,28 +175,6 @@ RUN set -eu; \
 COPY backend/board-indexes/package_*.json /opt/arduino15-seed/
 
 WORKDIR /app
-
-# Install Python backend dependencies
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy backend application code
-COPY backend/app/ ./app/
-
-# The custom-chip SDK header. chip_compile.py passes this directory to clang
-# as -I, and reports available:false without it, so a chip that includes
-# velxio-chip.h cannot compile on an image that leaves it out.
-COPY backend/sdk/ ./sdk/
-
-# Setup Nginx configuration. Remove Debian's stock site so it doesn't shadow
-# ours as the default_server (was Issue #108: users behind reverse proxies got
-# the "Welcome to nginx" page because the stock site claimed default_server).
-RUN rm -f /etc/nginx/sites-enabled/default
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy and configure entrypoint script (fix Windows CRLF → LF)
-COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # ── ESP32 emulation: pre-built QEMU .so + ROM binaries ──────────────────────
 # From the qemu-provider stage (prebuilt/qemu/, filled by scripts/fetch-qemu.sh)
@@ -331,8 +307,46 @@ RUN rm -rf /root/.espressif/python_env/idf5.5_* \
 # tree did); its equivalent is tools/requirements/requirements.core.txt.
 RUN pip install --no-cache-dir -r /opt/esp-idf-v5/tools/requirements/requirements.core.txt
 
-# Built frontend assets, copied LAST: every layer above (QEMU, the ESP-IDF
-# trees, the pip installs) stays cached when only the UI changes.
+# ── App layers, LAST ────────────────────────────────────────────────────────
+# Everything above (QEMU, the multi-GB ESP-IDF trees, both python envs) stays
+# cached when the backend, the nginx/entrypoint config or the UI change.
+
+# Backend python env with uv, from the committed uv.lock, into /app/.venv.
+# The entrypoint runs /app/.venv/bin/uvicorn by absolute path because IDF's
+# export.sh rewrites PATH at boot.
+COPY --from=ghcr.io/astral-sh/uv:0.12.18 /uv /uvx /bin/
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_PYTHON=/usr/local/bin/python3.12 \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+COPY backend/pyproject.toml backend/uv.lock /app/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project
+
+# The custom-chip SDK header. chip_compile.py passes this directory to clang
+# as -I, and reports available:false without it, so a chip that includes
+# velxio-chip.h cannot compile on an image that leaves it out.
+COPY backend/sdk/ ./sdk/
+
+# Setup Nginx configuration. Remove Debian's stock site so it doesn't shadow
+# ours as the default_server (was Issue #108: users behind reverse proxies got
+# the "Welcome to nginx" page because the stock site claimed default_server).
+RUN rm -f /etc/nginx/sites-enabled/default
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy and configure entrypoint script (fix Windows CRLF → LF)
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+# Database migrations (alembic upgrade head runs at boot)
+COPY backend/alembic.ini /app/alembic.ini
+COPY backend/migrations/ /app/migrations/
+
+# Backend application code
+COPY backend/app/ ./app/
+
+# Built frontend assets
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
 EXPOSE 80

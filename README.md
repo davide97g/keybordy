@@ -4,9 +4,20 @@ A small keyboard built on a classic ESP32 DevKit: eight MX-style switches wired 
 
 - `firmware/keys8/`: current firmware. Reads 8 keys and prints `key N down` / `key N up` on serial at 115200. Also holds the Wokwi `diagram.json`.
 - `firmware/switches_oled/`, `firmware/rotary_oled/`: earlier sketches with the SSD1306 OLED.
-- `sim/`: fully local simulator, a vendored fork of Velxio (AGPLv3) in Docker. Run `sim/velxio/scripts/fetch-qemu.sh` once, then `docker compose -f sim/compose.yaml up -d --build` and open http://localhost:3080/editor?project=keys8. See `sim/README.md`.
+- `sim/`: fully local simulator, a vendored fork of Velxio (AGPLv3) in Docker, with a local Postgres for saved projects. Run `just sim-fetch-qemu` once, then `just sim-up` and open http://localhost:3080/editor?project=keys8. See `sim/README.md`.
 - `docs/`: board and bench notes.
 - `guide/`: interactive wiring guide (Vite + React).
+
+## Tooling
+
+Tasks live in the root `justfile` (`just` lists them); tool versions are pinned in `mise.toml` (Bun, Node, Python, uv, just). Frontends use Bun (`bun.lock`), the simulator backend uses uv (`uv.lock`).
+
+```
+just install         # bun + uv dependencies
+just dev             # simulator with backend hot reload + UI on http://localhost:5173
+just test            # backend (incl. Postgres) + frontend tests
+just fw-flash        # compile and flash keys8
+```
 
 ## Wiring
 
@@ -27,5 +38,6 @@ No breadboard, so every board pin takes one jumper and each switch gets two pins
 ## Flash
 
 ```
-arduino-cli compile --upload -p /dev/cu.usbserial-0001 --fqbn esp32:esp32:esp32 firmware/keys8
+just fw-flash        # arduino-cli compile --upload -p /dev/cu.usbserial-0001 --fqbn esp32:esp32:esp32 firmware/keys8
+just fw-monitor
 ```

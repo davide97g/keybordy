@@ -16,71 +16,33 @@ STM32) are hidden from the picker, the new-project dialog and the gallery.
 - Simulation: Real AVR8 emulation using avr8js with full GPIO/timer/USART support
 - Components: Visual electronic components from wokwi-elements (LEDs, resistors, buttons, etc.)
 - Auth: none. Single user, local only.
-- Project persistence, all client-side:
+- Project persistence:
   - `/editor?project=<name>` imports the Wokwi project folder nginx serves at
     `/projects/<name>/` (`utils/loadFromUrl.ts`, JSON autoindex listing).
-  - The workspace autosaves to IndexedDB (`utils/workspaceDraft.ts`,
-    `hooks/useWorkspaceDraft.ts`) and plain `/editor` restores it.
+  - Scratch and folder workspaces autosave to an IndexedDB draft
+    (`utils/workspaceDraft.ts`); saved projects autosave to Postgres through
+    `/api/projects` (`utils/workspacePersistence.ts`, `services/projectsApi.ts`,
+    `components/projects/`), at `/editor?id=<uuid>`. The hook driving both is
+    `hooks/useWorkspaceDraft.ts`; plain `/editor` reopens the last one.
   - Save (Ctrl+S) downloads a Wokwi `.zip`; File > Export .vlx is lossless.
 
 The project uses **local clones of official Wokwi repositories** in `third-party/` instead of npm packages.
 
 ## Development Commands
 
-### Backend (FastAPI + Python)
+Run from the keybordy repo root with `just` (see its `justfile`); the image
+is built and run by `sim/compose.yaml`. The backend only runs in the
+container: it needs the Linux QEMU `.so` files, ESP-IDF and arduino-cli cores.
 
-**Setup:**
 ```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate  # Windows
-pip install -r requirements.txt
+just dev            # containers + backend hot reload + Vite on :5173
+just test-backend   # cd backend && uv run pytest (Postgres tests via TEST_DATABASE_URL)
+just test-frontend  # cd frontend && bun run test (vitest; NOT `bun test`)
+just lint           # ruff + eslint
+cd frontend && bun run build:docker   # vite build only, no tsc
 ```
 
-**Run development server:**
-```bash
-cd backend
-venv\Scripts\activate
-uvicorn app.main:app --reload --port 8001
-```
-
-**Access:**
-- API: http://localhost:8001
-- Docs: http://localhost:8001/docs
-
-### Frontend (React + Vite)
-
-**Setup:**
-```bash
-cd frontend
-npm install
-```
-
-**Run development server:**
-```bash
-cd frontend
-npm run dev
-```
-
-**Build for production:**
-```bash
-cd frontend
-npm run build
-```
-
-**Docker build (skips tsc type-check, uses esbuild only):**
-```bash
-npm run build:docker
-```
-
-**Lint:**
-```bash
-cd frontend
-npm run lint
-```
-
-**Access:**
-- App: http://localhost:5173
+API docs: http://localhost:3080/api/docs
 
 ### Wokwi Libraries (npm)
 
@@ -93,12 +55,12 @@ hacking). The one exception is `qemu-lcgamboa` (real source dependency for
 ESP32 emulation when rebuilding QEMU).
 
 **Bump a wokwi lib version:** edit the version string in
-`frontend/package.json` and run `npm install` in `frontend/`.
+`frontend/package.json` and run `bun install` in `frontend/`.
 
 **Adding new components to wokwi-elements:** the metadata generator
 (`scripts/generate-component-metadata.ts`) scans the upstream `src/`,
 which the npm package doesn't ship. Clone wokwi-elements once into
-`third-party/wokwi-elements/` and run `npm run generate:metadata`. The
+`third-party/wokwi-elements/` and run `bun run generate:metadata`. The
 script gracefully skips when the clone is absent — `components-metadata.json`
 is committed.
 
@@ -177,7 +139,7 @@ The simulation runs at ~60 FPS using `requestAnimationFrame`:
 Main stores:
 - `useEditorStore`: Multi-file workspace (files[], activeFileId, openFileIds)
 - `useSimulatorStore`: Simulation state, components, wires, compiled hex, serialMonitorOpen
-- `useProjectStore`: Current loaded project (id, slug) — the `?project=` folder; used for download filenames
+- `useProjectStore`: Current loaded project (id, slug, source `folder`|`saved`, name, revision); decides where autosave goes
 
 **6. Component-Pin Mapping**
 
@@ -202,7 +164,7 @@ Wire positions auto-update when components move via `updateWirePositions()`.
 
 ## Key File Locations
 
-### Backend (OSS — stateless)
+### Backend
 - [backend/app/main.py](backend/app/main.py) - FastAPI app entry point, CORS, routers, /health
 - [backend/app/api/routes/compile.py](backend/app/api/routes/compile.py) - Compilation endpoints (multi-file, sync + async)
 - [backend/app/api/routes/compile_chip.py](backend/app/api/routes/compile_chip.py) - Custom-chip WASM compile
@@ -212,7 +174,9 @@ Wire positions auto-update when components move via `updateWirePositions()`.
 - [backend/app/services/arduino_cli.py](backend/app/services/arduino_cli.py) - arduino-cli wrapper
 - [backend/app/services/espidf_compiler.py](backend/app/services/espidf_compiler.py) - ESP-IDF compile wrapper
 - [backend/app/services/build_queue.py](backend/app/services/build_queue.py) - FIFO admission gate for compile jobs (heavy ESP-IDF lane + light arduino-cli lane, unbounded queue, capped concurrent builds). Exposes only a coarse load level.
-- [backend/app/core/config.py](backend/app/core/config.py) - Minimal Settings (FRONTEND_URL only)
+- [backend/app/api/routes/projects.py](backend/app/api/routes/projects.py) - Saved projects on Postgres (optimistic autosave, 503 when the DB is down)
+- [backend/app/models/project.py](backend/app/models/project.py), [backend/migrations/](backend/migrations/) - `projects` table and its Alembic migrations
+- [backend/app/core/config.py](backend/app/core/config.py) - Settings (FRONTEND_URL, DATABASE_URL)
 
 ### Frontend - Core
 - [frontend/src/App.tsx](frontend/src/App.tsx) - Main app component, routing (`/` redirects to `/editor`)
@@ -363,7 +327,7 @@ board.
 `frontend/public/components-metadata.json` is produced by
 `scripts/generate-component-metadata.ts`. **Direct edits get wiped** the
 next time the generator runs (which happens on every third-party update,
-plus anyone who runs `npm run generate:metadata` from `frontend/`).
+plus anyone who runs `bun run generate:metadata` from `frontend/`).
 
 For Velxio-native components that don't exist in wokwi-elements (custom
 chips, ePaper panels, logic gates, voltmeters, …) add the entry to
@@ -380,14 +344,11 @@ To regenerate after editing the override file:
 
 ```bash
 cd frontend
-npm run generate:metadata
+bun run generate:metadata
 ```
 
-(The script needs `tsx` and `typescript` resolvable; the npm script in
-`frontend/package.json:8` is the supported entry point — if it errors
-with "Cannot find module 'typescript'", run with
-`NODE_PATH="$PWD/frontend/node_modules" npx tsx scripts/generate-component-metadata.ts`
-from the repo root.)
+(Bun runs the TypeScript script directly and it resolves `typescript` from
+`frontend/node_modules`.)
 
 ### 7. Pre-existing TypeScript Errors
 
@@ -396,12 +357,12 @@ There are known pre-existing TS errors that do NOT block the app from running:
 - `@monaco-editor/react` type compatibility with React 19
 - Test mock type mismatches in `AVRSimulator.test.ts`
 
-**Do not fix these unless explicitly asked.** They are suppressed in Docker builds by using `build:docker` which runs `vite build` only (no `tsc -b`). Local `npm run build` runs `tsc -b` and will show these errors.
+**Do not fix these unless explicitly asked.** They are suppressed in Docker builds by using `build:docker` which runs `vite build` only (no `tsc -b`). Local `bun run build` runs `tsc -b` and will show these errors.
 
 ### 8. Docker Build — third-party
 
 `Dockerfile` does NOT clone any wokwi-* repos. The frontend stage
-just does `COPY frontend/ scripts/` then `npm install && npm run build:docker`,
+installs with `bun install --frozen-lockfile` from `frontend/bun.lock`, then runs `bun run build:docker`,
 which pulls `@wokwi/elements`, `avr8js`, `rp2040js` from npm. Board SVGs live
 in `frontend/public/boards/`, component SVGs in `frontend/public/component-svgs/`,
 and `components-metadata.json` is committed.
@@ -416,19 +377,8 @@ and `components-metadata.json` is committed.
 
 ## Testing
 
-### Backend Testing
-Test compilation directly:
-```bash
-cd backend
-python test_compilation.py
-```
-
-### Frontend Testing
-Vitest is configured. Run tests:
-```bash
-cd frontend
-npm test
-```
+- Backend: `just test-backend` (pytest via uv, config in `backend/pyproject.toml`). Tests marked `db` run against the dev compose Postgres and skip without `TEST_DATABASE_URL`.
+- Frontend: `just test-frontend` (vitest via `bun run test`).
 
 ## Common Development Scenarios
 

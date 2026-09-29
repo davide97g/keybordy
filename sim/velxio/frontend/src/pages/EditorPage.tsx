@@ -7,7 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { startSimulation } from '../simulation/spice/start';
 import { useDocumentTitle } from '../utils/useDocumentTitle';
 import { getLocaleFromPath, localizedPath } from '../i18n/path';
-import { restoreDraft } from '../utils/workspaceDraft';
+import {
+  openSavedProject,
+  restoreWorkspace,
+  savedProjectParam,
+} from '../utils/workspacePersistence';
+import { ProjectsHost } from '../components/projects/ProjectsHost';
 import { loadProjectFromUrl, projectParam } from '../utils/loadFromUrl';
 import { showMessageDialog } from '../store/useMessageDialogStore';
 import { CodeEditor } from '../components/editor/CodeEditor';
@@ -107,9 +112,10 @@ export const EditorPage: React.FC = () => {
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
 
   // What the canvas shows on arrival, in order:
+  //   0. `/editor?id=<uuid>`: a saved project from the server (Postgres);
   //   1. `/editor?project=<name>`: the project folder served at /projects/
   //      (re-read on every load, so the files on disk stay the truth);
-  //   2. plain `/editor`: the local draft from the last session;
+  //   2. plain `/editor`: the saved project open last, else the local draft;
   //   3. otherwise, on the untouched default canvas (the hardcoded Uno + LED
   //      of useSimulatorStore's INITIAL_BOARD), the starter-template picker
   //      over an emptied canvas (cancelling leaves a blank workspace).
@@ -123,6 +129,19 @@ export const EditorPage: React.FC = () => {
       window.location.pathname.replace(/\/+$/, '') === localizedPath('/editor', locale);
     const init = async () => {
       if (!onEditor) return;
+      const savedId = savedProjectParam();
+      if (savedId) {
+        const result = await openSavedProject(savedId);
+        if (result === 'not-found' || result === 'unavailable') {
+          showMessageDialog(
+            result === 'not-found'
+              ? 'That saved project no longer exists.'
+              : 'The project store is unreachable and this browser has no copy of that project.',
+            { kind: 'error' },
+          );
+        }
+        return;
+      }
       const project = projectParam();
       if (project) {
         try {
@@ -137,7 +156,7 @@ export const EditorPage: React.FC = () => {
         return;
       }
       if (window.location.search) return;
-      if (await restoreDraft()) return;
+      if (await restoreWorkspace()) return;
       if (useProjectStore.getState().currentProject) return;
       const sim = useSimulatorStore.getState();
       const pristine =
@@ -678,6 +697,7 @@ export const EditorPage: React.FC = () => {
         isOpen={showNewProjectDialog}
         onClose={() => setShowNewProjectDialog(false)}
       />
+      <ProjectsHost />
     </div>
   );
 };
