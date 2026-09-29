@@ -47,6 +47,19 @@ Rebuild the image (`just sim-up`) for Dockerfile, nginx or entrypoint changes, a
 
 Press the green **Run** button. The first ESP32 compile takes about 2 minutes; later ones come from the cache in seconds. The serial panel prints `keys8 ready`. Click a key on the canvas and it prints `key N down` / `key N up`.
 
+## Headless checks
+
+`harness/simcheck.py` runs the same compile and QEMU emulation without a browser. It is for scripts, CI-style checks and Claude.
+
+```sh
+just sim-lint                 # diagram.json vs the sketch's KEY_PINS/GND_PINS vs the README table
+just sim-check                # lint, boot keys8, tap K1..K8, expect one `key N down`/`up` each
+just sim-check --bounce       # same with contact chatter, to test the debounce
+just sim-run -s "until ready; press K2; wait 300; release K2" -v
+```
+
+Without a browser the emulator does not apply `INPUT_PULLUP` or the switch contacts. The harness reads the nets from `diagram.json` and does that job. It fails on lint errors, boot loops, panics, shorts, floating inputs, keys with no ground, and missing or extra key lines. `--json` prints the result as JSON. The top of the script documents the steps.
+
 ## What stays local
 
 - Compiling, emulation and project storage all run in the containers or the browser.

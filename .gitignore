@@ -9,3 +9,6 @@ firmware/*/build/
 .ruff_cache/
 .pytest_cache/
 backups/
+
+sim/.cache/
+__pycache__/

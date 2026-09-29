@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(just sim-lint:*)",
+      "Bash(just sim-run:*)",
+      "Bash(just sim-check:*)",
+      "Bash(just sim-up)",
+      "Bash(just sim-logs:*)",
+      "Bash(just fw-build:*)",
+      "Bash(python3 sim/harness/simcheck.py:*)"
+    ]
+  }
+}

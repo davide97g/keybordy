@@ -44,6 +44,21 @@ sim-up:
 sim-down:
     {{compose}} down
 
+# Static wiring check: diagram.json vs the sketch's pin map vs README (no container needed)
+[positional-arguments]
+sim-lint *args:
+    @python3 sim/harness/simcheck.py lint "$@"
+
+# Compile + boot in QEMU headless, play a --script, print serial (e.g. `just sim-run keys8 -s "until ready; tap K3"`)
+[positional-arguments]
+sim-run *args:
+    @python3 sim/harness/simcheck.py run "$@"
+
+# Lint, then tap every key and assert `key N down/up` (add --bounce for contact chatter)
+[positional-arguments]
+sim-check *args:
+    @python3 sim/harness/simcheck.py check "$@"
+
 # Follow container logs (e.g. `just sim-logs velxio`)
 sim-logs *args:
     {{compose}} logs -f {{args}}

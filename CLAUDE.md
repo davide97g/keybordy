@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A hand-wired keyboard on a classic ESP32 DevKit: eight MX-style switches wired with jumpers only (no breadboard, no PCB, no solder), plus a rotary encoder to add later. The repo holds the Arduino firmware, a Wokwi circuit diagram, a fully local simulator (a vendored Velxio fork in Docker), bench notes in `docs/`, and an interactive wiring guide in `guide/`.
 
-There are no tests or linters for the firmware. Verification means compiling, then either flashing and reading serial or running the circuit in the simulator. The vendored simulator has its own test suites (see below).
+Firmware and wiring are verified with `sim/harness/simcheck.py` (see "Headless checks" below): a static lint of the diagram against the sketch, and a headless run in the simulator's QEMU that presses keys and asserts serial output. After any change to a sketch, `diagram.json` or the README pin table, run `just sim-check` and report its result. Flashing and reading serial stays the final check on real hardware. The vendored simulator has its own test suites (see below).
 
 ## Tooling
 
@@ -74,9 +74,29 @@ Open http://localhost:3080/editor?project=keys8. The `velxio` container (image `
 - Each key's color lives in `firmware/keys8/diagram.json`: the pushbutton `color` and both of its wires use the same hex. The serial monitor colors `key N down/up` lines from the cap color of the part labeled `KN`, so keep the labels `K1`..`K8`.
 
 Gotchas:
-- The simulation only runs in a visible tab. In a headless or hidden tab, serial stays at `Waiting for serial data...`. Use a visible browser to test Run and key presses.
+- The simulation only runs in a visible tab. In a headless or hidden tab, serial stays at `Waiting for serial data...`. To check firmware and wiring, use the headless harness (`just sim-check`) instead of the UI. Use a visible browser only for UI work.
 - The first image build clones ESP-IDF and takes 30+ minutes. The first ESP32 compile takes about 2 minutes; later compiles are cached in the `velxio-ccache` and `velxio-build` volumes.
-- Debug emulation outside the browser by running `/app/.venv/bin/python /app/app/services/esp32_worker.py` inside the container. It reads a JSON config on stdin and emits `uart_tx` / `gpio_change` JSON on stdout.
+- `sim/harness/simcheck.py` wraps `/app/.venv/bin/python /app/app/services/esp32_worker.py` inside the container. The worker reads a JSON config on stdin and emits `uart_tx` / `gpio_*` JSON on stdout (see its docstring). Use `just sim-run -v` before driving it by hand.
+
+## Headless checks (`sim/harness/simcheck.py`)
+
+This is how Claude runs simulations and reads their output without a browser. It is stdlib Python and runs on the host. `lint` needs nothing else. `run` and `check` need `just sim-up`.
+
+```sh
+just sim-lint [name]                  # diagram.json vs KEY_PINS/GND_PINS vs README table, pin rules
+just sim-check [name] [--bounce]      # lint, then boot, tap every Kn, expect `key n down`/`key n up` once each
+just sim-run [name] -s "until ready; tap K3; expect 'key 3 up'"   # any scenario; prints timed serial + actions
+```
+
+`name` is a folder under `firmware/` (default `keys8`) or a path to a copy, which is handy for trying a change in the scratchpad. Add `--json` for machine-readable output on stdout (`ok`, `problems`, `warnings`, `serial[{t_ms,line}]`, `actions`, `gpio`). Use `-v` to stream serial and worker logs. The exit code is 0 only on PASS.
+
+- Script steps are separated by `;`: `wait MS`, `press P`/`release P`, `tap P [HOLD_MS]`, `bounce P [HOLD_MS]` (contact chatter on both edges), `cw P [N]`/`ccw P [N]` (ky-040 detents), `until RE [MS]` (default 20 s, for boot), `expect RE [MS]` (default 2 s), `reject RE [MS]`. `P` is a part id or label (`k3`, `K3`, `rot`). Pressing `rot` presses its SW.
+- It compiles through the simulator's `/api/compile/` (about 30 s cold, cached in `sim/.cache/` by source hash, `--fresh` bypasses the cache) and runs `esp32_worker.py` in the `velxio` container via `docker exec`.
+- The worker alone does not solve the circuit: without help every `INPUT_PULLUP` pin reads LOW. The harness plays the browser's role. It builds nets from `diagram.json`, where a pushbutton's `1.l/1.r` and `2.l/2.r` are one node each and a press joins them. It tracks each GPIO's direction, level and pull from worker events, then writes each input's level with `set_pin`. It models ky-040 CLK/DT/SW pull-ups only when VCC is on a supply.
+- `check` fails on: lint errors, `rst:` lines after the first, panics and backtraces, worker crash/reboot events, shorts (two drivers at different levels on one net), switch inputs with no pull, switches with no GND or LOW GPIO on either side, a missing or extra `key` line. In `run`, the circuit checks are only warnings, because the sketch may not use the keys.
+- It has been checked against deliberate faults, each of which fails as it should: `INPUT` instead of `INPUT_PULLUP`, a leg moved to GPIO34, a GPIO ground driven HIGH, and `DEBOUNCE_MS = 0` with `--bounce`.
+- `--bin` runs a prebuilt image, but images from the host `arduino-cli` (core 3.3.12) do not work in this QEMU. The default QIO build fails its flash init. A `FlashMode=dio` build boots, then panics with `Cache error` on the first GPIO edge. Use the default path, which is the simulator's own compile.
+- Timing is wall clock through a pipe, with about 20 ms from a press to the serial line. Contact-chatter blips are 3 ms. Do not assert on sub-10 ms timing.
 
 ## Wiring guide (`guide/`)
 
