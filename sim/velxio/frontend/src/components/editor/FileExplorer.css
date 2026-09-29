@@ -99,6 +99,28 @@
 .file-explorer-save-btn.is-dirty {
   color: var(--color-feedback-warning);
 }
+/* Each autosave lands with a little pop; new edits give the icon a nudge.
+   The class flips on every state change, so the animation replays. */
+.file-explorer-save-btn.is-saved svg {
+  animation: save-btn-pop 420ms var(--ease-spring);
+}
+.file-explorer-save-btn.is-dirty svg {
+  animation: save-btn-nudge 300ms var(--ease-out);
+}
+@keyframes save-btn-pop {
+  0%   { transform: scale(0.7); }
+  55%  { transform: scale(1.3) rotate(-8deg); }
+  100% { transform: none; }
+}
+@keyframes save-btn-nudge {
+  0%, 100% { transform: none; }
+  40%      { transform: translateY(1.5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .file-explorer-save-btn svg {
+    animation: none !important;
+  }
+}
 .file-explorer-save-btn.is-saving {
   color: var(--color-feedback-success);
   animation: velxio-pulse 1s ease-in-out infinite;

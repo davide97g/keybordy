@@ -5,6 +5,7 @@ import { ExamplesPage } from './pages/ExamplesPage';
 import { ExampleDetailPage } from './pages/ExampleDetailPage';
 import { ExampleEditorPage } from './pages/ExampleEditorPage';
 import { ImageToCodePage } from './pages/ImageToCodePage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { LocaleSync } from './i18n/LocaleSync';
 import { NON_DEFAULT_LOCALES } from './i18n/config';
 import { MessageDialogHost } from './components/ui/MessageDialogHost';
@@ -85,6 +86,9 @@ function App() {
           {/* `/en/...` is the default locale spelled out — redirect to the
               canonical prefix-free path instead of rendering a blank page. */}
           <Route path="/en/*" element={<EnPrefixRedirect />} />
+
+          {/* Anything else: the 404 sticker instead of a blank page. */}
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </LocaleSync>
       {/* Global alert() replacement — opened from anywhere (React or plain

@@ -97,10 +97,24 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ editorMenu, editorToolbar 
           {/* Brand */}
           <div className="header-brand">
             <Link to={localize('/')} className="header-brand-link" aria-label="keybordy home">
+              {/* A keycap: hover lifts it into a sticker, a click presses it.
+                  The boot splash's sticker flies into this slot on load. */}
               <span className="header-mark" aria-hidden="true">
-                K
+                <svg viewBox="7 6 20 20" width="13" height="13">
+                  <rect x="8.5" y="7.5" width="4.5" height="17" rx="1" />
+                  <polygon points="13,15.2 19.6,7.5 25,7.5 16.4,17.6" />
+                  <polygon points="15.2,15.6 25,24.5 19.6,24.5 13,18.6" />
+                </svg>
               </span>
-              <span className="header-title">keybordy</span>
+              {/* One span per letter: the title types itself in once the boot
+                  splash lifts, and ripples like a row of keys on hover. */}
+              <span className="header-title" aria-label="keybordy">
+                {'keybordy'.split('').map((ch, i) => (
+                  <span key={i} aria-hidden="true" style={{ '--i': i } as React.CSSProperties}>
+                    {ch}
+                  </span>
+                ))}
+              </span>
             </Link>
           </div>
 

@@ -25,7 +25,10 @@ export function EditorStatusBar() {
       className={'editor-status' + (running ? ' editor-status--live' : '')}
       aria-live="polite"
     >
-      <span className="editor-status-state">{state}</span>
+      {/* Keyed on the state so every change stamps the new word in. */}
+      <span className="editor-status-state" key={state}>
+        {state}
+      </span>
       {board && <span>{boardDisplayName(board)}</span>}
       {board && board.serialBaudRate > 0 && (
         <span>{board.serialBaudRate.toLocaleString()} baud</span>
@@ -34,7 +37,7 @@ export function EditorStatusBar() {
       {file && (
         <span>
           {file.name}
-          {file.modified ? ' · edited' : ''}
+          {file.modified && <span className="editor-status-edited"> · edited</span>}
         </span>
       )}
     </footer>

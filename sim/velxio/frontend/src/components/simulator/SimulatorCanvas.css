@@ -718,3 +718,31 @@
   color: var(--wb-12);
   font-weight: 600;
 }
+
+/* The empty bench eases in: art first, then the words, then the art keeps
+   drifting a few pixels so the canvas never looks frozen. */
+.canvas-empty-art {
+  animation:
+    canvas-empty-rise 520ms var(--ease-out) both,
+    canvas-empty-drift 7s 520ms ease-in-out infinite;
+}
+.canvas-empty-title {
+  animation: canvas-empty-rise 460ms var(--ease-out) 120ms both;
+}
+.canvas-empty-hint {
+  animation: canvas-empty-rise 460ms var(--ease-out) 200ms both;
+}
+@keyframes canvas-empty-rise {
+  from { opacity: 0; transform: translateY(12px); }
+}
+@keyframes canvas-empty-drift {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50%      { transform: translateY(-5px) rotate(-0.4deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-empty-art,
+  .canvas-empty-title,
+  .canvas-empty-hint {
+    animation: none;
+  }
+}

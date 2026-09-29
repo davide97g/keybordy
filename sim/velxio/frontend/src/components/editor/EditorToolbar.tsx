@@ -1455,6 +1455,13 @@ export const EditorToolbar = ({
     : isMultiBoard
       ? anyBoardRunning
       : running;
+  const runLabel = verifying
+    ? t('editor.toolbar.run.checkingShort', 'Checking')
+    : compiling
+      ? t('editor.toolbar.run.buildingShort', 'Building')
+      : runLive
+        ? t('editor.toolbar.run.runningShort', 'Running')
+        : t('editor.toolbar.run.runShort', 'Run');
 
   return (
     <>
@@ -1607,14 +1614,9 @@ export const EditorToolbar = ({
                     <polygon points="5,3 19,12 5,21" />
                   </svg>
                 )}
-                <span className="tb-run-label">
-                  {verifying
-                    ? t('editor.toolbar.run.checkingShort', 'Checking')
-                    : compiling
-                      ? t('editor.toolbar.run.buildingShort', 'Building')
-                      : runLive
-                        ? t('editor.toolbar.run.runningShort', 'Running')
-                        : t('editor.toolbar.run.runShort', 'Run')}
+                {/* Keyed on the text so each change rolls the new word in. */}
+                <span className="tb-run-label tb-run-label--roll" key={runLabel}>
+                  {runLabel}
                 </span>
               </button>
               {isMultiBoard && (

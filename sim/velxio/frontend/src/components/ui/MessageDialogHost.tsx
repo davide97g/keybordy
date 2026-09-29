@@ -10,6 +10,15 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useMessageDialogStore, type MessageDialogKind } from '../../store/useMessageDialogStore';
+import { LogoSticker, type LogoStickerState } from './LogoSticker';
+import './MessageDialogHost.css';
+
+/** The sticker on the panel's corner says the kind at a glance. */
+const STICKER_STATE: Record<MessageDialogKind, LogoStickerState> = {
+  info: 'idle',
+  success: 'done',
+  error: 'error',
+};
 
 const ACCENTS: Record<MessageDialogKind, { bg: string; fg: string; icon: string }> = {
   info: { bg: 'var(--color-accent-soft)', fg: 'var(--color-accent-fg)', icon: 'ℹ' },
@@ -43,6 +52,7 @@ export const MessageDialogHost = () => {
     <div
       role="dialog"
       aria-modal="true"
+      className="msg-dialog"
       onClick={() => close(false)}
       style={{
         position: 'fixed',
@@ -56,8 +66,10 @@ export const MessageDialogHost = () => {
       }}
     >
       <div
+        className="msg-dialog__panel"
         onClick={(e) => e.stopPropagation()}
         style={{
+          position: 'relative',
           width: 440,
           maxWidth: 'calc(100vw - 32px)',
           maxHeight: 'calc(100vh - 64px)',
@@ -73,6 +85,7 @@ export const MessageDialogHost = () => {
           fontFamily: 'var(--font-sans)',
         }}
       >
+        <LogoSticker className="msg-dialog__sticker" size={40} state={STICKER_STATE[kind]} />
         {title && (
           <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{title}</h2>
         )}

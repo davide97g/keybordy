@@ -60,7 +60,9 @@ body {
   border-radius: var(--radius-xs);
 }
 
-/* The lime K tile: the one brand mark, also used for the favicon. */
+/* The lime K tile: the one brand mark, also used for the favicon. Drawn as a
+   keycap (the inset shadow is its skirt). Hover lifts it into a sticker with a
+   white die-cut border, pressing sinks it into the skirt. */
 .header-mark {
   display: grid;
   place-items: center;
@@ -69,11 +71,52 @@ body {
   border-radius: 6px;
   background: var(--color-action-primary);
   color: var(--color-action-primary-fg);
-  font: 900 13px/1 var(--font-display);
-  font-stretch: 120%;
+  box-shadow: inset 0 -2.5px 0 #8fb300;
+  transition:
+    transform 260ms var(--ease-spring),
+    box-shadow 160ms var(--ease-out);
+}
+
+.header-mark svg {
+  fill: currentColor;
+  transition: transform 120ms var(--ease-out);
+}
+
+.header-brand-link:hover .header-mark,
+.header-brand-link:focus-visible .header-mark {
+  transform: rotate(-8deg) scale(1.14);
+  box-shadow:
+    inset 0 -2.5px 0 #8fb300,
+    0 0 0 2px var(--gray-50),
+    0 4px 10px rgba(0, 0, 0, 0.6);
+}
+
+.header-brand-link:active .header-mark {
+  transform: rotate(-8deg) scale(1.06) translateY(1px);
+  box-shadow:
+    inset 0 -0.5px 0 #8fb300,
+    0 0 0 2px var(--gray-50),
+    0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.header-brand-link:active .header-mark svg {
+  transform: translateY(1px);
+}
+
+/* The boot sticker has just landed in the slot (lib/bootSplash.ts sets
+   data-booted on <html>): the mark catches it. */
+html[data-booted] .header-mark {
+  animation: header-mark-catch 520ms var(--ease-spring);
+}
+
+@keyframes header-mark-catch {
+  0%   { transform: scale(0.6) rotate(-20deg); }
+  55%  { transform: scale(1.25) rotate(6deg); }
+  100% { transform: none; }
 }
 
 .header-title {
+  display: inline-flex;
   font-family: var(--font-display);
   font-size: 15px;
   font-weight: var(--display-weight);
@@ -81,6 +124,42 @@ body {
   text-transform: uppercase;
   color: var(--wb-13);
   letter-spacing: 0.01em;
+}
+
+.header-title > span {
+  display: inline-block;
+  transition: transform 180ms var(--ease-spring), color 180ms var(--ease-out);
+}
+
+/* Hover: a ripple along the word, like a finger dragged across a row of keys. */
+.header-brand-link:hover .header-title > span {
+  animation: header-letter-ripple 420ms var(--ease-out) calc(var(--i) * 32ms);
+}
+
+@keyframes header-letter-ripple {
+  0%, 100% { transform: translateY(0); }
+  35%      { transform: translateY(2px); color: var(--color-action-primary); }
+  70%      { transform: translateY(-1.5px); }
+}
+
+/* Boot: each letter is typed in, one keystroke at a time. */
+html[data-booted] .header-title > span {
+  animation: header-letter-type 300ms var(--ease-spring) both;
+  animation-delay: calc(180ms + var(--i) * 55ms);
+}
+
+@keyframes header-letter-type {
+  0%   { opacity: 0; transform: translateY(6px) scale(0.6); }
+  60%  { opacity: 1; transform: translateY(-2px) scale(1.08); color: var(--color-action-primary); }
+  100% { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-mark,
+  .header-title > span {
+    animation: none !important;
+    transition: none;
+  }
 }
 
 /* Kept for backward compatibility */

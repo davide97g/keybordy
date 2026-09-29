@@ -26,18 +26,55 @@
   color: var(--wb-12);
 }
 
+.editor-status-state {
+  display: inline-block;
+  animation: editor-status-stamp 340ms var(--ease-spring);
+}
+
+@keyframes editor-status-stamp {
+  0%   { opacity: 0; transform: scale(1.6) rotate(-4deg); }
+  100% { opacity: 1; transform: none; }
+}
+
+.editor-status-edited {
+  animation: editor-status-fade 200ms var(--ease-out);
+}
+
+@keyframes editor-status-fade {
+  from { opacity: 0; }
+}
+
 .editor-status-spacer {
   flex: 1;
 }
 
 .editor-status--live {
-  background: var(--color-action-primary);
+  position: relative;
+  /* A slow sheen travels the strip while the board runs: alive, not busy. */
+  background:
+    linear-gradient(100deg, transparent 40%, rgba(255, 255, 255, 0.35) 50%, transparent 60%)
+      -40% 0 / 40% 100% no-repeat,
+    var(--color-action-primary);
+  animation: editor-status-sheen 3.2s linear infinite;
   border-top-color: var(--color-action-primary);
   color: var(--color-action-primary-fg);
 }
 
 .editor-status--live .editor-status-state {
   color: var(--color-action-primary-fg);
+}
+
+@keyframes editor-status-sheen {
+  from { background-position: -40% 0, 0 0; }
+  to   { background-position: 140% 0, 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-status-state,
+  .editor-status-edited,
+  .editor-status--live {
+    animation: none;
+  }
 }
 
 @media (max-width: 768px) {

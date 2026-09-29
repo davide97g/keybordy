@@ -1,0 +1,132 @@
+/* Keystroke HUD: a row of keycaps on the canvas's bottom-left corner. */
+
+.key-hud {
+  position: absolute;
+  left: var(--space-6);
+  bottom: var(--space-6);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 7px 10px 7px 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--wb-2) 88%, transparent);
+  box-shadow: 0 0 0 1px var(--wb-6), var(--shadow-3);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+  animation: key-hud-in 420ms var(--ease-spring);
+}
+
+@keyframes key-hud-in {
+  from { opacity: 0; transform: translateY(14px) rotate(-2deg) scale(0.94); }
+}
+
+.key-hud__label {
+  font: 500 9.5px/1.1 var(--font-mono);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--wb-10);
+  max-width: 5em;
+}
+
+.key-hud__caps {
+  display: flex;
+  gap: 5px;
+}
+
+/* A keycap: face + skirt (the inset shadow). The cap color shows as a thin
+   underline at rest and floods the face while the key is down. */
+.key-hud__cap {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--wb-5);
+  box-shadow:
+    inset 0 -3px 0 var(--wb-1),
+    inset 0 -4.5px 0 color-mix(in srgb, var(--c) 70%, transparent);
+  color: var(--wb-11);
+  font: 700 10.5px/1 var(--font-mono);
+  transition:
+    transform 70ms var(--ease-out),
+    background-color 70ms var(--ease-out),
+    box-shadow 70ms var(--ease-out),
+    color 70ms var(--ease-out);
+  animation: key-hud-cap-in 360ms var(--ease-spring) both;
+  animation-delay: calc(80ms + var(--i) * 35ms);
+}
+
+@keyframes key-hud-cap-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+.key-hud__cap--down {
+  transform: translateY(2px);
+  background: var(--c);
+  color: var(--gray-1000);
+  box-shadow:
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 0 14px color-mix(in srgb, var(--c) 70%, transparent);
+}
+
+/* Keystroke counter; the number is keyed on the count, so each press bumps
+   it. */
+.key-hud__count {
+  font: 500 9.5px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--wb-10);
+  white-space: nowrap;
+}
+
+.key-hud__count-num {
+  display: inline-block;
+  min-width: 2ch;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--wb-12);
+  text-align: right;
+  animation: key-hud-bump 220ms var(--ease-spring);
+}
+
+@keyframes key-hud-bump {
+  from { transform: translateY(-40%); opacity: 0.2; }
+}
+
+/* The part on the canvas whose `key N down` just arrived: one ring in its
+   cap color, from the firmware's point of view. */
+[data-component-id].kb-key-hit::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 10px;
+  pointer-events: none;
+  animation: kb-key-hit 560ms var(--ease-out) forwards;
+}
+
+@keyframes kb-key-hit {
+  0% {
+    box-shadow: 0 0 0 0 var(--kb-hit-color, var(--color-action-primary));
+    opacity: 1;
+  }
+  100% {
+    box-shadow: 0 0 0 10px var(--kb-hit-color, var(--color-action-primary));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .key-hud,
+  .key-hud__cap,
+  .key-hud__count-num,
+  [data-component-id].kb-key-hit::after {
+    animation: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .key-hud__label {
+    display: none;
+  }
+}

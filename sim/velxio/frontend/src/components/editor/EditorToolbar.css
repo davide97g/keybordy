@@ -119,8 +119,43 @@
   background: var(--color-action-primary-hover);
   color: var(--color-action-primary-fg);
 }
+/* A keycap: the inset shadow is its skirt, and a press sinks into it. */
+.tb-btn-run:not(:disabled) {
+  box-shadow: inset 0 -2px 0 #8fb300;
+}
 .tb-btn-run:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: translateY(1.5px);
+  box-shadow: inset 0 0 0 #8fb300;
+}
+/* Going live: one ring bursts off the pill, like a key lighting up. */
+.tb-btn-run {
+  position: relative;
+}
+.tb-btn-run--live::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 0 var(--color-action-primary);
+  animation: tb-run-ignite 700ms var(--ease-out) forwards;
+}
+@keyframes tb-run-ignite {
+  0%   { box-shadow: 0 0 0 0 rgba(214, 255, 31, 0.75); }
+  100% { box-shadow: 0 0 0 12px rgba(214, 255, 31, 0); }
+}
+.tb-run-label--roll {
+  display: inline-block;
+  animation: tb-label-roll 260ms var(--ease-spring);
+}
+@keyframes tb-label-roll {
+  from { opacity: 0; transform: translateY(70%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tb-btn-run--live::after,
+  .tb-run-label--roll {
+    animation: none;
+  }
 }
 .tb-btn-run:disabled {
   opacity: 0.4;
@@ -158,6 +193,9 @@
   color: var(--color-feedback-error);
   box-shadow: inset 0 0 0 1.5px var(--color-feedback-error);
   font: 600 12.5px/1 var(--font-sans);
+}
+.tb-btn-stop:active:not(:disabled) {
+  transform: translateY(1.5px) scale(0.97);
 }
 .tb-btn-stop:hover:not(:disabled) {
   background: var(--color-feedback-error-soft);

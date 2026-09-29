@@ -26,26 +26,49 @@
         z-index: 2147483000;
         display: grid;
         place-items: center;
+        color: #e8e4ee;
+      }
+      /* The backdrop is its own layer so it can fade while the sticker, a
+         child of the splash, stays opaque on its flight to the header. */
+      #boot-splash::before {
+        content: '';
+        position: absolute;
+        inset: 0;
         background:
           radial-gradient(circle at 50% 42%, rgba(214, 255, 31, 0.09), transparent 42vmin),
           radial-gradient(rgba(185, 168, 255, 0.07) 1px, transparent 1.2px) 0 0 / 22px 22px,
           #070608;
-        color: #e8e4ee;
-        transition: opacity 380ms ease-in 120ms;
+        transition: opacity 420ms ease-in 60ms;
       }
       #boot-splash[data-state='leaving'] {
-        opacity: 0;
         pointer-events: none;
       }
-      #boot-splash[data-state='leaving'] .kbs-wrap {
-        animation: boot-peel-off 440ms cubic-bezier(0.55, 0, 0.8, 0.2) forwards;
+      #boot-splash[data-state='leaving']::before,
+      #boot-splash[data-state='leaving'] .boot-fade {
+        opacity: 0;
       }
-      @keyframes boot-peel-off {
-        from { transform: rotate(-6deg); }
-        30%  { transform: rotate(-9deg) scale(1.06); }
-        to   { opacity: 0; transform: translate(34%, -60%) rotate(24deg) scale(0.7); }
+      .boot-fade {
+        transition: opacity 200ms ease-in, transform 260ms ease-in;
+      }
+      #boot-splash[data-state='leaving'] .boot-fade {
+        transform: translateY(8px);
+      }
+      /* bootSplash.ts aims the flight at the header mark with --boot-dx/dy
+         and --boot-scale; without a header it just peels up and away. */
+      #boot-splash[data-state='leaving'] .kbs-wrap {
+        animation: boot-fly 600ms cubic-bezier(0.55, 0, 0.25, 1) forwards;
+      }
+      @keyframes boot-fly {
+        0%   { transform: rotate(-6deg); }
+        22%  { transform: translateY(-10px) rotate(-12deg) scale(1.08); }
+        88%  { opacity: 1; }
+        100% {
+          opacity: 0;
+          transform: translate(var(--boot-dx, 30vw), var(--boot-dy, -60vh)) rotate(0deg) scale(var(--boot-scale, 0.4));
+        }
       }
       .boot-stack {
+        position: relative;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -106,6 +129,9 @@
         #boot-splash[data-state='leaving'] .kbs-wrap {
           animation: none;
         }
+        #boot-splash[data-state='leaving'] .kbs-wrap {
+          opacity: 0;
+        }
       }
     </style>
   </head>
@@ -142,9 +168,9 @@
             </g>
           </svg>
         </span>
-        <div class="boot-word"><span style="--i:0">k</span><span style="--i:1">e</span><span style="--i:2">y</span><span style="--i:3">b</span><span style="--i:4">o</span><span style="--i:5">r</span><span style="--i:6">d</span><span style="--i:7">y</span></div>
-        <div class="boot-keys"><i style="--i:0;--c:#d6ff1f"></i><i style="--i:1;--c:#ff2e74"></i><i style="--i:2;--c:#b9a8ff"></i><i style="--i:3;--c:#3ee6ff"></i><i style="--i:4;--c:#ffb52e"></i><i style="--i:5;--c:#d17bff"></i><i style="--i:6;--c:#5cffb0"></i><i style="--i:7;--c:#f4f1f8"></i></div>
-        <div class="boot-caption">booting workbench</div>
+        <div class="boot-word boot-fade"><span style="--i:0">k</span><span style="--i:1">e</span><span style="--i:2">y</span><span style="--i:3">b</span><span style="--i:4">o</span><span style="--i:5">r</span><span style="--i:6">d</span><span style="--i:7">y</span></div>
+        <div class="boot-keys boot-fade"><i style="--i:0;--c:#d6ff1f"></i><i style="--i:1;--c:#ff2e74"></i><i style="--i:2;--c:#b9a8ff"></i><i style="--i:3;--c:#3ee6ff"></i><i style="--i:4;--c:#ffb52e"></i><i style="--i:5;--c:#d17bff"></i><i style="--i:6;--c:#5cffb0"></i><i style="--i:7;--c:#f4f1f8"></i></div>
+        <div class="boot-caption boot-fade">booting workbench</div>
       </div>
     </div>
     <script>

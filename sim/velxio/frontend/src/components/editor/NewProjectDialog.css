@@ -31,6 +31,11 @@
   flex-direction: column;
   overflow: hidden;
   box-shadow: var(--shadow-3);
+  animation: new-project-slap 400ms var(--ease-spring);
+}
+
+@keyframes new-project-slap {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
 }
 
 .new-project-head {
@@ -104,12 +109,49 @@
   color: var(--wb-13);
   cursor: pointer;
   font: inherit;
-  transition: background 0.1s ease, border-color 0.1s ease;
+  transition:
+    background 0.1s ease,
+    border-color 0.1s ease,
+    transform 260ms var(--ease-spring),
+    box-shadow 200ms var(--ease-out);
 }
 
+/* Hover peels a card up like a sticker: a small turn (alternating, so a row
+   does not all lean the same way), a lift and a die-cut white edge. */
 .new-project-card:hover {
   background: var(--wb-6);
-  border-color: var(--wb-8);
+  border-color: var(--gray-50);
+  transform: translateY(-3px) rotate(-1deg);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+
+.new-project-card:nth-child(even):hover {
+  transform: translateY(-3px) rotate(1deg);
+}
+
+.new-project-card:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 80ms;
+}
+
+.new-project-card-thumb img,
+.new-project-card-thumb svg {
+  transition: transform 400ms var(--ease-out);
+}
+
+.new-project-card:hover .new-project-card-thumb img,
+.new-project-card:hover .new-project-card-thumb svg {
+  transform: scale(1.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-project-dialog {
+    animation: none;
+  }
+  .new-project-card:hover,
+  .new-project-card:nth-child(even):hover {
+    transform: none;
+  }
 }
 
 /* Circuit thumbnail — same 300x180 (5:3) frame as the gallery cards. */

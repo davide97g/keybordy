@@ -1,0 +1,32 @@
+/* Message dialog motion. Everything else is inline in MessageDialogHost. */
+
+.msg-dialog {
+  animation: msg-dialog-fade 160ms var(--ease-out);
+}
+
+@keyframes msg-dialog-fade {
+  from { opacity: 0; }
+}
+
+/* The panel is slapped down like the sticker on its corner: dropped from a
+   little above, slightly turned, and settled with a spring. */
+.msg-dialog__panel {
+  animation: msg-dialog-slap 380ms var(--ease-spring);
+}
+
+@keyframes msg-dialog-slap {
+  from { opacity: 0; transform: translateY(-14px) rotate(-1.5deg) scale(1.04); }
+}
+
+.msg-dialog__sticker {
+  position: absolute;
+  top: -14px;
+  left: -14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-dialog,
+  .msg-dialog__panel {
+    animation: none;
+  }
+}

@@ -393,9 +393,13 @@ export const SerialMonitor: React.FC = () => {
                 }
                 return keyColors.size > 0 ? colorizeKeyLines(text, keyColors) : text;
               })()
-            : activeBoard?.running
-              ? t('editor.serial.waitingData') + '\n'
-              : t('editor.serial.startSim') + '\n'}
+            : (
+                <span className="serial-empty">
+                  {activeBoard?.running ? t('editor.serial.waitingData') : t('editor.serial.startSim')}
+                  <span className="serial-empty__caret" aria-hidden="true" />
+                  {'\n'}
+                </span>
+              )}
         </pre>
       )}
 

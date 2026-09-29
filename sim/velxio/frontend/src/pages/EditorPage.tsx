@@ -23,6 +23,7 @@ import { FileExplorer } from '../components/editor/FileExplorer';
 // Lazy-load Pi workspace so xterm.js isn't in the main bundle
 import { CompilationConsole } from '../components/editor/CompilationConsole';
 import { CompileProgressCard } from '../components/editor/CompileProgressCard';
+import { KeyHud } from '../components/simulator/KeyHud';
 import { SimulatorCanvas } from '../components/simulator/SimulatorCanvas';
 import { SerialMonitor } from '../components/simulator/SerialMonitor';
 import { Oscilloscope } from '../components/simulator/Oscilloscope';
@@ -667,6 +668,7 @@ export const EditorPage: React.FC = () => {
                 hidden copy still keeps its 100ms timer running and duplicates
                 the aria-live region a screen reader reads out. */}
             {!simulatorHidden && <CompileProgressCard onShowOutput={() => setConsoleOpen(true)} />}
+            {!simulatorHidden && <KeyHud />}
           </div>
           {serialMonitorOpen && (
             <>

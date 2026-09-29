@@ -7,3 +7,26 @@
 .serial-key-line--up .serial-key-state {
   color: var(--wb-10);
 }
+
+/* Empty monitor: a blinking block caret after the hint, like a terminal
+   waiting for its first byte. */
+.serial-empty {
+  color: var(--wb-10);
+}
+.serial-empty__caret {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.05em;
+  margin-left: 4px;
+  vertical-align: -0.18em;
+  background: var(--color-action-primary);
+  animation: serial-caret 1.05s steps(1) infinite;
+}
+@keyframes serial-caret {
+  50% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .serial-empty__caret {
+    animation: none;
+  }
+}
