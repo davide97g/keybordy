@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "author": "keybordy",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k1",
+      "top": -40,
+      "left": 220,
+      "attrs": {
+        "color": "blue",
+        "label": "K1",
+        "bounce": "1"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k2",
+      "top": -40,
+      "left": 330,
+      "attrs": {
+        "color": "blue",
+        "label": "K2",
+        "bounce": "1"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k3",
+      "top": 30,
+      "left": 220,
+      "attrs": {
+        "color": "blue",
+        "label": "K3",
+        "bounce": "1"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k4",
+      "top": 30,
+      "left": 330,
+      "attrs": {
+        "color": "blue",
+        "label": "K4",
+        "bounce": "1"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k5",
+      "top": 100,
+      "left": 220,
+      "attrs": {
+        "color": "blue",
+        "label": "K5",
+        "bounce": "1"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k6",
+      "top": 100,
+      "left": 330,
+      "attrs": {
+        "color": "blue",
+        "label": "K6",
+        "bounce": "1"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k7",
+      "top": 170,
+      "left": 220,
+      "attrs": {
+        "color": "blue",
+        "label": "K7",
+        "bounce": "1"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k8",
+      "top": 170,
+      "left": 330,
+      "attrs": {
+        "color": "blue",
+        "label": "K8",
+        "bounce": "1"
+      }
+    },
+    {
+      "type": "wokwi-ky-040",
+      "id": "rot",
+      "top": 280,
+      "left": 230,
+      "attrs": {}
+    }
+  ],
+  "connections": [
+    [
+      "esp:TX0",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX0",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
+    [
+      "k1:1.l",
+      "esp:D32",
+      "orange",
+      []
+    ],
+    [
+      "k1:2.r",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "k2:1.l",
+      "esp:D33",
+      "gold",
+      []
+    ],
+    [
+      "k2:2.r",
+      "esp:D25",
+      "black",
+      []
+    ],
+    [
+      "k3:1.l",
+      "esp:D14",
+      "green",
+      []
+    ],
+    [
+      "k3:2.r",
+      "esp:D26",
+      "black",
+      []
+    ],
+    [
+      "k4:1.l",
+      "esp:D13",
+      "blue",
+      []
+    ],
+    [
+      "k4:2.r",
+      "esp:D27",
+      "black",
+      []
+    ],
+    [
+      "k5:1.l",
+      "esp:D4",
+      "purple",
+      []
+    ],
+    [
+      "k5:2.r",
+      "esp:RX2",
+      "black",
+      []
+    ],
+    [
+      "k6:1.l",
+      "esp:D18",
+      "gray",
+      []
+    ],
+    [
+      "k6:2.r",
+      "esp:TX2",
+      "black",
+      []
+    ],
+    [
+      "k7:1.l",
+      "esp:D19",
+      "cyan",
+      []
+    ],
+    [
+      "k7:2.r",
+      "esp:D21",
+      "black",
+      []
+    ],
+    [
+      "k8:1.l",
+      "esp:D23",
+      "brown",
+      []
+    ],
+    [
+      "k8:2.r",
+      "esp:D22",
+      "black",
+      []
+    ],
+    [
+      "rot:CLK",
+      "esp:D34",
+      "white",
+      []
+    ],
+    [
+      "rot:DT",
+      "esp:D35",
+      "white",
+      []
+    ],
+    [
+      "rot:SW",
+      "esp:VN",
+      "white",
+      []
+    ],
+    [
+      "rot:VCC",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "rot:GND",
+      "esp:GND.2",
+      "black",
+      []
+    ]
+  ],
+  "dependencies": {}
+}

@@ -1,0 +1,38 @@
+# Local Wokwi-style simulator: Velxio (AGPLv3), https://github.com/davidmonterocrespo24/velxio
+# Open http://localhost:3080/editor and the keys8 project loads by itself.
+name: keybordy-sim
+
+services:
+  velxio:
+    image: ghcr.io/davidmonterocrespo24/velxio:master
+    container_name: velxio
+    environment:
+      VELXIO_NEWS: "off"   # no news fetch from velxio.dev
+    volumes:
+      - velxio-data:/app/data
+      - velxio-arduino-libs:/root/.arduino15
+      - velxio-arduino-user-libs:/root/Arduino
+      - velxio-ccache:/var/cache/ccache
+      - velxio-build:/var/lib/velxio-build
+    restart: unless-stopped
+
+  # Sits in front of Velxio, adds autoload.js to every page and serves the
+  # project straight from firmware/keys8, so a reload picks up repo edits.
+  proxy:
+    image: nginx:1.27-alpine
+    container_name: velxio-proxy
+    depends_on: [velxio]
+    ports:
+      - "127.0.0.1:3080:80"
+    volumes:
+      - ./proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./web:/srv/keybordy/web:ro
+      - ../firmware/keys8:/srv/keybordy/keys8:ro
+    restart: unless-stopped
+
+volumes:
+  velxio-data:
+  velxio-arduino-libs:
+  velxio-arduino-user-libs:
+  velxio-ccache:
+  velxio-build:

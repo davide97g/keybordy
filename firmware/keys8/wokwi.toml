@@ -1,0 +1,4 @@
+[wokwi]
+version = 1
+firmware = "build/keys8.ino.merged.bin"
+elf = "build/keys8.ino.elf"
