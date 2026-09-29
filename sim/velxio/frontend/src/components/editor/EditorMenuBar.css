@@ -16,10 +16,10 @@
 .emb-trigger {
   background: transparent;
   border: none;
-  color: var(--wb-12);
-  font: 400 13px system-ui, sans-serif;
+  color: var(--wb-11);
+  font: 400 13px var(--font-sans);
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
 }
 
@@ -36,8 +36,8 @@
   min-width: 230px;
   background: var(--wb-3);
   border: 1px solid var(--wb-7);
-  border-radius: 6px;
-  padding: 4px;
+  border-radius: 10px;
+  padding: 5px;
   z-index: 9500; /* above the toolbar and the canvas, below modals (10000) */
   box-shadow: var(--shadow-3);
 }
@@ -51,17 +51,17 @@
   background: transparent;
   border: none;
   color: var(--wb-13);
-  font: 400 13px system-ui, sans-serif;
+  font: 400 13px var(--font-sans);
   padding: 6px 10px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   text-align: left;
   white-space: nowrap;
 }
 
 .emb-item:hover:not(:disabled) {
-  background: var(--color-action-primary);
-  color: var(--color-fg-on-action);
+  background: var(--color-wash-selected);
+  color: var(--wb-13);
 }
 
 .emb-item:disabled {
@@ -71,11 +71,11 @@
 
 .emb-shortcut {
   color: var(--wb-10);
-  font-size: 11px;
+  font: 400 10.5px var(--font-mono);
 }
 
 .emb-item:hover:not(:disabled) .emb-shortcut {
-  color: var(--color-accent-fg);
+  color: var(--lavender-300);
 }
 
 .emb-separator {
@@ -88,9 +88,11 @@
    the pro items and the Language list under one trigger). */
 .emb-section-label {
   padding: 6px 12px 2px;
+  font-family: var(--font-display);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
+  font-weight: var(--display-weight);
+  font-stretch: 130%;
+  letter-spacing: var(--label-tracking);
   text-transform: uppercase;
   color: var(--wb-10);
   user-select: none;

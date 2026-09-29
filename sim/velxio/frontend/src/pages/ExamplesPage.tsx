@@ -17,7 +17,7 @@ import type { ExampleProject } from '../data/examples';
 
 export const ExamplesPage: React.FC = () => {
   const localize = useLocalizedHref();
-  useDocumentTitle('Examples — Velxio');
+  useDocumentTitle('Examples · keybordy');
 
   const navigate = useNavigate();
 

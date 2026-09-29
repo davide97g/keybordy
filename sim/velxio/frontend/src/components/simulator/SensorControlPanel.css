@@ -17,7 +17,7 @@
   z-index: 1002;
   pointer-events: all;
   color: var(--wb-13);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-family: var(--font-sans);
   user-select: none;
 }
 
@@ -157,7 +157,7 @@
 
 .sensor-check {
   margin: 0;
-  accent-color: var(--accent, #0071e3);
+  accent-color: var(--lavender-400);
   cursor: pointer;
 }
 

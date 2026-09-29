@@ -165,7 +165,7 @@ function drawWaveform(
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = chrome.trigger;
-    ctx.font = 'bold 9px monospace';
+    ctx.font = "bold 9px 'Martian Mono', monospace";
     ctx.fillText('T', x + 2, 10);
   }
 
@@ -206,7 +206,7 @@ function drawWaveform(
   ctx.stroke();
 
   ctx.fillStyle = color;
-  ctx.font = '9px monospace';
+  ctx.font = "9px 'Martian Mono', monospace";
   ctx.fillText('H', width - 12, HIGH_Y + 3);
   ctx.fillText('L', width - 12, LOW_Y + 3);
 }
@@ -300,7 +300,7 @@ function drawAnalogWaveform(
 
   // Volts axis: the top and bottom of the visible span, plus the centre.
   ctx.fillStyle = chrome.axisText;
-  ctx.font = '9px monospace';
+  ctx.font = "9px 'Martian Mono', monospace";
   const fmt = (v: number) => (Math.abs(v) >= 10 ? v.toFixed(0) : v.toFixed(1));
   ctx.fillText(`${fmt(yOffsetV + spanV / 2)}V`, 2, 9);
   ctx.fillText(`${fmt(yOffsetV)}V`, 2, height / 2 + 3);
@@ -321,7 +321,7 @@ function drawRuler(
   const chrome = scopeChrome();
   ctx.strokeStyle = chrome.rulerLine;
   ctx.fillStyle = chrome.rulerText;
-  ctx.font = '9px monospace';
+  ctx.font = "9px 'Martian Mono', monospace";
   ctx.lineWidth = 1;
 
   const windowStartMs = windowEndMs - windowMs;

@@ -85,15 +85,23 @@ WORKDIR /app
 # registry (see frontend/package.json) — no upstream git clones needed.
 # Board SVGs live in frontend/public/boards/, component SVGs in
 # frontend/public/component-svgs/, and components-metadata.json is committed.
-COPY frontend/ frontend/
-COPY scripts/ scripts/
+# Dependencies first, sources second: a UI-only edit then reuses the cached
+# npm install layer instead of reinstalling ~1 GB of node_modules.
+# (postinstall runs frontend/scripts/copy-monaco.mjs, so that folder comes
+# along with package.json.)
+COPY frontend/package.json frontend/
+COPY frontend/scripts/ frontend/scripts/
 WORKDIR /app/frontend
 # Lock files aren't committed in this repo (they're gitignored) — see the
 # note in .gitignore. The `rm -f` below is defense-in-depth in case
 # someone runs `docker build .` from a tree where a local lock exists.
 RUN rm -f package-lock.json \
- && npm install --include=optional \
- && npm run build:docker
+ && npm install --include=optional
+WORKDIR /app
+COPY frontend/ frontend/
+COPY scripts/ scripts/
+WORKDIR /app/frontend
+RUN rm -f package-lock.json && npm run build:docker
 
 
 # ---- Stage 2: Final Production Image ----
@@ -187,9 +195,6 @@ COPY backend/sdk/ ./sdk/
 # the "Welcome to nginx" page because the stock site claimed default_server).
 RUN rm -f /etc/nginx/sites-enabled/default
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy built frontend assets from builder stage
-COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
 # Copy and configure entrypoint script (fix Windows CRLF → LF)
 COPY docker/entrypoint.sh /app/entrypoint.sh
@@ -325,6 +330,10 @@ RUN rm -rf /root/.espressif/python_env/idf5.5_* \
 # System-python IDF deps. IDF 5.x has no root requirements.txt (the 4.4
 # tree did); its equivalent is tools/requirements/requirements.core.txt.
 RUN pip install --no-cache-dir -r /opt/esp-idf-v5/tools/requirements/requirements.core.txt
+
+# Built frontend assets, copied LAST: every layer above (QEMU, the ESP-IDF
+# trees, the pip installs) stays cached when only the UI changes.
+COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
 EXPOSE 80
 

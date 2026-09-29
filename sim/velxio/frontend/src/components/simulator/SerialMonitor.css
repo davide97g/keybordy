@@ -1,0 +1,9 @@
+/* keybordy: "key N down/up" lines. The number takes the key's own trace
+   color (set inline from its cap color); "up" is dimmed so presses stand
+   out while you scan the log. */
+.serial-key-num {
+  font-weight: 700;
+}
+.serial-key-line--up .serial-key-state {
+  color: var(--wb-10);
+}

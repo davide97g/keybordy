@@ -24,7 +24,7 @@
   z-index: 8500;
   pointer-events: all;
   color: var(--wb-13);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-family: var(--font-sans);
   font-size: 13px;
 }
 
@@ -262,7 +262,7 @@
   background: none;
   border: none;
   color: var(--wb-13);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1;
   padding: 2px 3px;
@@ -472,7 +472,7 @@
 
 .pid-row-value {
   color: var(--wb-13);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -510,7 +510,7 @@
 .pid-sensor-range {
   flex: 1 1 60px;
   min-width: 40px;
-  accent-color: var(--accent, #0071e3);
+  accent-color: var(--lavender-400);
 }
 
 .pid-sensor-input {
@@ -522,7 +522,7 @@
 .pid-sensor-check {
   flex: 0 0 auto;
   margin: 0;
-  accent-color: var(--accent, #0071e3);
+  accent-color: var(--lavender-400);
 }
 
 .pid-sensor-select {

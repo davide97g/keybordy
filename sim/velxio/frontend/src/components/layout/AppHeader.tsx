@@ -2,7 +2,6 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from './LanguageSwitcher';
-import { ThemeToggle } from './ThemeToggle';
 import { useLocalizedHref } from '../../i18n/useLocalizedNavigate';
 import { applyStripLayout, STRIP_BELOW_CLASS } from './headerStripFit';
 import './LanguageSwitcher.css';
@@ -97,22 +96,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ editorMenu, editorToolbar 
         <div className="header-left">
           {/* Brand */}
           <div className="header-brand">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#0071e3"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="5" y="5" width="14" height="14" rx="2" />
-              <rect x="9" y="9" width="6" height="6" />
-              <path d="M9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4" />
-            </svg>
-            <Link to={localize('/')} style={{ textDecoration: 'none', color: 'inherit' }}>
-              <span className="header-title">Velxio</span>
+            <Link to={localize('/')} className="header-brand-link" aria-label="keybordy home">
+              <span className="header-mark" aria-hidden="true">
+                K
+              </span>
+              <span className="header-title">keybordy</span>
             </Link>
           </div>
 
@@ -171,7 +159,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ editorMenu, editorToolbar 
             row goes to the toolbar. */}
         {!editorToolbar && (
         <div className="header-right">
-          <ThemeToggle className="header-theme-toggle" />
           <LanguageSwitcher />
 
           {/* Mobile hamburger — useless in the editor variant, where

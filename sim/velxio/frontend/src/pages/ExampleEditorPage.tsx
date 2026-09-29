@@ -45,7 +45,7 @@ export const ExampleEditorPage: React.FC = () => {
   // head says the action, not the sketch (the gallery keeps the sketch title).
   const board = starterBoard(example?.id);
   useDocumentTitle(
-    board ? starterTitle(board) : example ? `${example.title} — Velxio` : 'Example — Velxio',
+    board ? starterTitle(board) : example ? `${example.title} · keybordy` : 'Example · keybordy',
   );
 
   useEffect(() => {

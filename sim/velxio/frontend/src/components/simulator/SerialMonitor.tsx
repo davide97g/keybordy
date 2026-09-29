@@ -3,7 +3,7 @@
  * Each board has its own tab with serial output, input, and clear button.
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { getTabSessionId } from '../../simulation/Esp32Bridge';
@@ -11,6 +11,8 @@ import { openDeviceGateway } from '../../lib/openDeviceGateway';
 import type { BoardKind } from '../../types/board';
 import { boardDisplayName, isPiBoardKind } from '../../types/board';
 import { PiTerminal } from '../raspberry-pi/PiTerminal';
+import { boardAccent, keyColorsFromComponents } from '../../utils/boardColors';
+import './SerialMonitor.css';
 
 // Short labels for tabs
 const BOARD_SHORT_LABEL: Partial<Record<string, string>> = {
@@ -57,27 +59,40 @@ const BOARD_ICON: Partial<Record<string, string>> = {
   attiny85: '▪',
 };
 
-const BOARD_COLOR: Partial<Record<string, string>> = {
-  'arduino-uno': '#4fc3f7',
-  'arduino-nano': '#4fc3f7',
-  'arduino-mega': '#4fc3f7',
-  'raspberry-pi-pico': '#ce93d8',
-  'pi-pico-w': '#ce93d8',
-  'raspberry-pi-3': 'var(--color-feedback-error)',
-  'raspberry-pi-4': 'var(--color-feedback-error)',
-  'raspberry-pi-5': 'var(--color-feedback-error)',
-  esp32: 'var(--color-feedback-success)',
-  'esp32-devkit-c-v4': 'var(--color-feedback-success)',
-  'esp32-cam': 'var(--color-feedback-success)',
-  'wemos-lolin32-lite': 'var(--color-feedback-success)',
-  'esp32-s3': 'var(--color-feedback-success)',
-  'xiao-esp32-s3': 'var(--color-feedback-success)',
-  'arduino-nano-esp32': 'var(--color-feedback-success)',
-  'esp32-c3': 'var(--color-feedback-success)',
-  'xiao-esp32-c3': 'var(--color-feedback-success)',
-  'aitewinrobot-esp32c3-supermini': 'var(--color-feedback-success)',
-  attiny85: 'var(--color-feedback-warning)',
-};
+// Only the tail of a long log gets per-line spans; older lines stay one
+// plain string so a chatty sketch doesn't rebuild thousands of nodes per flush.
+const KEY_COLOR_TAIL_LINES = 400;
+const KEY_LINE = /^(.*?\bkey )(\d+)( +)(down|up)\b(.*)$/;
+
+function colorizeKeyLines(text: string, keyColors: Map<number, string>): React.ReactNode[] {
+  const lines = text.split('\n');
+  const cut = Math.max(0, lines.length - KEY_COLOR_TAIL_LINES);
+  const out: React.ReactNode[] = [];
+  if (cut > 0) out.push(lines.slice(0, cut).join('\n') + '\n');
+  for (let i = cut; i < lines.length; i++) {
+    const line = lines[i];
+    const nl = i < lines.length - 1 ? '\n' : '';
+    const m = KEY_LINE.exec(line);
+    const color = m ? keyColors.get(Number(m[2])) : undefined;
+    if (!m || !color) {
+      out.push(line + nl);
+      continue;
+    }
+    out.push(
+      <span key={i} className={'serial-key-line serial-key-line--' + m[4]}>
+        {m[1]}
+        <span className="serial-key-num" style={{ color }}>
+          {m[2]}
+        </span>
+        {m[3]}
+        <span className="serial-key-state">{m[4]}</span>
+        {m[5]}
+        {nl}
+      </span>,
+    );
+  }
+  return out;
+}
 
 export const SerialMonitor: React.FC = () => {
   const { t } = useTranslation();
@@ -95,6 +110,9 @@ export const SerialMonitor: React.FC = () => {
   const [lineEnding, setLineEnding] = useState<'none' | 'nl' | 'cr' | 'both'>('nl');
   const [autoscroll, setAutoscroll] = useState(true);
   const outputRef = useRef<HTMLPreElement>(null);
+  // keybordy: each key's cap color, so "key N down/up" lines match its wires.
+  const components = useSimulatorStore((s) => s.components);
+  const keyColors = useMemo(() => keyColorsFromComponents(components), [components]);
 
   // Sync active tab to activeBoardId when it changes
   useEffect(() => {
@@ -199,7 +217,7 @@ export const SerialMonitor: React.FC = () => {
       <div style={styles.tabStrip}>
         {boards.map((board) => {
           const isActive = board.id === resolvedTabId;
-          const color = BOARD_COLOR[board.boardKind] ?? 'var(--wb-10)';
+          const color = boardAccent(board.boardKind);
           const hasUnread = board.serialOutput.length > (lastSeenLen[board.id] ?? 0);
           return (
             <button
@@ -225,7 +243,7 @@ export const SerialMonitor: React.FC = () => {
         {/* Right-side controls */}
         <div style={styles.tabControls}>
           {isMicroPython && (
-            <span style={{ color: '#ce93d8', fontSize: 11, fontWeight: 600 }}>
+            <span style={{ color: 'var(--lavender-400)', fontSize: 11, fontWeight: 600 }}>
               MicroPython REPL
             </span>
           )}
@@ -358,7 +376,7 @@ export const SerialMonitor: React.FC = () => {
                             : undefined
                         }
                         style={{
-                          color: '#4fc3f7',
+                          color: 'var(--color-accent-fg)',
                           textDecoration: 'underline',
                           fontWeight: 'bold',
                           cursor: 'pointer',
@@ -373,7 +391,7 @@ export const SerialMonitor: React.FC = () => {
                   parts.push(text.slice(lastIdx));
                   return parts;
                 }
-                return text;
+                return keyColors.size > 0 ? colorizeKeyLines(text, keyColors) : text;
               })()
             : activeBoard?.running
               ? t('editor.serial.waitingData') + '\n'
@@ -425,18 +443,19 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    background: 'var(--wb-2)',
+    background: 'var(--color-terminal-bg)',
     borderTop: '1px solid var(--wb-6)',
-    fontFamily: 'monospace',
-    fontSize: 13,
+    fontFamily: 'var(--font-mono)',
+    fontSize: 12.5,
     minHeight: 0,
   },
   tabStrip: {
     display: 'flex',
     alignItems: 'center',
     background: 'var(--wb-3)',
+    backgroundImage: 'var(--pattern-hatch)',
     borderBottom: '1px solid var(--wb-6)',
-    minHeight: 32,
+    minHeight: 30,
     flexShrink: 0,
     overflow: 'hidden',
   },
@@ -447,31 +466,34 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--wb-10)',
     padding: '5px 12px',
     cursor: 'pointer',
-    fontSize: 11,
-    fontWeight: 600,
-    fontFamily: 'inherit',
+    fontSize: 10.5,
+    fontWeight: 800,
+    fontFamily: 'var(--font-display)',
+    fontStretch: '130%',
+    letterSpacing: 'var(--label-tracking)',
+    textTransform: 'uppercase',
     display: 'flex',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
     whiteSpace: 'nowrap',
     position: 'relative',
   },
   tabActive: {
-    background: 'rgba(255,255,255,0.04)',
+    background: 'var(--wb-0)',
   },
   tabControls: {
     marginLeft: 'auto',
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
-    paddingRight: 8,
+    gap: 10,
+    paddingRight: 10,
     flexShrink: 0,
   },
   unreadDot: {
     width: 6,
     height: 6,
     borderRadius: '50%',
-    background: '#4fc3f7',
+    background: 'var(--color-action-primary)',
     flexShrink: 0,
     marginLeft: 3,
   },
@@ -481,84 +503,90 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
   },
   baudRate: {
-    color: 'var(--color-accent-fg)',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    background: 'var(--wb-2)',
+    color: 'var(--wb-11)',
+    fontSize: 10.5,
+    fontFamily: 'var(--font-mono)',
+    background: 'var(--wb-1)',
     border: '1px solid var(--wb-6)',
-    borderRadius: 3,
-    padding: '1px 6px',
+    borderRadius: 'var(--radius-pill)',
+    padding: '2px 8px',
   },
   autoscrollLabel: {
     color: 'var(--wb-10)',
     fontSize: 11,
+    fontFamily: 'var(--font-sans)',
     display: 'flex',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     cursor: 'pointer',
   },
   checkbox: {
     margin: 0,
     cursor: 'pointer',
+    accentColor: 'var(--color-action-primary)',
   },
   clearBtn: {
     background: 'transparent',
-    border: '1px solid var(--wb-8)',
+    border: '1px solid var(--wb-7)',
     color: 'var(--wb-12)',
-    padding: '2px 8px',
-    borderRadius: 3,
+    padding: '3px 10px',
+    borderRadius: 'var(--radius-pill)',
     cursor: 'pointer',
     fontSize: 11,
+    fontFamily: 'var(--font-sans)',
   },
   output: {
     flex: 1,
     margin: 0,
-    padding: 8,
+    padding: '8px 14px',
     color: 'var(--color-terminal-fg)',
     background: 'var(--color-terminal-bg)',
     overflowY: 'auto',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
     minHeight: 0,
-    fontSize: 13,
-    lineHeight: '1.4',
+    fontFamily: 'var(--font-mono)',
+    fontSize: 12.5,
+    lineHeight: '1.65',
   },
   inputRow: {
     display: 'flex',
-    gap: 4,
-    padding: 4,
+    gap: 6,
+    padding: '5px 8px',
     background: 'var(--wb-3)',
     borderTop: '1px solid var(--wb-6)',
     flexShrink: 0,
   },
   input: {
     flex: 1,
-    background: 'var(--wb-2)',
-    border: '1px solid var(--wb-7)',
+    background: 'var(--wb-1)',
+    border: '1px solid var(--wb-6)',
     color: 'var(--wb-12)',
-    padding: '4px 8px',
-    borderRadius: 3,
-    fontFamily: 'monospace',
+    padding: '4px 12px',
+    borderRadius: 'var(--radius-pill)',
+    fontFamily: 'var(--font-mono)',
     fontSize: 12,
     outline: 'none',
   },
   select: {
-    background: 'var(--wb-2)',
-    border: '1px solid var(--wb-7)',
+    background: 'var(--wb-1)',
+    border: '1px solid var(--wb-6)',
     color: 'var(--wb-12)',
-    padding: '4px',
-    borderRadius: 3,
+    padding: '4px 8px',
+    borderRadius: 'var(--radius-pill)',
     fontSize: 11,
+    fontFamily: 'var(--font-sans)',
     outline: 'none',
   },
   sendBtn: {
-    background: 'var(--color-action-primary)',
+    background: 'var(--wb-6)',
     border: 'none',
-    color: 'var(--color-fg-on-action)',
-    padding: '4px 12px',
-    borderRadius: 3,
+    color: 'var(--wb-13)',
+    padding: '4px 14px',
+    borderRadius: 'var(--radius-pill)',
     cursor: 'pointer',
     fontSize: 12,
+    fontFamily: 'var(--font-sans)',
     fontWeight: 600,
   },
 };

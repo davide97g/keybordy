@@ -6,7 +6,7 @@
   flex-direction: column;
   overflow: hidden;
   font-size: 12px;
-  font-family: 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
 }
 
 /* Two rows, not one: the title on top, the three actions under it. Side by
@@ -20,11 +20,15 @@
   align-items: stretch;
   justify-content: center;
   gap: 3px;
-  padding: 6px 6px 6px 8px;
+  padding: 8px 6px 6px 10px;
   color: var(--wb-11);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
+  background-image: var(--pattern-hatch);
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: var(--display-weight);
+  font-stretch: 130%;
+  text-transform: uppercase;
+  letter-spacing: var(--label-tracking);
   border-bottom: 1px solid var(--wb-6);
   flex-shrink: 0;
 }
@@ -49,7 +53,7 @@
   color: var(--wb-11);
   cursor: pointer;
   padding: 2px;
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -74,7 +78,7 @@
   color: var(--wb-11);
   cursor: pointer;
   padding: 2px;
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -123,13 +127,13 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 6px;
+  padding: 4px 8px;
   cursor: pointer;
-  color: var(--wb-12);
-  border-radius: 3px;
-  margin: 0 2px;
-  font-size: 11px;
-  line-height: 16px;
+  color: var(--wb-11);
+  border-radius: 6px;
+  margin: 0 4px;
+  font-size: 12px;
+  line-height: 18px;
   white-space: nowrap;
   overflow: hidden;
   user-select: none;
@@ -141,6 +145,7 @@
 
 .file-explorer-item-active {
   background: var(--color-accent-soft);
+  box-shadow: inset 2px 0 0 var(--lavender-400);
   color: var(--wb-13);
 }
 
@@ -243,7 +248,7 @@
   padding: 2px 4px 3px 2px;
   cursor: pointer;
   color: var(--wb-11);
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   margin: 0 2px;
   user-select: none;
   position: relative;
@@ -336,7 +341,7 @@
   color: var(--wb-11);
   cursor: pointer;
   padding: 0;
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   justify-content: center;

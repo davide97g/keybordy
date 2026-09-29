@@ -23,6 +23,7 @@ import { Oscilloscope } from '../components/simulator/Oscilloscope';
 import { AppHeader } from '../components/layout/AppHeader';
 import { useSimulatorStore } from '../store/useSimulatorStore';
 import { useEditorStore } from '../store/useEditorStore';
+import { EditorStatusBar } from '../components/layout/EditorStatusBar';
 import { useCompileLogsStore } from '../store/useCompileLogsStore';
 import { useOscilloscopeStore } from '../store/useOscilloscopeStore';
 import { useProjectStore } from '../store/useProjectStore';
@@ -49,7 +50,7 @@ const EXPLORER_MAX = 500;
 // FileExplorer.css), so nothing has to share a line — 124px fits a board
 // name and typical file names, and every px saved here goes to the code
 // editor.
-const EXPLORER_DEFAULT = 124;
+const EXPLORER_DEFAULT = 184;
 
 // Once per full page load: the `?project=` load, the draft restore and the
 // pristine-visit starter dialog must not run again when the user later
@@ -67,7 +68,7 @@ const resizeHandleStyle: React.CSSProperties = {
 
 export const EditorPage: React.FC = () => {
   const { t } = useTranslation();
-  useDocumentTitle('Velxio');
+  useDocumentTitle('keybordy');
 
   // Local draft autosave; armed once the workspace init below has decided
   // what the canvas shows.
@@ -370,34 +371,12 @@ export const EditorPage: React.FC = () => {
             role="group"
             aria-label={t('editor.shell.viewMode')}
             className="view-mode-toggle"
-            style={{
-              // display comes from App.css (flex; none on a narrow bar or mobile).
-              // Never squeezed below its buttons: flexbox used to crush
-              // this block to a third of its width and clip two of them.
-              flexShrink: 0,
-              gap: 1,
-              background: 'var(--wb-3)',
-              border: '1px solid var(--wb-7)',
-              borderRadius: 4,
-              overflow: 'hidden',
-              alignSelf: 'center',
-              margin: '0 6px',
-            }}
           >
             <button
               onClick={() => toggleExplorer()}
               aria-pressed={explorerOpen}
               title={explorerOpen ? t('editor.menu.hideExplorer', 'Hide file explorer') : t('editor.menu.showExplorer', 'Show file explorer')}
-              style={{
-                background: explorerOpen ? 'var(--color-action-primary)' : 'transparent',
-                color: explorerOpen ? 'white' : 'var(--wb-11)',
-                border: 'none',
-                height: 28,
-                padding: '0 10px',
-                display: 'flex',
-                alignItems: 'center',
-                cursor: 'pointer',
-              }}
+              className="vm-seg"
             >
               <svg
                 width="13"
@@ -412,7 +391,7 @@ export const EditorPage: React.FC = () => {
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
               </svg>
             </button>
-            <div style={{ width: 1, background: 'var(--wb-7)', alignSelf: 'stretch' }} />
+            <div className="vm-divider" />
             {(
               [
                 { key: 'code', label: t('editor.shell.code'), path: 'M16 18l6-6-6-6M8 6l-6 6 6 6' },
@@ -424,19 +403,7 @@ export const EditorPage: React.FC = () => {
                 key={m.key}
                 onClick={() => setViewMode(m.key)}
                 aria-pressed={viewMode === m.key}
-                style={{
-                  background: viewMode === m.key ? 'var(--color-action-primary)' : 'transparent',
-                  color: viewMode === m.key ? 'white' : 'var(--wb-11)',
-                  border: 'none',
-                  height: 28,
-                  padding: '0 10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontFamily: 'inherit',
-                }}
+                className="vm-seg"
               >
                 <svg
                   width="13"
@@ -704,6 +671,8 @@ export const EditorPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {!isMobile && <EditorStatusBar />}
 
       <NewProjectDialog
         isOpen={showNewProjectDialog}

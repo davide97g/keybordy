@@ -301,7 +301,7 @@ export const BoardSensorControls: React.FC<BoardSensorControlsProps> = ({
               <div
                 style={{
                   marginTop: 6,
-                  fontFamily: 'monospace',
+                  fontFamily: 'var(--font-mono)',
                   fontSize: 11,
                   color: 'var(--wb-11)',
                   textAlign: 'center',
@@ -316,7 +316,7 @@ export const BoardSensorControls: React.FC<BoardSensorControlsProps> = ({
             <div style={{ marginTop: showImu ? 12 : 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <strong style={{ fontSize: 12 }}>Battery</strong>
-                <span style={{ fontFamily: 'monospace', color: 'var(--wb-11)' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--wb-11)' }}>
                   {batteryMv} mV - {battPct}%
                 </span>
               </div>

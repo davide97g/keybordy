@@ -6,7 +6,11 @@ import { useEditorStore } from '../../store/useEditorStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { registerRetroAsm, LANGUAGE_ID as RETRO_ASM_ID } from './retroAsmLanguage';
 import { CHIP_JSON_SCHEMA, CHIP_JSON_SCHEMA_URI } from './chipJsonSchema';
-import { defineVelxioThemes, monacoThemeFor } from './monacoThemes';
+import { defineKeybordyThemes, monacoThemeFor } from './monacoThemes';
+
+// Martian Mono is self-hosted (tokens/typography.css). Monaco measures glyphs
+// once, so the editor re-measures when the webfont finishes loading.
+const EDITOR_FONT = "'Martian Mono', 'SF Mono', Menlo, Consolas, monospace";
 import { useResolvedTheme } from '../../hooks/useTheme';
 import { registerEditorCommand } from '../../lib/editorCommands';
 import {
@@ -72,13 +76,14 @@ export const CodeEditor = () => {
           height="100%"
           language="json"
           theme={theme}
-          beforeMount={defineVelxioThemes}
+          beforeMount={defineKeybordyThemes}
           value={content}
           options={{
             readOnly: true,
             domReadOnly: true,
             minimap: { enabled: false },
             fontSize,
+            fontFamily: EDITOR_FONT,
             automaticLayout: true,
             scrollBeyondLastLine: false,
             wordWrap: 'on',
@@ -105,9 +110,14 @@ export const CodeEditor = () => {
           ? { path: `velxio-ws/${useEditorStore.getState().activeGroupId}/${activeFile.name}` }
           : {})}
         beforeMount={(monaco: Monaco) => {
-          // Both velxio themes have to exist before Monaco is asked to use
-          // one, or it silently falls back to stock vs-dark.
-          defineVelxioThemes(monaco);
+          // The keybordy theme has to exist before Monaco is asked to use
+          // it, or it silently falls back to stock vs-dark.
+          defineKeybordyThemes(monaco);
+          // Re-measure once the self-hosted mono webfont has loaded, or the
+          // cursor drifts off the glyphs it was measured against.
+          if (typeof document !== 'undefined' && document.fonts) {
+            void document.fonts.ready.then(() => monaco.editor.remeasureFonts());
+          }
           // Register the 8080/Z80 assembly language once so Monaco knows how
           // to tokenize .s / .asm files when they're opened.
           registerRetroAsm(monaco);
@@ -139,6 +149,8 @@ export const CodeEditor = () => {
         options={{
           minimap: { enabled: true },
           fontSize,
+          fontFamily: EDITOR_FONT,
+          lineHeight: 1.6,
           automaticLayout: true,
           scrollBeyondLastLine: false,
           wordWrap: 'on',

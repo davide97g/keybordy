@@ -95,7 +95,7 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
       style={{
         position: 'absolute',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.5)',
+        background: 'var(--color-bg-overlay)',
         zIndex: 1100,
         display: 'flex',
         alignItems: 'flex-end',
@@ -117,8 +117,7 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
           flexDirection: 'column',
           boxShadow: '0 -8px 24px rgba(0,0,0,0.6)',
           overflow: 'hidden',
-          fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          fontFamily: 'var(--font-sans)',
         }}
       >
         {/* Header */}
@@ -218,14 +217,14 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'var(--wb-8)';
-                  e.currentTarget.style.borderColor = '#007acc';
+                  e.currentTarget.style.borderColor = 'var(--lavender-400)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'var(--wb-7)';
                   e.currentTarget.style.borderColor = 'transparent';
                 }}
               >
-                <span style={{ color: '#00d9ff', fontWeight: 600, marginRight: 10 }}>
+                <span style={{ color: 'var(--cyan-400)', fontWeight: 600, marginRight: 10 }}>
                   {pin.name}
                 </span>
                 {pin.description && (
@@ -235,7 +234,7 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
                 )}
                 <span
                   aria-hidden="true"
-                  style={{ marginLeft: 'auto', color: '#007acc', fontSize: 16, fontWeight: 700 }}
+                  style={{ marginLeft: 'auto', color: 'var(--lavender-400)', fontSize: 16, fontWeight: 700 }}
                 >
                   →
                 </span>

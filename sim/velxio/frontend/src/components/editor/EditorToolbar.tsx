@@ -36,7 +36,6 @@ import { wifiSsidNoteFor } from '../../utils/firmwareWifiNote';
 import { applyWokwiImport, importProjectFile, PROJECT_FILE_ACCEPT } from '../../utils/importProject';
 import { readFirmwareFile } from '../../utils/firmwareLoader';
 import './EditorToolbar.css';
-import { ThemeToggle } from '../layout/ThemeToggle';
 
 /**
  * Output-console group for circuit pre-flight + runtime faults. Routing these
@@ -191,6 +190,7 @@ export const EditorToolbar = ({
   const electricalPaused = useElectricalStore((s) => s.paused);
   const setElectricalPaused = useElectricalStore((s) => s.setPaused);
   const isBoardless = boards.length === 0;
+  const hasParts = useSimulatorStore((s) => s.components.length > 0);
   const digitalRunning = isBoardless && !electricalPaused;
   // Any board actually running — the correct multi-target signal for the
   // Run-All / Stop buttons (the flat `running` flag only tracks the ACTIVE
@@ -1447,6 +1447,15 @@ export const EditorToolbar = ({
     return () => offs.forEach((off) => off());
   }, []);
 
+  // Run turns into a live "Running" pill while the simulation runs. A
+  // board-less bench only counts as running once it holds parts; an empty
+  // one is idle, whatever the digital engine's paused flag says.
+  const runLive = isBoardless
+    ? digitalRunning && hasParts
+    : isMultiBoard
+      ? anyBoardRunning
+      : running;
+
   return (
     <>
       <div className="editor-toolbar-wrapper" style={{ position: 'relative' }}>
@@ -1559,7 +1568,8 @@ export const EditorToolbar = ({
                       ? compileAllRunning || anyBoardRunning || verifying
                       : running || compiling || verifying || !activeBoard
                 }
-                className="tb-btn tb-btn-run"
+                className={'tb-btn tb-btn-run' + (runLive ? ' tb-btn-run--live' : '')}
+                aria-live="polite"
                 title={
                   verifying
                     ? t('editor.toolbar.run.verifying', 'Checking circuit...')
@@ -1578,8 +1588,8 @@ export const EditorToolbar = ({
               >
                 {verifying || compiling ? (
                   <svg
-                    width="18"
-                    height="18"
+                    width="16"
+                    height="16"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -1590,11 +1600,22 @@ export const EditorToolbar = ({
                   >
                     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                   </svg>
+                ) : runLive ? (
+                  <span className="tb-run-pulse" aria-hidden="true" />
                 ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                     <polygon points="5,3 19,12 5,21" />
                   </svg>
                 )}
+                <span className="tb-run-label">
+                  {verifying
+                    ? t('editor.toolbar.run.checkingShort', 'Checking')
+                    : compiling
+                      ? t('editor.toolbar.run.buildingShort', 'Building')
+                      : runLive
+                        ? t('editor.toolbar.run.runningShort', 'Running')
+                        : t('editor.toolbar.run.runShort', 'Run')}
+                </span>
               </button>
               {isMultiBoard && (
                 <button
@@ -1656,9 +1677,10 @@ export const EditorToolbar = ({
               className="tb-btn tb-btn-stop"
               title={isBoardless ? 'Freeze digital simulation' : t('editor.toolbar.stop')}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <rect x="3" y="3" width="18" height="18" rx="3" />
               </svg>
+              <span className="tb-run-label">{t('editor.toolbar.stopShort', 'Stop')}</span>
             </button>
 
             {/* Reset — for a booted QEMU-Linux guest this re-uploads the
@@ -1824,7 +1846,6 @@ export const EditorToolbar = ({
                 <line x1="12" y1="19" x2="20" y2="19" />
               </svg>
             </button>
-            <ThemeToggle />
             {rightSlot}
           </div>
         </div>

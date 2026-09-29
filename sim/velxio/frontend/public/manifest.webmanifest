@@ -1,14 +1,18 @@
 {
-  "name": "Velxio — Circuit & Arduino Simulator",
-  "short_name": "Velxio",
-  "description": "Online circuit and Arduino simulator. ESP32, RP2040, Pi Pico, ATtiny85, SPICE analog simulation, 100+ components. Free and open source.",
+  "name": "keybordy workbench",
+  "short_name": "keybordy",
+  "description": "Local ESP32 simulator for the keybordy hand-wired keyboard (a self-hosted fork of Velxio).",
   "start_url": "/editor",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0d0d0f",
-  "theme_color": "#007acc",
-  "categories": ["developer", "education", "productivity"],
+  "background_color": "#070608",
+  "theme_color": "#d6ff1f",
+  "categories": [
+    "developer",
+    "education",
+    "productivity"
+  ],
   "lang": "en",
   "icons": [
     {
@@ -38,14 +42,6 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/og-image.svg",
-      "sizes": "1200x630",
-      "type": "image/svg+xml",
-      "label": "Velxio Arduino Emulator"
     }
   ]
 }

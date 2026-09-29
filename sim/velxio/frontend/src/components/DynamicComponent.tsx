@@ -44,6 +44,24 @@ import { getSensorControlForComponent } from '../simulation/sensorControlConfig'
 // <velxio-instr-voltmeter>) that don't exist upstream.
 import '@wokwi/elements';
 import '../velxio-elements';
+
+// keybordy: a pushbutton's "K1" label lives in its shadow DOM with a fixed
+// grey. Adopt one extra sheet so the label uses the mono face and the key's
+// own cap color (the same hex as its wires), fed through --kb-key-color.
+let keyLabelSheet: CSSStyleSheet | null = null;
+function adoptKeyLabelStyle(el: HTMLElement): void {
+  const root = el.shadowRoot;
+  if (!root || !('adoptedStyleSheets' in root)) return;
+  if (!keyLabelSheet) {
+    keyLabelSheet = new CSSStyleSheet();
+    keyLabelSheet.replaceSync(
+      ".label { color: var(--kb-key-color, #a59fb2); font: 700 11px/1 'Martian Mono', ui-monospace, monospace; letter-spacing: 0.02em; }",
+    );
+  }
+  if (!root.adoptedStyleSheets.includes(keyLabelSheet)) {
+    root.adoptedStyleSheets = [...root.adoptedStyleSheets, keyLabelSheet];
+  }
+}
 import './velxio-components/Ssd1306I2cElement'; // registers velxio-ssd1306-i2c-4pin (4-pin I2C OLED)
 
 // The wire-graph walk that answers "which board pin owns this component pin"
@@ -90,6 +108,15 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
   const elementRef = useRef<HTMLElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(false);
+
+  // keybordy: expose the cap color to the label sheet (adoptKeyLabelStyle).
+  const capColor = typeof properties.color === 'string' ? properties.color : '';
+  useEffect(() => {
+    const el = elementRef.current;
+    if (!el || metadata.tagName !== 'wokwi-pushbutton') return;
+    if (capColor) el.style.setProperty('--kb-key-color', capColor);
+    else el.style.removeProperty('--kb-key-color');
+  }, [capColor, metadata.tagName]);
 
   const handleComponentEvent = useSimulatorStore((s) => s.handleComponentEvent);
   const running = useSimulatorStore((s) => s.running);
@@ -466,6 +493,10 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
     containerRef.current.appendChild(element);
     elementRef.current = element;
     mountedRef.current = true;
+    if (metadata.tagName === 'wokwi-pushbutton') {
+      adoptKeyLabelStyle(element);
+      if (capColor) element.style.setProperty('--kb-key-color', capColor);
+    }
 
     return () => {
       if (containerRef.current && element.parentNode === containerRef.current) {
@@ -916,7 +947,7 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
               color: '#ddd',
               border: '1px solid #555',
               borderBottomWidth: '2px',
-              fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', monospace",
+              fontFamily: 'var(--font-mono)',
               fontWeight: 600,
               lineHeight: '1.3',
               whiteSpace: 'nowrap',

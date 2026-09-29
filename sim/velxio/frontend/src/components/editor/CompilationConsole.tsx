@@ -259,9 +259,9 @@ function logColor(type: CompilationLog['type']): string {
     case 'warning':
       return 'var(--color-feedback-warning)';
     case 'success':
-      return '#66bb6a';
+      return 'var(--color-feedback-success)';
     case 'core-install':
-      return '#4fc3f7';
+      return 'var(--color-accent-fg)';
     default:
       return 'var(--wb-12)';
   }
@@ -276,7 +276,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'var(--wb-2)',
     borderTop: '1px solid var(--wb-6)',
     fontSize: 12,
-    fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
+    fontFamily: 'var(--font-mono)',
     overflow: 'hidden',
     height: '100%',
   },
@@ -286,6 +286,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     padding: '4px 10px',
     background: 'var(--wb-3)',
+    backgroundImage: 'var(--pattern-hatch)',
     borderBottom: '1px solid var(--wb-6)',
     flexShrink: 0,
     minHeight: 30,
@@ -302,11 +303,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   title: {
     color: 'var(--wb-12)',
-    fontWeight: 600,
-    fontSize: 12,
-    fontFamily: 'system-ui, sans-serif',
+    fontWeight: 820,
+    fontSize: 10.5,
+    fontFamily: 'var(--font-display)',
+    fontStretch: '130%',
     textTransform: 'uppercase' as const,
-    letterSpacing: '0.5px',
+    letterSpacing: 'var(--label-tracking)',
   },
   badges: {
     display: 'flex',
@@ -314,19 +316,19 @@ const styles: Record<string, React.CSSProperties> = {
   },
   errorBadge: {
     color: 'var(--color-feedback-error)',
-    background: 'rgba(239, 83, 80, 0.15)',
+    background: 'var(--color-feedback-error-soft)',
     padding: '1px 6px',
     borderRadius: 3,
     fontSize: 11,
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
   },
   warningBadge: {
     color: 'var(--color-feedback-warning)',
-    background: 'rgba(255, 167, 38, 0.15)',
+    background: 'var(--color-feedback-warning-soft)',
     padding: '1px 6px',
     borderRadius: 3,
     fontSize: 11,
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
   },
   filterSelect: {
     background: 'var(--wb-6)',
@@ -336,7 +338,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     padding: '2px 4px',
     cursor: 'pointer',
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
   },
   checkboxLabel: {
     display: 'flex',
@@ -345,7 +347,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--wb-10)',
     fontSize: 11,
     cursor: 'pointer',
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
   },
   checkbox: {
     accentColor: 'var(--color-action-primary)',
@@ -370,7 +372,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--wb-9)',
     fontStyle: 'italic',
     padding: '12px 0',
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
   },
   targetGroup: {
     marginTop: 6,
@@ -391,12 +393,12 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--wb-13)',
     fontWeight: 700,
     fontSize: 11.5,
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
   },
   targetKind: {
     color: 'var(--wb-9)',
     fontSize: 9,
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
     textTransform: 'uppercase' as const,
     letterSpacing: '0.5px',
     border: '1px solid var(--wb-6)',
@@ -421,12 +423,12 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
   },
   coreTag: {
-    background: 'rgba(79, 195, 247, 0.15)',
-    color: '#4fc3f7',
+    background: 'var(--color-accent-soft)',
+    color: 'var(--color-accent-fg)',
     padding: '0 4px',
     borderRadius: 2,
     marginRight: 4,
     fontSize: 10,
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
   },
 };

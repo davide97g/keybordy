@@ -57,8 +57,7 @@
 
 .status-dot.running {
   background: var(--color-feedback-success);
-  box-shadow: 0 0 6px rgba(76, 175, 80, 0.7);
-  animation: pulse-green 2s ease-in-out infinite;
+  animation: pulse-green 1.4s ease-in-out infinite;
 }
 
 .status-dot.stopped {
@@ -67,37 +66,38 @@
 }
 
 @keyframes pulse-green {
-  0%,
-  100% {
-    box-shadow: 0 0 4px rgba(76, 175, 80, 0.5);
-  }
   50% {
-    box-shadow: 0 0 10px rgba(76, 175, 80, 0.9);
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-dot.running {
+    animation: none;
   }
 }
 
 /* ── Board Selector ──────────────────────────────── */
 .board-selector {
   padding: 4px 8px;
-  background: var(--color-accent-soft);
+  background-color: var(--wb-1);
   color: var(--wb-12);
-  border: 1px solid var(--color-accent-border);
-  border-radius: 5px;
-  font-size: 12px;
-  font-weight: 500;
+  border: 1px solid var(--wb-6);
+  border-radius: var(--radius-pill);
+  font: 500 11.5px/1 var(--font-mono);
   cursor: pointer;
   transition: border-color 0.15s;
   height: 28px;
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a59fb2' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 6px center;
-  padding-right: 22px;
+  background-position: right 9px center;
+  padding-left: 11px;
+  padding-right: 24px;
 }
 
 .board-selector:hover:not(:disabled) {
-  border-color: var(--color-action-primary);
+  border-color: var(--wb-8);
 }
 
 .board-selector:disabled {
@@ -118,8 +118,8 @@
   gap: 6px;
   padding: 0 10px;
   height: 28px;
-  border-radius: 4px;
-  font-size: 13px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -131,28 +131,25 @@
   padding: 0 10px;
   height: 28px;
   background: transparent;
-  border: 1px solid var(--color-accent-border);
-  border-radius: 5px;
+  border: none;
+  border-radius: var(--radius-pill);
   color: var(--wb-11);
-  font-size: 12px;
-  font-weight: 500;
+  font: 500 12px/1 var(--font-sans);
   cursor: pointer;
   transition:
-    border-color 0.15s,
-    background 0.15s,
-    color 0.15s;
+    background var(--duration-fast),
+    color var(--duration-fast);
   white-space: nowrap;
 }
 
 .canvas-serial-btn:hover {
-  border-color: var(--color-action-primary);
-  color: var(--wb-12);
+  background: var(--wb-4);
+  color: var(--wb-13);
 }
 
 .canvas-serial-btn-active {
   background: var(--color-accent-soft);
-  border-color: var(--color-action-primary);
-  color: var(--color-action-primary);
+  color: var(--color-accent-fg);
 }
 
 /* ── Canvas icon-only buttons (undo/redo, …) ─────── */
@@ -163,20 +160,19 @@
   width: 28px;
   height: 28px;
   background: transparent;
-  border: 1px solid var(--color-accent-border);
-  border-radius: 5px;
+  border: none;
+  border-radius: var(--radius-pill);
   color: var(--wb-11);
   cursor: pointer;
   transition:
-    border-color 0.15s,
-    background 0.15s,
-    color 0.15s,
-    opacity 0.15s;
+    background var(--duration-fast),
+    color var(--duration-fast),
+    opacity var(--duration-fast);
   flex-shrink: 0;
 }
 
 .canvas-icon-btn:hover:not(:disabled) {
-  border-color: var(--color-action-primary);
+  background: var(--wb-4);
   color: var(--wb-12);
 }
 
@@ -190,8 +186,9 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font: 500 11.5px/1 var(--font-mono);
   color: var(--wb-9);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Add Component button ────────────────────────── */
@@ -199,21 +196,20 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 0 10px;
+  padding: 0 12px 0 10px;
   height: 28px;
-  background: var(--color-action-primary);
-  color: var(--color-fg-on-action);
+  background: var(--wb-6);
+  color: var(--wb-13);
   border: none;
-  border-radius: 5px;
-  font-size: 12px;
-  font-weight: 600;
+  border-radius: var(--radius-pill);
+  font: 600 12px/1 var(--font-sans);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
   white-space: nowrap;
 }
 
 .add-component-btn:hover:not(:disabled) {
-  background: var(--color-action-primary-hover);
+  background: var(--wb-7);
 }
 
 .add-component-btn:disabled {
@@ -227,21 +223,11 @@
   position: relative;
   overflow: hidden;
   background-color: var(--wb-1);
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 19px,
-      var(--color-canvas-grid) 19px,
-      var(--color-canvas-grid) 20px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 19px,
-      var(--color-canvas-grid) 19px,
-      var(--color-canvas-grid) 20px
-    );
+  /* Dot grid at the 20px snap pitch, lavender so it reads as the theme's
+     secondary ink rather than a grey ruled sheet. */
+  background-image: radial-gradient(var(--color-canvas-grid) 1px, transparent 1.3px);
+  background-size: 20px 20px;
+  background-position: 10px 10px;
   user-select: none;
   touch-action: none; /* Disable browser scroll/zoom so JS handlers take full control */
 }
@@ -275,10 +261,10 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  background: var(--wb-2);
+  background: var(--wb-3);
   border: 1px solid var(--wb-6);
-  border-radius: 5px;
-  padding: 0 2px;
+  border-radius: var(--radius-pill);
+  padding: 0 4px;
   height: 28px;
 }
 
@@ -302,7 +288,7 @@
   height: 24px;
   background: transparent;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   color: var(--wb-11);
   cursor: pointer;
   flex-shrink: 0;
@@ -319,11 +305,11 @@
   background: transparent;
   border: none;
   color: var(--wb-11);
-  font-size: 11px;
-  font-family: monospace;
+  font: 500 11px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
-  padding: 0 2px;
-  border-radius: 3px;
+  padding: 4px 2px;
+  border-radius: var(--radius-pill);
 }
 
 .zoom-level:hover {
@@ -332,7 +318,7 @@
 }
 
 .component-label {
-  font-size: 11px;
+  font: 500 10.5px/1.2 var(--font-mono);
   background-color: var(--wb-3);
   padding: 3px 8px;
   border-radius: 3px;
@@ -349,10 +335,10 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 100;
-  background: rgba(0, 113, 227, 0.92);
-  color: var(--color-fg-on-action);
+  background: var(--lavender-400);
+  color: var(--color-action-primary-fg);
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -364,10 +350,10 @@
 }
 
 .wire-mode-banner button {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--gray-950);
   color: var(--wb-13);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 4px;
+  border: none;
+  border-radius: var(--radius-pill);
   padding: 4px 14px;
   cursor: pointer;
   font-size: 12px;
@@ -376,7 +362,7 @@
 }
 
 .wire-mode-banner button:hover {
-  background: rgba(255, 255, 255, 0.35);
+  background: var(--gray-800);
 }
 
 /* ── Mobile-friendly adjustments ────────────────── */
@@ -563,7 +549,7 @@
   color: var(--color-action-primary);
 }
 .canvas-ble-advertising {
-  color: #6366f1;
+  color: var(--lavender-400);
 }
 
 /* ── Selection action bar (floating toolbar for selected wire/component/board) ─── */
@@ -575,7 +561,7 @@
   transform: scale(0.97);
 }
 .selection-action-bar button:focus-visible {
-  outline: 2px solid var(--color-action-primary);
+  outline: 2px solid var(--lavender-400);
   outline-offset: 1px;
 }
 
@@ -594,7 +580,7 @@
   transition: filter 0.25s ease;
 }
 .velxio-burnt {
-  outline: 1px dashed rgba(220, 38, 38, 0.65);
+  outline: 1px dashed var(--color-feedback-error-border);
   outline-offset: 1px;
   border-radius: 4px;
 }
@@ -643,4 +629,92 @@
   .velxio-ants::after {
     animation: none;
   }
+}
+
+/* ── SPICE summary chip ─────────────────────────────
+   Screen-fixed in the canvas' top-left corner (it used to live inside the
+   zoomed world SVG and sat on top of the circuit). */
+.spice-chip {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 10px 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--wb-3);
+  box-shadow: inset 0 0 0 1px var(--wb-6);
+  color: var(--wb-10);
+  font: 500 10.5px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.spice-chip-mode {
+  display: grid;
+  place-items: center;
+  height: 16px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--wb-6);
+  color: var(--wb-12);
+  font-weight: 700;
+}
+.spice-chip--warn {
+  box-shadow: inset 0 0 0 1px var(--color-feedback-error);
+  color: var(--color-feedback-error);
+}
+.spice-chip--warn .spice-chip-mode {
+  background: var(--color-feedback-error-soft);
+  color: var(--color-feedback-error);
+}
+
+/* ── Empty bench ────────────────────────────────────
+   Shown when the canvas holds no board and no part. Screen-fixed and
+   click-through, so panning and the Add button still work around it. */
+.canvas-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  pointer-events: none;
+  text-align: center;
+}
+.canvas-empty-art {
+  width: min(560px, 80%);
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
+  object-fit: cover;
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px var(--wb-6);
+  opacity: 0.92;
+}
+.canvas-empty-title {
+  margin: 8px 0 0;
+  color: var(--wb-13);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: var(--display-weight);
+  font-stretch: 140%;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.canvas-empty-hint {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--wb-10);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.canvas-empty-hint b {
+  color: var(--wb-12);
+  font-weight: 600;
 }

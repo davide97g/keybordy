@@ -24,7 +24,7 @@
 .new-project-dialog {
   background: var(--wb-2);
   border: 1px solid var(--wb-7);
-  border-radius: 10px;
+  border-radius: 16px;
   width: min(840px, 94vw);
   max-height: 86vh;
   display: flex;
@@ -34,18 +34,35 @@
 }
 
 .new-project-head {
-  padding: 20px 24px 10px;
+  position: relative;
+  padding: 28px 24px 22px;
+  min-height: 132px;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  /* keybordy art (the eight colored keys) on the right of the header. */
+  padding-right: 200px;
+  background:
+    url('/keybordy/workbench-keys.webp') right 28px center / auto 100% no-repeat,
+    var(--pattern-hatch),
+    var(--wb-2);
+  border-bottom: 1px solid var(--wb-6);
 }
 
 .new-project-title {
   margin: 0;
   color: var(--wb-13);
-  font-size: 17px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: var(--display-weight);
+  font-stretch: 140%;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 
 .new-project-sub {
+  max-width: 46ch;
   margin: 6px 0 0;
   color: var(--wb-10);
   font-size: 12.5px;
@@ -58,11 +75,13 @@
 }
 
 .new-project-section-title {
-  margin: 16px 0 8px;
+  margin: 18px 0 8px;
   color: var(--wb-10);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: var(--display-weight);
+  font-stretch: 130%;
+  letter-spacing: var(--label-tracking);
   text-transform: uppercase;
 }
 
@@ -170,4 +189,11 @@
 .new-project-cancel:hover {
   color: var(--wb-12);
   border-color: var(--wb-9);
+}
+
+@media (max-width: 560px) {
+  .new-project-head {
+    padding-right: 24px;
+    background: var(--pattern-hatch), var(--wb-2);
+  }
 }

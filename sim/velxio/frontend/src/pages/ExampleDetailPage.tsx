@@ -50,8 +50,8 @@ export const ExampleDetailPage: React.FC = () => {
 
   // SEO — called unconditionally (hooks must not be inside conditionals).
   const seoTitle = example
-    ? `${example.title} — Free Arduino Simulator Example | Velxio`
-    : 'Example Not Found | Velxio';
+    ? `${example.title} · keybordy`
+    : 'Example not found · keybordy';
 
   const boardLabel = example
     ? (BOARD_LABELS[example.boardType ?? 'arduino-uno'] ?? example.boardType ?? 'Arduino Uno')
@@ -138,7 +138,7 @@ export const ExampleDetailPage: React.FC = () => {
           style={{ width: '100%', maxWidth: 760, marginBottom: 32, fontSize: 13, color: 'var(--wb-9)' }}
         >
           <Link to="/" style={{ color: 'var(--wb-9)', textDecoration: 'none' }}>
-            Velxio
+            keybordy
           </Link>
           {' / '}
           <Link to="/examples" style={{ color: 'var(--wb-9)', textDecoration: 'none' }}>

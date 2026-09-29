@@ -70,7 +70,7 @@ export const MessageDialogHost = () => {
           display: 'flex',
           flexDirection: 'column',
           gap: 14,
-          fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+          fontFamily: 'var(--font-sans)',
         }}
       >
         {title && (

@@ -28,7 +28,7 @@ import { MicrophoneToggle } from './MicrophoneToggle';
 import { BoardSensorControls } from './BoardSensorControls';
 import { WireLayer } from './WireLayer';
 import type { SegmentHandle, WaypointHandle, AlignmentGuide } from './WireLayer';
-import { ElectricalOverlay } from '../analog-ui/ElectricalOverlay';
+import { ElectricalOverlay, ElectricalSummaryChip } from '../analog-ui/ElectricalOverlay';
 import { BoardOnCanvas } from './BoardOnCanvas';
 import { PartSimulationRegistry } from '../../simulation/parts';
 import { PROPERTY_CHANGE_EVENT, type PropertyChangeDetail } from '../../simulation/parts/partUtils';
@@ -3391,6 +3391,21 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             />
           </div>
 
+          {/* SPICE summary — screen-fixed, outside the pan/zoom world */}
+          <ElectricalSummaryChip />
+
+          {/* keybordy empty state: nothing on the bench yet */}
+          {boards.length === 0 && components.length === 0 && (
+            <div className="canvas-empty" aria-live="polite">
+              <img className="canvas-empty-art" src="/keybordy/workbench.webp" alt="" />
+              <p className="canvas-empty-title">The bench is empty</p>
+              <p className="canvas-empty-hint">
+                Add a board or a part with <b>+ Add part</b>, or open a project from the File
+                menu.
+              </p>
+            </div>
+          )}
+
           {/* Wire creation mode banner — visible on both desktop and mobile */}
           {wireInProgress && (
             <WireModeBanner
@@ -3907,7 +3922,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                     background: 'none',
                     border: 'none',
                     borderBottom: '1px solid var(--wb-7)',
-                    color: '#e6e6e6',
+                    color: 'var(--wb-13)',
                     cursor: 'pointer',
                     fontSize: 13,
                     textAlign: 'left',
@@ -3953,7 +3968,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                     background: 'none',
                     border: 'none',
                     borderBottom: '1px solid var(--wb-7)',
-                    color: '#e6e6e6',
+                    color: 'var(--wb-13)',
                     cursor: 'pointer',
                     fontSize: 13,
                     textAlign: 'left',
@@ -4100,7 +4115,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
               style={{
                 position: 'fixed',
                 inset: 0,
-                background: 'rgba(0,0,0,0.5)',
+                background: 'var(--color-bg-overlay)',
                 zIndex: 10000,
                 display: 'flex',
                 alignItems: 'center',

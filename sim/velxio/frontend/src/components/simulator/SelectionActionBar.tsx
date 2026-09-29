@@ -227,7 +227,7 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
                 width: 20,
                 height: 20,
                 borderRadius: '50%',
-                backgroundColor: currentColor || '#22c55e',
+                backgroundColor: currentColor || 'var(--lime-500)',
                 border: '2px solid rgba(255,255,255,0.2)',
               }}
             />

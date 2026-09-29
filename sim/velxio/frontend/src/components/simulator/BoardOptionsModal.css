@@ -278,12 +278,12 @@
 }
 
 .bom-spiffs-name {
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
 .bom-spiffs-size {
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--wb-11);
   text-align: right;
@@ -333,7 +333,7 @@
 .bom-spiffs-tally {
   font-size: 11px;
   color: var(--wb-10);
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: var(--font-mono);
 }
 
 .bom-spiffs-tally.over {

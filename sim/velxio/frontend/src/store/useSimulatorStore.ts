@@ -1765,7 +1765,7 @@ const INITIAL_BOARD: BoardInstance = {
   serialOutput: '',
   serialBaudRate: 0,
   serialLink: undefined,
-  serialMonitorOpen: false,
+  serialMonitorOpen: true, // keybordy: the serial log is the only proof a key press worked, so it starts docked
   activeFileGroupId: `group-${INITIAL_BOARD_ID}`,
   languageMode: 'arduino' as LanguageMode,
 };
@@ -2338,7 +2338,7 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         serialOutput: '',
         serialBaudRate: 0,
         serialLink: undefined,
-        serialMonitorOpen: false,
+        serialMonitorOpen: true,
         activeFileGroupId: `group-${id}`,
         languageMode: seededLanguage,
       };
@@ -3453,7 +3453,7 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
     serialOutput: '',
     serialBaudRate: 0,
     serialLink: undefined,
-    serialMonitorOpen: false,
+    serialMonitorOpen: true,
     remoteConnected: false,
     remoteSocket: null,
 

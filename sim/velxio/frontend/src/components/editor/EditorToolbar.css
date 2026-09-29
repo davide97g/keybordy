@@ -29,7 +29,7 @@
 .toolbar-group {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
@@ -75,13 +75,14 @@
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   background: transparent;
   color: var(--wb-11);
   transition:
-    background 0.12s,
-    color 0.12s;
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
   flex-shrink: 0;
   align-self: center;
 }
@@ -91,34 +92,81 @@
   cursor: not-allowed;
 }
 
-/* Compile — accent blue (token, not neon) */
+/* Compile — lavender, the secondary signal */
 .tb-btn-compile {
-  color: var(--color-action-primary);
+  color: var(--color-accent-fg);
 }
 .tb-btn-compile:hover:not(:disabled) {
   background: var(--color-accent-soft);
-  color: var(--color-action-primary-hover);
+  color: var(--lavender-300);
 }
 .tb-btn-compile:active:not(:disabled) {
   background: var(--color-accent-soft-strong);
 }
 
-/* Run — semantic success green (token) */
+/* Run — the one filled accent on the strip: a labeled lime pill. While the
+   simulation runs it stays lit and reads "Running" with a pulsing dot. */
 .tb-btn-run {
-  color: var(--color-feedback-success);
+  width: auto;
+  gap: 7px;
+  padding: 0 14px 0 11px;
+  background: var(--color-action-primary);
+  color: var(--color-action-primary-fg);
+  font: 650 12.5px/1 var(--font-sans);
+  letter-spacing: 0.01em;
 }
 .tb-btn-run:hover:not(:disabled) {
-  background: var(--color-feedback-success-soft);
-  color: var(--color-feedback-success);
+  background: var(--color-action-primary-hover);
+  color: var(--color-action-primary-fg);
+}
+.tb-btn-run:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.tb-btn-run:disabled {
+  opacity: 0.4;
+}
+.tb-btn-run.tb-btn-run--live:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.tb-run-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tb-run-pulse {
+    animation: tb-run-pulse 1.4s ease-in-out infinite;
+  }
+}
+@keyframes tb-run-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+.tb-run-label {
+  line-height: 1;
+  white-space: nowrap;
 }
 
-/* Stop — semantic error red (token) */
+/* Stop — hot pink outline pill */
 .tb-btn-stop {
+  width: auto;
+  gap: 6px;
+  padding: 0 12px 0 10px;
   color: var(--color-feedback-error);
+  box-shadow: inset 0 0 0 1.5px var(--color-feedback-error);
+  font: 600 12.5px/1 var(--font-sans);
 }
 .tb-btn-stop:hover:not(:disabled) {
   background: var(--color-feedback-error-soft);
   color: var(--color-feedback-error);
+}
+.tb-btn-stop:disabled {
+  color: var(--wb-10);
+  box-shadow: inset 0 0 0 1px var(--wb-7);
+  opacity: 0.6;
 }
 
 /* Reset */
@@ -127,31 +175,32 @@
   color: var(--wb-12);
 }
 
-/* Libraries button (always visible, with label) */
+/* Libraries — a quiet outlined pill: it is a setup action, not the main one */
 .tb-btn-libraries {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   height: 28px;
-  padding: 0 8px 0 7px;
+  padding: 0 11px 0 9px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  background: var(--color-action-primary);
-  color: var(--color-fg-on-action);
-  font-size: 11px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--wb-7);
+  color: var(--wb-11);
+  font-size: 12px;
   font-weight: 500;
-  font-family: inherit;
+  font-family: var(--font-sans);
   white-space: nowrap;
   transition:
-    background 0.15s,
-    color 0.15s;
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
   flex-shrink: 0;
   align-self: center;
 }
 .tb-btn-libraries:hover {
-  background: var(--color-action-primary-hover);
-  color: var(--color-fg-on-action);
+  background: var(--wb-4);
+  color: var(--wb-13);
 }
 .tb-libraries-label {
   line-height: 1;
@@ -165,6 +214,13 @@
 @container editor-toolbar (max-width: 360px) {
   .tb-libraries-label {
     display: none;
+  }
+  .tb-btn-stop .tb-run-label {
+    display: none;
+  }
+  .tb-btn-stop {
+    width: 28px;
+    padding: 0;
   }
   .tb-btn-libraries {
     padding: 0 6px;
@@ -258,18 +314,18 @@
 .tb-lib-hint-btn {
   background: var(--color-action-primary);
   border: none;
-  border-radius: 4px;
-  color: var(--color-fg-on-action);
+  border-radius: var(--radius-pill);
+  color: var(--color-action-primary-fg);
   font-size: 12px;
   font-weight: 600;
   font-family: inherit;
   padding: 2px 8px;
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background var(--duration-fast);
 }
 .tb-lib-hint-btn:hover {
   background: var(--color-action-primary-hover);
-  color: var(--color-fg-on-action);
+  color: var(--color-action-primary-fg);
 }
 .tb-lib-hint-close {
   margin-left: auto;
@@ -318,7 +374,7 @@
   align-items: center;
   gap: 5px;
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
   max-width: 280px;
   white-space: nowrap;
@@ -419,13 +475,20 @@
   display: inline-flex;
   align-items: center;
 }
+.tb-run-split .tb-btn-run:has(+ .tb-btn-run-caret) {
+  border-radius: var(--radius-pill) 0 0 var(--radius-pill);
+  padding-right: 10px;
+}
 .tb-btn-run-caret {
-  width: 16px;
-  color: var(--color-feedback-success);
+  width: 20px;
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+  margin-left: 1px;
+  background: var(--color-action-primary);
+  color: var(--color-action-primary-fg);
 }
 .tb-btn-run-caret:hover:not(:disabled) {
-  background: var(--color-feedback-success-soft);
-  color: var(--color-feedback-success);
+  background: var(--color-action-primary-hover);
+  color: var(--color-action-primary-fg);
 }
 .tb-run-menu {
   position: absolute;
@@ -457,8 +520,8 @@
   text-align: left;
   white-space: nowrap;
   transition:
-    background 0.12s,
-    color 0.12s;
+    background var(--duration-fast),
+    color var(--duration-fast);
 }
 .tb-run-menu-item:hover:not(:disabled) {
   background: var(--color-wash-hover);
@@ -480,7 +543,7 @@
   border-bottom: 1px solid var(--color-feedback-error-border);
   color: var(--color-feedback-error);
   font-size: 11px;
-  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   padding: 4px 12px;
   max-height: 80px;
   overflow-y: auto;

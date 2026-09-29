@@ -7,8 +7,8 @@ import { BOARD_KIND_LABELS } from '../../types/board';
 /** Neutral chip glyph for overlay-registered boards without a bespoke icon. */
 const PRO_FALLBACK_ICON = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-    <rect x="3" y="3" width="10" height="10" rx="2" fill="#8b5cf6" />
-    <rect x="5.5" y="5.5" width="5" height="5" rx="1" fill="#1e1b2e" />
+    <rect x="3" y="3" width="10" height="10" rx="2" style={{ fill: 'var(--lavender-400)' }} />
+    <rect x="5.5" y="5.5" width="5" height="5" rx="1" style={{ fill: 'var(--gray-950)' }} />
   </svg>
 );
 
@@ -75,7 +75,7 @@ export const BoardPickerModal = ({ isOpen, onClose, onSelectBoard }: BoardPicker
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.6)',
+        background: 'var(--color-bg-overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -126,10 +126,10 @@ export const BoardPickerModal = ({ isOpen, onClose, onSelectBoard }: BoardPicker
                   width: 28,
                   textAlign: 'center',
                   color: kind.startsWith('raspberry')
-                    ? '#c22'
+                    ? 'var(--pink-500)'
                     : kind.startsWith('esp')
-                      ? '#e8a020'
-                      : '#4af',
+                      ? 'var(--amber-500)'
+                      : 'var(--cyan-400)',
                 }}
               >
                 {BOARD_ICON[kind] ?? PRO_FALLBACK_ICON}

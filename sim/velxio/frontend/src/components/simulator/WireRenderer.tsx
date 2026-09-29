@@ -43,7 +43,7 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
   const marker = cssVar('--color-wire-marker');
   const strokeW = isSelected ? 3 : 2;
   const outlineW = isSelected ? 6 : 5;
-  const opacity = isSelected || isHovered ? 1 : 0.85;
+  const opacity = isSelected || isHovered ? 1 : 0.95;
 
   return (
     <g style={{ pointerEvents: 'none' }} strokeLinecap="round" strokeLinejoin="round">
@@ -76,10 +76,10 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
         cy={wire.start.y}
         r="3"
         fill={color}
-        stroke="#1a1a1a"
+        stroke={outline}
         strokeWidth="1"
       />
-      <circle cx={wire.end.x} cy={wire.end.y} r="3" fill={color} stroke="#1a1a1a" strokeWidth="1" />
+      <circle cx={wire.end.x} cy={wire.end.y} r="3" fill={color} stroke={outline} strokeWidth="1" />
     </g>
   );
 };

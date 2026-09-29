@@ -14,7 +14,7 @@ import { useVfsStore } from '../../store/useVfsStore';
 import { getBoardBridge, useSimulatorStore } from '../../store/useSimulatorStore';
 import { attachSlavesFromCanvas } from '../../simulation/piSlaveScanner';
 import { boardDisplayName } from '../../types/board';
-import { defineVelxioThemes, monacoThemeFor } from '../editor/monacoThemes';
+import { defineKeybordyThemes, monacoThemeFor } from '../editor/monacoThemes';
 import { useResolvedTheme } from '../../hooks/useTheme';
 
 // Lazy-load PiTerminal so @xterm/xterm is only bundled when needed
@@ -313,7 +313,7 @@ export const RaspberryPiWorkspace: React.FC<RaspberryPiWorkspaceProps> = ({ boar
               height="100%"
               language={activeFileNode.name.endsWith('.py') ? 'python' : 'shell'}
               theme={monacoTheme}
-              beforeMount={defineVelxioThemes}
+              beforeMount={defineKeybordyThemes}
               value={activeFileNode.content ?? ''}
               onChange={(val) => setContent(boardId, activePane, val ?? '')}
               options={{

@@ -7,7 +7,7 @@
  *
  * For nets with AC content (detected via `.tran` `timeWaveforms`) labels
  * show `~<RMS>` prefixed with a tilde to mark them as time-varying. A
- * summary pill in the top-left advertises DC vs AC analysis mode.
+ * summary chip (ElectricalSummaryChip, below) advertises DC vs AC mode.
  *
  * This is a read-only, zero-interactivity layer — it sits ABOVE the wire
  * layer but below the component layer so labels remain legible without
@@ -17,7 +17,7 @@
  * (a 4-digit 7-segment clock draws ~40 wires, so ~40 `0uV` pills covered
  * the breadboard). A label is drawn only when the user hovers its wire,
  * or hovers a component/board that wire lands on — so pointing at a part
- * reveals every voltage around it at once. The summary pill always shows.
+ * reveals every voltage around it at once.
  */
 import { useMemo } from 'react';
 import { useElectricalStore } from '../../store/useElectricalStore';
@@ -49,10 +49,6 @@ export function ElectricalOverlay({
   hoveredBoardId = null,
 }: ElectricalOverlayProps = {}) {
   const nodeVoltages = useElectricalStore((s) => s.nodeVoltages);
-  const converged = useElectricalStore((s) => s.converged);
-  const error = useElectricalStore((s) => s.error);
-  const solveMs = useElectricalStore((s) => s.lastSolveMs);
-  const analysisMode = useElectricalStore((s) => s.analysisMode);
   const timeWaveforms = useElectricalStore((s) => s.timeWaveforms);
   const pinNetMap = useElectricalStore((s) => s.pinNetMap);
 
@@ -104,7 +100,6 @@ export function ElectricalOverlay({
     );
   }, [labels, hoveredWireId, hoveredComponentId, hoveredBoardId]);
 
-  const modeBadge = analysisMode === 'tran' ? 'AC' : 'DC';
   // SVG attributes cannot take a CSS custom property, so the overlay resolves
   // its tokens here. `theme` is read purely to re-resolve them when the user
   // switches appearance — cssVar caches per theme.
@@ -115,21 +110,9 @@ export function ElectricalOverlay({
       dc: cssVar('--color-probe-dc'),
       dcDim: cssVar('--color-probe-dc-dim'),
       ac: cssVar('--color-probe-ac'),
-      error: cssVar('--color-probe-error'),
-      errorDim: cssVar('--color-probe-error-dim'),
     }),
     [theme],
   );
-  const badgeColor = analysisMode === 'tran' ? probe.ac : probe.dcDim;
-
-  const summaryLines: string[] = [];
-  if (error) summaryLines.push(`Warning: ${error}`);
-  else if (!converged) summaryLines.push('Warning: did not converge');
-  else {
-    const n = Object.keys(nodeVoltages).length;
-    summaryLines.push(`${n} nets | ${solveMs.toFixed(0)} ms`);
-  }
-
   return (
     <svg
       style={{
@@ -142,51 +125,6 @@ export function ElectricalOverlay({
         zIndex: 20,
       }}
     >
-      {/* Summary pill with AC/DC badge */}
-      <g transform="translate(12, 12)">
-        <rect
-          x={0}
-          y={0}
-          rx={4}
-          ry={4}
-          width={250}
-          height={24}
-          fill={probe.labelBg}
-          stroke={error ? probe.errorDim : badgeColor}
-        />
-        <rect
-          x={4}
-          y={4}
-          rx={2}
-          ry={2}
-          width={22}
-          height={16}
-          fill={badgeColor}
-          opacity={0.2}
-          stroke={badgeColor}
-        />
-        <text
-          x={15}
-          y={16}
-          fontSize={10}
-          fill={badgeColor}
-          fontFamily="monospace"
-          textAnchor="middle"
-          fontWeight="bold"
-        >
-          {modeBadge}
-        </text>
-        <text
-          x={32}
-          y={17}
-          fontSize={11}
-          fill={error ? probe.error : probe.dcDim}
-          fontFamily="monospace"
-        >
-          SPICE {summaryLines.join(' ')}
-        </text>
-      </g>
-
       {/* Per-wire voltage labels — only for what the cursor is on */}
       {visibleLabels.map((l) => (
         <g key={l.id} transform={`translate(${l.x}, ${l.y})`}>
@@ -206,7 +144,7 @@ export function ElectricalOverlay({
             y={4}
             textAnchor="middle"
             fontSize={10}
-            fontFamily="monospace"
+            fontFamily="Martian Mono, monospace"
             fill={l.ac ? probe.ac : probe.dc}
           >
             {l.ac ? `~${formatV(l.v!)}` : formatV(l.v!)}
@@ -214,5 +152,40 @@ export function ElectricalOverlay({
         </g>
       ))}
     </svg>
+  );
+}
+
+/**
+ * SPICE solve summary ("DC · 20 nets · 0 ms"). A screen-fixed chip in the
+ * canvas' top-left corner, outside the pan/zoom world so it never sits on
+ * top of the circuit. Muted by default; pink only when the solve failed or
+ * did not converge.
+ */
+export function ElectricalSummaryChip() {
+  const nodeVoltages = useElectricalStore((s) => s.nodeVoltages);
+  const converged = useElectricalStore((s) => s.converged);
+  const error = useElectricalStore((s) => s.error);
+  const solveMs = useElectricalStore((s) => s.lastSolveMs);
+  const analysisMode = useElectricalStore((s) => s.analysisMode);
+  const wireCount = useSimulatorStore((s) => s.wires.length);
+
+  const nets = Object.keys(nodeVoltages).length;
+  const warn = !!error || !converged;
+  // Nothing wired means nothing to solve: ngspice's "no vectors" error on an
+  // empty bench is noise, not a warning worth painting pink.
+  if (wireCount === 0) return null;
+  if (!warn && nets === 0) return null;
+
+  const text = error
+    ? `Warning: ${error}`
+    : !converged
+      ? 'Warning: did not converge'
+      : `${nets} nets · ${solveMs.toFixed(0)} ms`;
+
+  return (
+    <div className={'spice-chip' + (warn ? ' spice-chip--warn' : '')} role="status">
+      <span className="spice-chip-mode">{analysisMode === 'tran' ? 'AC' : 'DC'}</span>
+      <span className="spice-chip-text">SPICE {text}</span>
+    </div>
   );
 }

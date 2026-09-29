@@ -139,7 +139,11 @@ export const BoardOnCanvas = ({
   const zRaise = useSimulatorStore((st) => st.zOrders[id] ?? 0);
 
   // Status dot color: green=running, amber=compiled, gray=idle
-  const statusColor = board.running ? '#22c55e' : board.compiledProgram ? '#f59e0b' : '#6b7280';
+  const statusColor = board.running
+    ? 'var(--color-feedback-success)'
+    : board.compiledProgram
+      ? 'var(--color-feedback-warning)'
+      : 'var(--wb-8)';
 
   const boardEl = (() => {
     // Overlay-registered board (proBoardRegistry): the overlay either provides
@@ -267,8 +271,8 @@ export const BoardOnCanvas = ({
             top: y - 3,
             width: size.w + 6,
             height: size.h + 6,
-            border: '2px solid #007acc',
-            borderRadius: 6,
+            border: '1.5px dashed var(--color-accent-border)',
+            borderRadius: 10,
             pointerEvents: 'none',
             zIndex: 2,
           }}
@@ -285,7 +289,7 @@ export const BoardOnCanvas = ({
           height: 12,
           borderRadius: '50%',
           background: statusColor,
-          border: '2px solid #1e1e1e',
+          border: '2px solid var(--wb-1)',
           pointerEvents: 'none',
           zIndex: 10,
           transition: 'background 0.3s',
@@ -315,9 +319,9 @@ export const BoardOnCanvas = ({
             lineHeight: '1.2',
             padding: '2px 7px',
             borderRadius: '10px',
-            border: '1px solid #0071e3',
-            background: '#0071e3',
-            color: '#fff',
+            border: '1px solid var(--lavender-400)',
+            background: 'var(--lavender-400)',
+            color: 'var(--gray-950)',
             whiteSpace: 'nowrap',
             display: 'inline-flex',
             alignItems: 'center',
@@ -325,8 +329,13 @@ export const BoardOnCanvas = ({
           }}
         >
           <svg width="9" height="11" viewBox="0 0 9 11" fill="none" aria-hidden="true">
-            <path d="M3 0.5h5.5v10h-8v-7.5z" stroke="#fff" strokeWidth="1" strokeLinejoin="round" />
-            <path d="M2.5 2.5v2M4.5 2.5v2M6.5 2.5v2" stroke="#fff" strokeWidth="1" />
+            <path
+              d="M3 0.5h5.5v10h-8v-7.5z"
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeLinejoin="round"
+            />
+            <path d="M2.5 2.5v2M4.5 2.5v2M6.5 2.5v2" stroke="currentColor" strokeWidth="1" />
           </svg>
           SD files
         </button>

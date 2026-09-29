@@ -72,7 +72,7 @@ export async function importProjectFile(file: File): Promise<ProjectImportResult
 
   throw new Error(
     `Unsupported project file: ${file.name}.\n` +
-      `Velxio accepts .vlx (Velxio projects) and .zip (Wokwi bundles).`,
+      `keybordy opens .vlx projects and Wokwi .zip bundles.`,
   );
 }
 

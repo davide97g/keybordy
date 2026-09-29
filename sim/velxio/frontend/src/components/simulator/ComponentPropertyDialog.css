@@ -20,7 +20,7 @@
   z-index: 1001;
   pointer-events: all;
   color: var(--wb-13);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-family: var(--font-sans);
 }
 
 /* Default (desktop): inline body, dialog scrolls as one. */
@@ -469,7 +469,7 @@
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 600;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-family: var(--font-mono);
   color: var(--wb-13);
   background-color: var(--wb-7);
   border: 1px solid var(--wb-8);

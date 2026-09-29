@@ -118,8 +118,8 @@
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.5px;
-  color: #f5f3ff;
-  background: linear-gradient(180deg, #8b5cf6, #6d28d9);
+  color: var(--gray-950);
+  background: var(--lavender-400);
   padding: 1px 6px;
   border-radius: 4px;
 }
@@ -179,7 +179,7 @@
 }
 
 .cip-doc code {
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   background: var(--wb-1);
   border: 1px solid var(--wb-6);
@@ -217,7 +217,7 @@
 
 .cip-doc td:first-child {
   color: var(--wb-12);
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  font-family: var(--font-mono);
   white-space: nowrap;
 }
 
@@ -251,7 +251,7 @@
 
 .cip-prop-name {
   color: var(--wb-11);
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  font-family: var(--font-mono);
   white-space: nowrap;
 }
 

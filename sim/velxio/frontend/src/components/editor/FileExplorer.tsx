@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useSyncExternalStore } from 'react';
+import { boardAccent } from '../../utils/boardColors';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useEditorStore, chipFileGroupId } from '../../store/useEditorStore';
@@ -17,8 +18,8 @@ import './FileExplorer.css';
 /** Neutral chip glyph for overlay-registered boards without a bespoke icon. */
 const PRO_FALLBACK_ICON = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-    <rect x="3" y="3" width="10" height="10" rx="2" fill="#8b5cf6" />
-    <rect x="5.5" y="5.5" width="5" height="5" rx="1" fill="#1e1b2e" />
+    <rect x="3" y="3" width="10" height="10" rx="2" style={{ fill: 'var(--lavender-400)' }} />
+    <rect x="5.5" y="5.5" width="5" height="5" rx="1" style={{ fill: 'var(--gray-950)' }} />
   </svg>
 );
 
@@ -317,25 +318,6 @@ const BOARD_ICON: Record<BoardKind, string> = {
   'stm32-netduino2': '◈',
 };
 
-// Color accent per board family
-const BOARD_COLOR: Record<BoardKind, string> = {
-  'arduino-uno': '#4fc3f7',
-  'arduino-nano': '#4fc3f7',
-  'arduino-mega': '#4fc3f7',
-  'raspberry-pi-pico': '#ce93d8',
-  'raspberry-pi-3': 'var(--color-feedback-error)',
-  esp32: 'var(--color-feedback-success)',
-  'esp32-s3': 'var(--color-feedback-success)',
-  'esp32-c3': 'var(--color-feedback-success)',
-  'stm32-bluepill': 'var(--color-accent-fg)',
-  'stm32-blackpill': 'var(--wb-12)',
-  'stm32-bluepill-f103cb': 'var(--color-accent-fg)',
-  'stm32-blackpill-f401': 'var(--wb-12)',
-  'stm32-f4-discovery': 'var(--color-accent-fg)',
-  'stm32-olimex-h405': 'var(--color-feedback-success)',
-  'stm32-netduino-plus2': '#ce93d8',
-  'stm32-netduino2': '#ce93d8',
-};
 
 function FileIcon({ name }: { name: string }) {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -852,7 +834,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
           </button>
           <button
             className="file-explorer-save-btn"
-            title="Open project (.vlx Velxio or .zip Wokwi)"
+            title="Open project (.vlx or Wokwi .zip)"
             onClick={handleOpenProjectClick}
           >
             <IcoOpen />
@@ -888,7 +870,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
           const groupFiles = fileGroups[groupId] ?? [];
           const isActiveBoard = board.id === activeBoardId;
           const isOpen = !collapsed[board.id];
-          const color = BOARD_COLOR[board.boardKind] ?? '#8b5cf6';
+          const color = boardAccent(board.boardKind);
 
           // Status dot color
           const statusColor = board.running
@@ -1191,7 +1173,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
                     }}
                     title={`libraries.json — ${boardDisplayName(board)}'s declared libraries (read-only; manage from the Library Manager)`}
                   >
-                    <span className="file-explorer-icon" style={{ color: '#ffd60a' }}>
+                    <span className="file-explorer-icon" style={{ color: 'var(--amber-500)' }}>
                       <FileIcon name="libraries.json" />
                     </span>
                     <span className="file-explorer-name">libraries.json</span>

@@ -11,7 +11,7 @@ const codeStyle: React.CSSProperties = {
   margin: '16px 0',
   borderRadius: '8px',
   fontSize: '13px',
-  fontFamily: 'var(--mono, monospace)',
+  fontFamily: 'var(--font-mono)',
 };
 
 export const CodeBlock: React.FC<CodeBlockProps> = ({ children, language = 'text' }) => (

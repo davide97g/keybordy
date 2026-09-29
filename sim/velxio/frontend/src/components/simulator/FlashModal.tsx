@@ -548,7 +548,7 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
           display: 'flex',
           flexDirection: 'column',
           gap: 14,
-          fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+          fontFamily: 'var(--font-sans)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1069,7 +1069,7 @@ const ProgressView = ({
           border: '1px solid var(--wb-6)',
           borderRadius: 4,
           fontSize: 11,
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+          fontFamily: 'var(--font-mono)',
           overflowY: 'auto',
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-all',

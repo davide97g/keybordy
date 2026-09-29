@@ -127,7 +127,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 1,
   },
   message: { flex: 1 },
-  componentId: { color: 'var(--color-accent-fg)', fontFamily: 'monospace' },
+  componentId: { color: 'var(--color-accent-fg)', fontFamily: 'var(--font-mono)' },
   actions: {
     display: 'flex',
     justifyContent: 'flex-end',

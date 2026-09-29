@@ -16,7 +16,7 @@
       "top": -40,
       "left": 220,
       "attrs": {
-        "color": "blue",
+        "color": "#d6ff1f",
         "label": "K1",
         "bounce": "1"
       }
@@ -27,7 +27,7 @@
       "top": -40,
       "left": 330,
       "attrs": {
-        "color": "blue",
+        "color": "#ff2e74",
         "label": "K2",
         "bounce": "1"
       }
@@ -38,7 +38,7 @@
       "top": 30,
       "left": 220,
       "attrs": {
-        "color": "blue",
+        "color": "#b9a8ff",
         "label": "K3",
         "bounce": "1"
       }
@@ -49,7 +49,7 @@
       "top": 30,
       "left": 330,
       "attrs": {
-        "color": "blue",
+        "color": "#3ee6ff",
         "label": "K4",
         "bounce": "1"
       }
@@ -60,7 +60,7 @@
       "top": 100,
       "left": 220,
       "attrs": {
-        "color": "blue",
+        "color": "#ffb52e",
         "label": "K5",
         "bounce": "1"
       }
@@ -71,7 +71,7 @@
       "top": 100,
       "left": 330,
       "attrs": {
-        "color": "blue",
+        "color": "#d17bff",
         "label": "K6",
         "bounce": "1"
       }
@@ -82,7 +82,7 @@
       "top": 170,
       "left": 220,
       "attrs": {
-        "color": "blue",
+        "color": "#5cffb0",
         "label": "K7",
         "bounce": "1"
       }
@@ -93,7 +93,7 @@
       "top": 170,
       "left": 330,
       "attrs": {
-        "color": "blue",
+        "color": "#f4f1f8",
         "label": "K8",
         "bounce": "1"
       }
@@ -122,97 +122,97 @@
     [
       "k1:1.l",
       "esp:D32",
-      "orange",
+      "#d6ff1f",
       []
     ],
     [
       "k1:2.r",
       "esp:GND.1",
-      "black",
+      "#d6ff1f",
       []
     ],
     [
       "k2:1.l",
       "esp:D33",
-      "gold",
+      "#ff2e74",
       []
     ],
     [
       "k2:2.r",
       "esp:D25",
-      "black",
+      "#ff2e74",
       []
     ],
     [
       "k3:1.l",
       "esp:D14",
-      "green",
+      "#b9a8ff",
       []
     ],
     [
       "k3:2.r",
       "esp:D26",
-      "black",
+      "#b9a8ff",
       []
     ],
     [
       "k4:1.l",
       "esp:D13",
-      "blue",
+      "#3ee6ff",
       []
     ],
     [
       "k4:2.r",
       "esp:D27",
-      "black",
+      "#3ee6ff",
       []
     ],
     [
       "k5:1.l",
       "esp:D4",
-      "purple",
+      "#ffb52e",
       []
     ],
     [
       "k5:2.r",
       "esp:RX2",
-      "black",
+      "#ffb52e",
       []
     ],
     [
       "k6:1.l",
       "esp:D18",
-      "gray",
+      "#d17bff",
       []
     ],
     [
       "k6:2.r",
       "esp:TX2",
-      "black",
+      "#d17bff",
       []
     ],
     [
       "k7:1.l",
       "esp:D19",
-      "cyan",
+      "#5cffb0",
       []
     ],
     [
       "k7:2.r",
       "esp:D21",
-      "black",
+      "#5cffb0",
       []
     ],
     [
       "k8:1.l",
       "esp:D23",
-      "brown",
+      "#f4f1f8",
       []
     ],
     [
       "k8:2.r",
       "esp:D22",
-      "black",
+      "#f4f1f8",
       []
     ],
     [
@@ -242,7 +242,7 @@
     [
       "rot:GND",
       "esp:GND.2",
-      "black",
+      "#5a5366",
       []
     ]
   ],

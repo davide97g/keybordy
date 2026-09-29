@@ -264,7 +264,7 @@
 
 .ilib-btn--primary {
   background: var(--color-action-primary);
-  color: #000;
+  color: var(--color-action-primary-fg);
 }
 
 .ilib-btn--primary:hover:not(:disabled) {

@@ -23,3 +23,14 @@ Changed or added:
 - The Wokwi importer works from plain files (`importFromWokwiSources`), maps `wokwi-esp32-devkit-v1` to the ESP32 with its pin names, and drops `$serialMonitor` wires; both import buttons share `applyWokwiImport`.
 - The workspace autosaves to IndexedDB and is restored on `/editor`; Save downloads a Wokwi `.zip`.
 - Backend build queue simplified to a FIFO with capped concurrent builds.
+
+## Restyle and rebrand (2026-09-29)
+
+- The editor is rebranded **keybordy** (header wordmark, page titles, favicon set, web manifest). The credit to Velxio and its license stay in this file and in `LICENSE`.
+- New dark-only theme, "Procedure Online": a black ground, acid lime and hot pink as the signal colors, lavender as the secondary. The light theme and the theme toggle are removed; `lib/theme.ts` always resolves to dark.
+- Fonts are Anybody (display), Geist (UI) and Martian Mono (code, pins, serial), self-hosted under the SIL OFL in `frontend/public/fonts/`. Inter and JetBrains Mono were dropped.
+- Toolbar hierarchy: Run is a labeled lime pill that reads "Running" while the board runs, Stop is a pink outline pill, Libraries and Add part are neutral. A status bar under the editor turns lime while the simulation runs.
+- The SPICE summary is a screen-fixed chip instead of a pill inside the zoomed canvas. The canvas grid is a lavender dot grid.
+- Per-key trace colors: a pushbutton labeled `K<n>` shows its label in its own cap color, and the serial monitor colors the number in `key <n> down|up` lines to match.
+- Monaco uses a single `keybordy-dark` theme with custom token colors.
+- The Dockerfile installs frontend dependencies before copying the sources and copies the built frontend last, so a UI-only change rebuilds in minutes.

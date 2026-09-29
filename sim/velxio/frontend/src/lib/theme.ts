@@ -85,8 +85,10 @@ export function systemPrefers(): ResolvedTheme {
   return window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light';
 }
 
-export function resolveMode(mode: ThemeMode): ResolvedTheme {
-  return mode === 'system' ? systemPrefers() : mode;
+/** keybordy is dark only: every mode resolves to dark. The mode plumbing is
+ *  kept so the ~20 call sites that read the resolved theme keep compiling. */
+export function resolveMode(_mode: ThemeMode): ResolvedTheme {
+  return 'dark';
 }
 
 // ── Reading tokens from JS ──────────────────────────────────────────────
@@ -119,7 +121,7 @@ function paint(resolved: ResolvedTheme): void {
 
   // The address-bar tint on mobile. Matches --color-bg-canvas per theme.
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', resolved === 'light' ? '#f5f5f7' : '#0a0a0c');
+  if (meta) meta.setAttribute('content', '#070608');
 }
 
 // ── Subscribable state ──────────────────────────────────────────────────
@@ -161,61 +163,15 @@ export function setThemeMode(mode: ThemeMode): void {
   emit();
 }
 
-/** Apply the stored preference without rewriting it — used on boot and when
- *  another tab (or another velxio.dev surface) changes the preference. */
-function adoptStored(): void {
-  currentMode = readStoredMode();
-  currentResolved = resolveMode(currentMode);
-  paint(currentResolved);
-  emit();
-}
-
 let started = false;
 
-/** Called once from main.tsx. The theme is already on the page by now (the
- *  index.html bootstrap did that before first paint); this wires up the two
- *  ways it can change out from under us. */
+/** Called once from main.tsx. keybordy has a single dark theme, so this only
+ *  paints it; there is no OS or cross-tab preference to follow. */
 export function initTheme(): void {
   if (started || typeof window === 'undefined') return;
   started = true;
-
-  adoptStored();
-
-  // The OS flipping while the user is in `system` mode.
-  const mq = window.matchMedia(DARK_QUERY);
-  const onSystemChange = () => {
-    if (currentMode === 'system') adoptStored();
-  };
-  if (mq.addEventListener) mq.addEventListener('change', onSystemChange);
-  else mq.addListener(onSystemChange);
-
-  // Another tab on this origin changing the preference — including the docs
-  // portal and the blog. A reader with the simulator and the docs open side
-  // by side sees both flip.
-  window.addEventListener('storage', (e) => {
-    if (e.key === null) {
-      adoptStored(); // storage cleared wholesale
-      return;
-    }
-    if (e.key === THEME_STORAGE_KEY) {
-      adoptStored();
-      return;
-    }
-    // A MIRROR key moving means a sibling site was the one that changed the
-    // preference. Its write is newer than our own key, so it wins and we
-    // re-canonicalise — otherwise readStoredMode(), which prefers our key,
-    // would keep answering with the stale value. Writing storage from here
-    // does not re-fire this event in this tab, so there is no loop.
-    if (e.key === MIRROR_STARLIGHT) {
-      const v = e.newValue;
-      setThemeMode(v === 'auto' ? 'system' : isMode(v) ? v : readStoredMode());
-      return;
-    }
-    if (e.key === MIRROR_BLOG) {
-      const v = e.newValue;
-      // The blog stores a resolved value. Adopting it as an explicit mode is
-      // right: the reader made an explicit choice over there.
-      if (v === 'dark' || v === 'light') setThemeMode(v);
-    }
-  });
+  currentMode = 'dark';
+  currentResolved = 'dark';
+  paint('dark');
+  emit();
 }

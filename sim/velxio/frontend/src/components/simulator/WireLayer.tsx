@@ -2,6 +2,7 @@ import React from 'react';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { WireRenderer } from './WireRenderer';
 import { useResolvedTheme } from '../../hooks/useTheme';
+import { cssVar } from '../../lib/theme';
 import { WireInProgressRenderer } from './WireInProgressRenderer';
 import { useIsCoarsePointer } from '../../utils/useTouchDevice';
 
@@ -65,6 +66,8 @@ export const WireLayer: React.FC<WireLayerProps> = ({
   // a child of this component, so re-rendering here repaints all of them when
   // the theme flips. Subscribing per wire would add a listener per wire.
   useResolvedTheme();
+  const guide = cssVar('--lavender-400');
+  const handleColor = cssVar('--color-accent-fg');
 
   return (
     <svg
@@ -101,7 +104,7 @@ export const WireLayer: React.FC<WireLayerProps> = ({
             y1={-100000}
             x2={g.value}
             y2={100000}
-            stroke="#00d9ff"
+            stroke={guide}
             strokeWidth={1}
             strokeDasharray="4,4"
             opacity={0.85}
@@ -113,7 +116,7 @@ export const WireLayer: React.FC<WireLayerProps> = ({
             y1={g.value}
             x2={100000}
             y2={g.value}
-            stroke="#00d9ff"
+            stroke={guide}
             strokeWidth={1}
             strokeDasharray="4,4"
             opacity={0.85}
@@ -130,7 +133,7 @@ export const WireLayer: React.FC<WireLayerProps> = ({
           cy={handle.my}
           r={isTouchDevice ? 14 : 7}
           fill="white"
-          stroke="#007acc"
+          stroke={handleColor}
           strokeWidth={2}
           style={{
             pointerEvents: 'all',
@@ -150,7 +153,7 @@ export const WireLayer: React.FC<WireLayerProps> = ({
           cx={handle.x}
           cy={handle.y}
           r={isTouchDevice ? 12 : 6}
-          fill="#007acc"
+          fill={handleColor}
           stroke="white"
           strokeWidth={2}
           style={{
