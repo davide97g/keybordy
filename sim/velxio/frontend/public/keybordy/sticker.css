@@ -1,0 +1,204 @@
+/* keybordy logo sticker — shared by the boot splash and the compile card.
+ *
+ * Linked from index.html as a plain stylesheet (not imported through Vite)
+ * because the boot splash has to animate before any JS has loaded. The React
+ * side (src/components/ui/LogoSticker.tsx) relies on it being global. The
+ * sticker's SVG markup exists twice, in index.html and LogoSticker.tsx: keep
+ * them in step.
+ *
+ * Anatomy, outermost first:
+ *   .kbs-wrap   slap-in, resting tilt, peel-off exit, done/error pop
+ *   .kbs        the svg: drop shadow, the thump in time with the key press
+ *   .kbs-cap    the keycap top, which presses into its skirt
+ *   .kbs-sheen  a gloss band that sweeps across the vinyl
+ *   .kbs-peel   the lifted corner, which flutters
+ *   .kbs-badge  a check or cross once a build settles
+ *
+ * States on .kbs-wrap: kbs--busy (loops), kbs--done, kbs--error, kbs--idle.
+ */
+
+.kbs-wrap {
+  --kbs-cap: #d6ff1f;
+  --kbs-skirt: #8fb300;
+  --kbs-ink: #0c0b0e;
+  --kbs-vinyl: #f4f1f8;
+  --kbs-beat: 1.15s;
+
+  display: inline-block;
+  flex-shrink: 0;
+  line-height: 0;
+  transform: rotate(-6deg);
+}
+
+.kbs-wrap.kbs--error {
+  --kbs-cap: #ff2e74;
+  --kbs-skirt: #a30f45;
+}
+
+.kbs {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.55));
+}
+
+.kbs-cap-top,
+.kbs-cap-skirt {
+  transition: fill 260ms ease-out;
+}
+.kbs-cap-top { fill: var(--kbs-cap); }
+.kbs-cap-skirt { fill: var(--kbs-skirt); }
+.kbs-ink { fill: var(--kbs-ink); }
+.kbs-vinyl { fill: var(--kbs-vinyl); }
+
+/* ── Slap: thrown at the screen, lands with an overshoot ──────────────── */
+
+.kbs-slap {
+  animation: kbs-slap 640ms cubic-bezier(0.2, 1.45, 0.35, 1) both;
+}
+
+@keyframes kbs-slap {
+  0% {
+    opacity: 0;
+    transform: scale(2) rotate(-28deg) translateY(-12%);
+  }
+  45% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-6deg);
+  }
+}
+
+/* ── Busy: the key keeps getting pressed ───────────────────────────────── */
+
+.kbs--busy .kbs {
+  animation: kbs-thump var(--kbs-beat) 640ms ease-in-out infinite;
+  transform-origin: 50% 90%;
+}
+
+.kbs--busy .kbs-cap {
+  animation: kbs-press var(--kbs-beat) 640ms ease-in-out infinite;
+}
+
+@keyframes kbs-press {
+  0%, 48%, 100% { transform: translateY(0); }
+  56%           { transform: translateY(6px); }
+  66%           { transform: translateY(6px); }
+  76%           { transform: translateY(-1.2px); }
+  84%           { transform: translateY(0); }
+}
+
+@keyframes kbs-thump {
+  0%, 48%, 100% { transform: scale(1, 1) rotate(0); }
+  57%           { transform: scale(1.04, 0.95) rotate(-1.5deg); }
+  76%           { transform: scale(0.98, 1.03) rotate(1deg); }
+  88%           { transform: scale(1, 1) rotate(0); }
+}
+
+.kbs-sheen {
+  opacity: 0;
+}
+
+.kbs--busy .kbs-sheen,
+.kbs--idle .kbs-sheen {
+  animation: kbs-sheen calc(var(--kbs-beat) * 2) 900ms cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+@keyframes kbs-sheen {
+  0%   { opacity: 0.85; transform: translateX(0) skewX(-20deg); }
+  55%  { opacity: 0.85; transform: translateX(170px) skewX(-20deg); }
+  56%, 100% { opacity: 0; transform: translateX(170px) skewX(-20deg); }
+}
+
+/* The corner scales along the fold's normal, (1,1)/√2, about the fold's
+   midpoint, so the crease stays put while the flap lifts and settles. */
+.kbs-peel {
+  transform-origin: 86px 86px;
+}
+
+.kbs--busy .kbs-peel,
+.kbs--idle .kbs-peel {
+  animation: kbs-flutter 2.6s 640ms ease-in-out infinite;
+}
+
+@keyframes kbs-flutter {
+  0%, 100% { transform: matrix(1, 0, 0, 1, 0, 0); }
+  50%      { transform: matrix(1.16, 0.16, 0.16, 1.16, 0, 0); }
+}
+
+/* ── Settled ───────────────────────────────────────────────────────────── */
+
+.kbs-badge {
+  opacity: 0;
+  transform-origin: 86px 14px;
+  transform: scale(0);
+}
+
+.kbs--done .kbs-badge,
+.kbs--error .kbs-badge {
+  opacity: 1;
+  transform: scale(1);
+  transition: transform 420ms cubic-bezier(0.2, 1.6, 0.4, 1), opacity 120ms;
+}
+
+.kbs-badge-bg {
+  fill: var(--kbs-ink);
+  stroke: var(--kbs-vinyl);
+  stroke-width: 3.5;
+}
+
+.kbs-badge-icon {
+  fill: none;
+  stroke: var(--kbs-cap);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kbs--done .kbs-badge-err,
+.kbs--error .kbs-badge-ok,
+.kbs--busy .kbs-badge-ok,
+.kbs--busy .kbs-badge-err,
+.kbs--idle .kbs-badge-ok,
+.kbs--idle .kbs-badge-err {
+  display: none;
+}
+
+.kbs--done .kbs {
+  animation: kbs-pop 460ms cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+.kbs--error .kbs {
+  animation: kbs-shake 480ms ease-in-out;
+}
+
+@keyframes kbs-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.18) rotate(4deg); }
+  100% { transform: scale(1); }
+}
+
+@keyframes kbs-shake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  20%      { transform: translateX(-9%) rotate(-7deg); }
+  40%      { transform: translateX(8%) rotate(6deg); }
+  60%      { transform: translateX(-5%) rotate(-4deg); }
+  80%      { transform: translateX(3%) rotate(2deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kbs-slap,
+  .kbs--busy .kbs,
+  .kbs--busy .kbs-cap,
+  .kbs-sheen,
+  .kbs-peel,
+  .kbs--done .kbs,
+  .kbs--error .kbs {
+    animation: none !important;
+  }
+  .kbs-badge {
+    transition: none !important;
+  }
+}

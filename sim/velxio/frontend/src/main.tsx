@@ -9,6 +9,7 @@ import './i18n';
 // this only subscribes to the OS preference.
 import { initTheme } from './lib/theme';
 import { registerDefaultWokwiBoardMappings } from './utils/wokwiZip';
+import { dismissBootSplash } from './lib/bootSplash';
 import './components/velxio-components/IC74HC595';
 import './components/velxio-components/LogicGateElements';
 import './components/velxio-components/TransistorElements';
@@ -64,6 +65,12 @@ window.addEventListener('vite:preloadError', (event) => {
 });
 
 createRoot(document.getElementById('root')!).render(<App />);
+
+// The editor drops the boot splash once its workspace has loaded (see
+// EditorPage). Every other route has nothing to wait for.
+if (!/\/editor\/?$/.test(window.location.pathname)) {
+  requestAnimationFrame(() => dismissBootSplash());
+}
 
 // DEV-only: expose the core stores for E2E harnesses (the platform-bugs QA
 // harness drives the STORE paths — property updates, group switches — the

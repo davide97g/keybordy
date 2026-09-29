@@ -24,6 +24,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ServerLoad } from '../../services/compilation';
+import { LogoSticker } from '../ui/LogoSticker';
 import {
   useCompileProgressStore,
   type CompileProgressEntry,
@@ -50,43 +51,6 @@ const LOAD_SEGMENTS: Record<ServerLoad, number> = {
 
 /** Load levels that colour the meter as "busy" rather than neutral. */
 const BUSY_LOADS = new Set<ServerLoad>(['high', 'peak']);
-
-function Spinner() {
-  return (
-    <svg
-      className="compile-card__spinner"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
-  );
-}
-
-function OutcomeIcon({ ok }: { ok: boolean }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={ok ? 'var(--color-feedback-success)' : 'var(--color-feedback-error)'}
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      style={{ flexShrink: 0 }}
-    >
-      {ok ? <path d="M20 6 9 17l-5-5" /> : <path d="M18 6 6 18M6 6l12 12" />}
-    </svg>
-  );
-}
 
 /**
  * Collapse the per-board entries into the one thing the card renders.
@@ -204,8 +168,16 @@ export function CompileProgressCard({ onShowOutput, inEditor }: CompileProgressC
       <span className="compile-card__sr" role="status" aria-live="polite">
         {title}
       </span>
+      {/* Stuck on the card's corner. Keyed on the run so every compile slaps
+          a fresh one on; it presses its key while the build runs, then pops a
+          check or shakes with a cross. */}
+      <LogoSticker
+        key={runId}
+        className="compile-card__sticker"
+        size={46}
+        state={s.allSettled ? (s.failed ? 'error' : 'done') : 'busy'}
+      />
       <div className="compile-card__head">
-        {s.allSettled ? <OutcomeIcon ok={!s.failed} /> : <Spinner />}
         <span className="compile-card__title" aria-hidden="true">{title}</span>
         <span className="compile-card__timer" aria-hidden="true">{elapsed.toFixed(1)}s</span>
         <button

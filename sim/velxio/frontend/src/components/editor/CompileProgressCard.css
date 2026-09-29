@@ -11,7 +11,10 @@
   top: var(--space-6);
   left: 50%;
   transform: translateX(-50%);
-  z-index: var(--z-overlay);
+  /* Above the canvas's SPICE chip (50), which would otherwise cover the
+     sticker on the card's corner; below the floating zoom (60) and the
+     wire-mode banner (100). SimulatorCanvas.css stacks in raw numbers. */
+  z-index: 55;
 
   width: min(380px, calc(100% - var(--space-8)));
   box-sizing: border-box;
@@ -73,6 +76,17 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
+  /* Clears the sticker on the top-left corner. */
+  padding-left: 30px;
+}
+
+/* The logo sticker (public/keybordy/sticker.css) slapped half over the card's
+   top-left corner. Tops out at -8px so the in-editor card, 8px from the top of
+   an overflow:hidden pane on a phone, never clips it. */
+.compile-card__sticker {
+  position: absolute;
+  top: -8px;
+  left: -12px;
 }
 
 .compile-card__title {
@@ -91,18 +105,6 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--color-fg-muted);
-}
-
-.compile-card__spinner {
-  flex-shrink: 0;
-  color: var(--color-action-primary);
-  animation: compile-card-spin 1s linear infinite;
-}
-
-@keyframes compile-card-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .compile-card__dismiss {
@@ -175,7 +177,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .compile-card,
-  .compile-card__spinner,
   .compile-card__bar--indeterminate::after {
     animation: none;
   }

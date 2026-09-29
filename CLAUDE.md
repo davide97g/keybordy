@@ -69,6 +69,7 @@ Open http://localhost:3080/editor?project=keys8. The `velxio` container (image `
 - Frontend checks: `just typecheck` and `just test-frontend`. About 350 TypeScript error lines and the epaper/i2c test failures predate the fork.
 - UI work without rebuilding the image: `just dev`, then open http://localhost:5173/editor?project=keys8 (Vite picks the next port if 5173 is taken). Vite proxies `/api` (with websockets) and `/projects` to nginx on 3080. Backend edits reload in place. Rebuild the image for Dockerfile, nginx or entrypoint changes; app layers come after the toolchain layers, so that takes well under a minute.
 - The UI is branded keybordy and is dark only (the "Procedure Online" theme). Colors are tokens in `sim/velxio/frontend/src/tokens/colors.css`; Monaco restates them in `components/editor/monacoThemes.ts`, so change both together. Fonts are self-hosted in `frontend/public/fonts/` (Anybody, Geist, Martian Mono).
+- The logo sticker (boot splash in `index.html`, compile card) is styled by `frontend/public/keybordy/sticker.css`, linked globally so the splash animates before JS loads. Its SVG exists twice, in `index.html` and `components/ui/LogoSticker.tsx`: change both. `lib/bootSplash.ts` drops the splash once `EditorPage` has loaded the workspace.
 - Each key's color lives in `firmware/keys8/diagram.json`: the pushbutton `color` and both of its wires use the same hex. The serial monitor colors `key N down/up` lines from the cap color of the part labeled `KN`, so keep the labels `K1`..`K8`.
 
 Gotchas:

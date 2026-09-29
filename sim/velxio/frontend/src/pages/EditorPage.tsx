@@ -14,6 +14,7 @@ import {
 } from '../utils/workspacePersistence';
 import { ProjectsHost } from '../components/projects/ProjectsHost';
 import { loadProjectFromUrl, projectParam } from '../utils/loadFromUrl';
+import { dismissBootSplash } from '../lib/bootSplash';
 import { showMessageDialog } from '../store/useMessageDialogStore';
 import { CodeEditor } from '../components/editor/CodeEditor';
 import { EditorToolbar } from '../components/editor/EditorToolbar';
@@ -168,7 +169,10 @@ export const EditorPage: React.FC = () => {
       clearWorkspaceForStarter();
       setShowNewProjectDialog(true);
     };
-    void init().finally(() => setDraftReady(true));
+    void init().finally(() => {
+      setDraftReady(true);
+      dismissBootSplash();
+    });
   }, []);
 
   const [explorerWidth, setExplorerWidth] = useState(EXPLORER_DEFAULT);
