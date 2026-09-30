@@ -26,6 +26,7 @@ import {
   compileProgress,
   MULTI_BOARD_PROGRESS_ID,
 } from '../../store/useCompileProgressStore';
+import { DeviceDock } from './DeviceDock';
 import { LibraryManagerModal } from '../simulator/LibraryManagerModal';
 import { InstallLibrariesModal } from '../simulator/InstallLibrariesModal';
 import { mergeSuggestedLibraries } from '../../utils/libraryManifest';
@@ -1718,6 +1719,10 @@ export const EditorToolbar = ({
                 <path d="M3 3v5h5" />
               </svg>
             </button>
+
+            {/* keybordy: the real board on USB — status, Flash, Attach. */}
+            <div className="tb-divider" />
+            <DeviceDock />
 
             {targetCount > 1 && (
               <>

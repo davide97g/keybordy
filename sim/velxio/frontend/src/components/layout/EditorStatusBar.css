@@ -82,3 +82,48 @@
     display: none;
   }
 }
+
+/* USB item: the real board. Cyan LED when it is on the cable. */
+.editor-status-usb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  animation: editor-status-fade 200ms var(--ease-out);
+}
+.editor-status-usb--idle,
+.editor-status-usb--attached,
+.editor-status-usb--flashing {
+  color: var(--color-device);
+}
+.editor-status--live .editor-status-usb {
+  color: inherit;
+}
+.editor-status-usb-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--wb-9);
+}
+.editor-status-usb--idle .editor-status-usb-led,
+.editor-status-usb--attached .editor-status-usb-led {
+  background: var(--color-device);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 6px var(--color-device-glow);
+}
+.editor-status-usb--flashing .editor-status-usb-led {
+  background: var(--color-feedback-warning);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .editor-status-usb--attached .editor-status-usb-led,
+  .editor-status-usb--flashing .editor-status-usb-led {
+    animation: editor-status-usb-blink 1.1s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editor-status-usb {
+    animation: none;
+  }
+}
+@keyframes editor-status-usb-blink {
+  50% { opacity: 0.3; }
+}

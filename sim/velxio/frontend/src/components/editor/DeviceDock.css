@@ -1,0 +1,426 @@
+/* Device dock — the real board's controls on the toolbar. Cyan is the device
+ * color (tokens/colors.css), so nothing here reads as the lime Run state. */
+
+.kb-dock {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+/* ── Status chip ────────────────────────────────────────────────────── */
+
+.kb-dock__chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px 0 10px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--wb-1);
+  box-shadow: inset 0 0 0 1px var(--wb-6);
+  color: var(--wb-10);
+  font: 600 11px/1 var(--font-mono);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+.kb-dock__chip:hover:not(:disabled) {
+  background: var(--wb-4);
+  color: var(--wb-13);
+}
+.kb-dock__chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.kb-dock__chip:focus-visible,
+.kb-dock__flash:focus-visible,
+.kb-dock__attach:focus-visible {
+  outline: none;
+  box-shadow: var(--color-focus-ring);
+}
+
+/* Unpaired: a dashed outline asks for the one click pairing needs. */
+.kb-dock[data-state='unpaired'] .kb-dock__chip {
+  box-shadow: none;
+  outline: 1px dashed var(--wb-8);
+  outline-offset: -1px;
+  color: var(--wb-11);
+}
+
+.kb-dock[data-state='ready'] .kb-dock__chip,
+.kb-dock[data-state='attached'] .kb-dock__chip,
+.kb-dock[data-state='flashing'] .kb-dock__chip {
+  color: var(--color-device);
+  box-shadow: inset 0 0 0 1px var(--color-device-border);
+  background: var(--color-device-soft);
+}
+
+.kb-dock__led {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--wb-7);
+  box-shadow: inset 0 0 0 1px var(--wb-8);
+  transition:
+    background var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+.kb-dock[data-state='absent'] .kb-dock__led {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--wb-9);
+}
+.kb-dock[data-state='ready'] .kb-dock__led,
+.kb-dock[data-state='attached'] .kb-dock__led {
+  background: var(--color-device);
+  box-shadow:
+    0 0 0 2px rgba(62, 230, 255, 0.18),
+    0 0 10px var(--color-device-glow);
+}
+.kb-dock[data-state='flashing'] .kb-dock__led {
+  background: var(--color-feedback-warning);
+  box-shadow: 0 0 10px rgba(255, 181, 46, 0.6);
+}
+
+.kb-dock__label {
+  display: inline-block;
+}
+
+/* The ring that bursts off the chip when the board is plugged in. */
+.kb-dock__burst {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Plugged in: the LED slaps on like a sticker. */
+  .kb-dock[data-state='ready'] .kb-dock__led {
+    animation: kb-led-slap 460ms var(--ease-spring);
+  }
+  .kb-dock__burst {
+    animation: kb-dock-burst 750ms var(--ease-out) forwards;
+  }
+  .kb-dock__label {
+    animation: kb-dock-roll 260ms var(--ease-spring);
+  }
+  /* Unplugged: the chip peels off and back. */
+  .kb-dock__chip--peel {
+    animation: kb-dock-peel 480ms var(--ease-out);
+  }
+  .kb-dock[data-state='attached'] .kb-dock__led,
+  .kb-dock[data-state='flashing'] .kb-dock__led {
+    animation: kb-led-blink 1.1s ease-in-out infinite;
+  }
+}
+
+@keyframes kb-led-slap {
+  0% {
+    transform: scale(2.4) rotate(-25deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.85) rotate(4deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes kb-dock-burst {
+  0% {
+    box-shadow: 0 0 0 0 rgba(62, 230, 255, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(62, 230, 255, 0);
+  }
+}
+@keyframes kb-dock-roll {
+  from {
+    opacity: 0;
+    transform: translateY(70%);
+  }
+}
+@keyframes kb-dock-peel {
+  0% {
+    transform: none;
+  }
+  35% {
+    transform: perspective(200px) rotateX(35deg) translateY(-2px);
+    opacity: 0.6;
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes kb-led-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ── Buttons: own base, not .tb-btn, so the header's compact-mode .tb-btn
+   rules (fixed 28px width, 5px padding) never squeeze the labels. ───── */
+
+.kb-dock__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: center;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+.kb-dock__btn:disabled {
+  cursor: not-allowed;
+}
+
+/* ── Flash: a cyan keycap that turns into its own progress bar ──────── */
+
+.kb-dock__flash {
+  position: relative;
+  overflow: hidden;
+  width: auto;
+  gap: 6px;
+  padding: 0 13px 0 10px;
+  background: var(--color-device);
+  color: var(--gray-950);
+  box-shadow: inset 0 -2px 0 var(--color-device-skirt);
+  font: 650 12.5px/1 var(--font-sans);
+  letter-spacing: 0.01em;
+  isolation: isolate;
+}
+.kb-dock__flash > :not(.kb-dock__flash-fill) {
+  position: relative;
+  z-index: 1;
+}
+.kb-dock__flash:hover:not(:disabled) {
+  background: #7aefff;
+}
+.kb-dock__flash:active:not(:disabled) {
+  transform: translateY(1.5px);
+  box-shadow: inset 0 0 0 var(--color-device-skirt);
+}
+.kb-dock__flash:disabled {
+  opacity: 0.4;
+}
+.kb-dock__flash-label {
+  display: inline-block;
+  min-width: 4.2em;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Busy: the pill empties to an outline and fills back up with the write. */
+.kb-dock__flash--busy,
+.kb-dock__flash--busy:disabled {
+  opacity: 1;
+  cursor: progress;
+  background: var(--color-device-soft);
+  color: var(--color-device);
+  box-shadow: inset 0 0 0 1.5px var(--color-device-border);
+}
+.kb-dock__flash-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--p, 0%);
+  background: var(--color-device);
+  opacity: 0;
+  transition: width 240ms var(--ease-out);
+  z-index: 0;
+}
+.kb-dock__flash--busy .kb-dock__flash-fill {
+  opacity: 1;
+}
+/* Dark text once the fill has passed under most of the label. */
+.kb-dock__flash--filled .kb-dock__flash-label {
+  color: var(--gray-950);
+}
+
+.kb-dock__flash--done,
+.kb-dock__flash--done:hover:not(:disabled) {
+  background: var(--color-action-primary);
+  box-shadow: inset 0 -2px 0 #8fb300;
+}
+.kb-dock__flash--error,
+.kb-dock__flash--error:hover:not(:disabled) {
+  background: var(--color-feedback-error);
+  color: var(--gray-0);
+  box-shadow: inset 0 -2px 0 var(--pink-600);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .kb-dock__flash-label {
+    animation: kb-dock-roll 260ms var(--ease-spring);
+  }
+  .kb-dock__flash--done {
+    animation: kb-flash-done 700ms var(--ease-out);
+  }
+  .kb-dock__flash--error {
+    animation: kb-flash-shake 420ms var(--ease-out);
+  }
+  /* A sheen travels across the track while the port is being set up. */
+  .kb-dock__flash--busy::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(62, 230, 255, 0.28) 50%, transparent 70%);
+    animation: kb-flash-sheen 1.3s linear infinite;
+    z-index: 0;
+  }
+}
+
+@keyframes kb-flash-done {
+  0% {
+    box-shadow:
+      inset 0 -2px 0 #8fb300,
+      0 0 0 0 rgba(214, 255, 31, 0.75);
+  }
+  100% {
+    box-shadow:
+      inset 0 -2px 0 #8fb300,
+      0 0 0 12px rgba(214, 255, 31, 0);
+  }
+}
+@keyframes kb-flash-shake {
+  20%,
+  60% {
+    transform: translateX(-3px);
+  }
+  40%,
+  80% {
+    transform: translateX(3px);
+  }
+}
+@keyframes kb-flash-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* ── Attach: outline pill, cyan and pulsing while live ──────────────── */
+
+.kb-dock__attach {
+  width: auto;
+  gap: 6px;
+  padding: 0 12px 0 10px;
+  color: var(--wb-11);
+  box-shadow: inset 0 0 0 1px var(--wb-7);
+  font: 600 12px/1 var(--font-sans);
+}
+.kb-dock__attach:hover:not(:disabled) {
+  background: var(--wb-4);
+  color: var(--wb-13);
+}
+.kb-dock__attach:active:not(:disabled) {
+  transform: translateY(1.5px) scale(0.97);
+}
+.kb-dock__attach--live,
+.kb-dock__attach--live:hover:not(:disabled) {
+  color: var(--color-device);
+  background: var(--color-device-soft);
+  box-shadow: inset 0 0 0 1.5px var(--color-device-border);
+}
+.kb-dock__attach-label {
+  white-space: nowrap;
+}
+.kb-dock__pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kb-dock__pulse {
+    animation: kb-led-blink 1.4s ease-in-out infinite;
+  }
+  .kb-dock__attach--live {
+    animation: kb-attach-ignite 700ms var(--ease-out);
+  }
+}
+@keyframes kb-attach-ignite {
+  0% {
+    box-shadow:
+      inset 0 0 0 1.5px var(--color-device-border),
+      0 0 0 0 rgba(62, 230, 255, 0.7);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 1.5px var(--color-device-border),
+      0 0 0 12px rgba(62, 230, 255, 0);
+  }
+}
+
+/* ── Attach error bubble ────────────────────────────────────────────── */
+
+.kb-dock__error {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: max-content;
+  max-width: 320px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface-1);
+  border: 1px solid var(--color-feedback-error-border);
+  box-shadow: var(--shadow-4);
+  color: var(--color-feedback-error);
+  font: 500 11.5px/1.4 var(--font-sans);
+}
+.kb-dock__error button {
+  border: none;
+  background: transparent;
+  color: var(--wb-10);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Narrow toolbar: labels go, the icons and the LED stay. */
+@container editor-toolbar (max-width: 560px) {
+  .kb-dock__attach-label,
+  .kb-dock__label {
+    display: none;
+  }
+  .kb-dock__chip {
+    padding: 0 10px;
+  }
+}
+/* Same collapse when the strip rides in the header and AppHeader has
+   measured it does not fit (see EditorToolbar.css). Flash keeps its word:
+   it is the call to action. */
+.unified-toolbar.unified-toolbar--compact .kb-dock__attach-label,
+.unified-toolbar.unified-toolbar--compact .kb-dock__label {
+  display: none;
+}
+.unified-toolbar.unified-toolbar--compact .kb-dock__chip {
+  padding: 0 10px;
+}
+.unified-toolbar.unified-toolbar--compact .kb-dock__attach {
+  padding: 0 8px;
+}

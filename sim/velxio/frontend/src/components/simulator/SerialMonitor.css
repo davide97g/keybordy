@@ -30,3 +30,22 @@
     animation: none;
   }
 }
+
+/* keybordy: the real board's tab. Its LED matches the toolbar dock: cyan
+   while the board is on USB, blinking while the monitor is attached. */
+.serial-usb-tab__led {
+  width: 6px;
+  height: 6px;
+  margin-right: 3px;
+  border-radius: 50%;
+  background: var(--color-device);
+  box-shadow: 0 0 6px var(--color-device-glow);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .serial-usb-tab--live .serial-usb-tab__led {
+    animation: serial-usb-blink 1.1s ease-in-out infinite;
+  }
+}
+@keyframes serial-usb-blink {
+  50% { opacity: 0.3; }
+}

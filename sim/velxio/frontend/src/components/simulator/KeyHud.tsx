@@ -8,12 +8,17 @@
  * missing or flickering cap. Each `down` also rings the matching part on the
  * canvas (the `kb-key-hit` class, styled in KeyHud.css).
  *
- * Hidden unless the active board is running and the circuit has K-labelled
- * keys.
+ * While the real board is attached over USB (store/useDeviceStore.ts) it
+ * reads the board's serial instead, so pressing a switch on the bench lights
+ * the cap and rings the part on the canvas.
+ *
+ * Hidden unless the active board is running (or the real one is attached)
+ * and the circuit has K-labelled keys.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useDeviceStore } from '../../store/useDeviceStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { keyColorsFromComponents } from '../../utils/boardColors';
 import './KeyHud.css';
@@ -25,8 +30,13 @@ export function KeyHud() {
   const board = useSimulatorStore(
     (s) => s.boards.find((b) => b.id === s.activeBoardId) ?? s.boards[0],
   );
-  const running = !!board?.running;
-  const output = board?.serialOutput ?? '';
+  const attached = useDeviceStore((s) => s.mode === 'attached');
+  const deviceOutput = useDeviceStore((s) => s.output);
+  const running = attached || !!board?.running;
+  const output = attached ? deviceOutput : (board?.serialOutput ?? '');
+  // Switching source restarts the parse, like a cleared buffer.
+  const source = attached ? 'usb' : 'sim';
+  const lastSource = useRef(source);
 
   const keyColors = useMemo(() => keyColorsFromComponents(components), [components]);
   const keyNumbers = useMemo(() => [...keyColors.keys()].sort((a, b) => a - b), [keyColors]);
@@ -50,6 +60,14 @@ export function KeyHud() {
   useEffect(() => {
     let prevEnd = parsedLen.current;
     let next = new Set(held);
+    if (lastSource.current !== source) {
+      lastSource.current = source;
+      // Start from the end: the backlog from before the switch is history.
+      parsedLen.current = output.length;
+      setHeld(new Set());
+      setStrokes(0);
+      return;
+    }
     if (output.length < prevEnd) {
       prevEnd = 0;
       next = new Set();
@@ -83,7 +101,7 @@ export function KeyHud() {
     // `held` and the key maps are read, not reacted to: only new output
     // drives this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [output]);
+  }, [output, source]);
 
   // Nothing can be held once the board stops.
   useEffect(() => {
@@ -93,9 +111,13 @@ export function KeyHud() {
   if (!running || keyNumbers.length === 0) return null;
 
   return (
-    <div className="key-hud" role="status" aria-label="Keys the firmware reports as down">
+    <div
+      className={'key-hud' + (attached ? ' key-hud--usb' : '')}
+      role="status"
+      aria-label={attached ? 'Keys the real board reports as down' : 'Keys the firmware reports as down'}
+    >
       <span className="key-hud__label" aria-hidden="true">
-        serial keys
+        {attached ? 'board keys' : 'serial keys'}
       </span>
       <div className="key-hud__caps">
         {keyNumbers.map((n, i) => {

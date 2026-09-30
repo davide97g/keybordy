@@ -23,6 +23,7 @@ import { FileExplorer } from '../components/editor/FileExplorer';
 // Lazy-load Pi workspace so xterm.js isn't in the main bundle
 import { CompilationConsole } from '../components/editor/CompilationConsole';
 import { CompileProgressCard } from '../components/editor/CompileProgressCard';
+import { FlashProgressCard } from '../components/editor/FlashProgressCard';
 import { KeyHud } from '../components/simulator/KeyHud';
 import { SimulatorCanvas } from '../components/simulator/SimulatorCanvas';
 import { SerialMonitor } from '../components/simulator/SerialMonitor';
@@ -615,7 +616,10 @@ export const EditorPage: React.FC = () => {
                   falls back to here rather than leaving the user with the
                   toolbar spinner and no idea a queue exists. */}
               {simulatorHidden && (
-                <CompileProgressCard inEditor onShowOutput={() => setConsoleOpen(true)} />
+                <>
+                  <CompileProgressCard inEditor onShowOutput={() => setConsoleOpen(true)} />
+                  <FlashProgressCard inEditor />
+                </>
               )}
             </div>
 
@@ -668,6 +672,7 @@ export const EditorPage: React.FC = () => {
                 hidden copy still keeps its 100ms timer running and duplicates
                 the aria-live region a screen reader reads out. */}
             {!simulatorHidden && <CompileProgressCard onShowOutput={() => setConsoleOpen(true)} />}
+            {!simulatorHidden && <FlashProgressCard />}
             {!simulatorHidden && <KeyHud />}
           </div>
           {serialMonitorOpen && (

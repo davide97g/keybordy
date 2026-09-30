@@ -130,3 +130,9 @@
     display: none;
   }
 }
+
+/* keybordy: fed by the real board over USB — the label takes the device
+   color so it is clear these presses came off the bench, not the canvas. */
+.key-hud--usb .key-hud__label {
+  color: var(--color-device);
+}

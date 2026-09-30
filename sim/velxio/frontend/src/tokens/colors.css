@@ -143,6 +143,14 @@
   --color-feedback-warning-border: rgba(255, 181, 46, 0.36);
   --color-accent-border:           rgba(185, 168, 255, 0.40);
 
+  /* The real board on the USB cable: cyan, so hardware never reads as the
+   * simulator's lime "running" state. */
+  --color-device:        var(--cyan-400);
+  --color-device-soft:   rgba(62, 230, 255, 0.14);
+  --color-device-border: rgba(62, 230, 255, 0.42);
+  --color-device-glow:   rgba(62, 230, 255, 0.55);
+  --color-device-skirt:  #10a3b8;
+
   /* Focus ring — lavender, so it never reads as the lime "go" state */
   --color-focus-ring: 0 0 0 2px var(--lavender-400);
 

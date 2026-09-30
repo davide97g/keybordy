@@ -1,0 +1,233 @@
+/* Flash progress card — CompileProgressCard's frame, with a row of step
+ * keycaps and cyan (the device color) where the compile card uses lime. */
+
+.flash-card .compile-card__fill:not(.compile-card__fill--success):not(.compile-card__fill--error),
+.flash-card .compile-card__bar--indeterminate::after {
+  background: var(--color-device);
+}
+
+.flash-card--done {
+  border-color: var(--color-feedback-success-border);
+}
+.flash-card--error {
+  border-color: var(--color-feedback-error-border);
+}
+
+.flash-card__error {
+  color: var(--color-feedback-error);
+  white-space: normal;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* ── Step keycaps ───────────────────────────────────────────────────── */
+
+.flash-card__steps {
+  display: flex;
+  gap: var(--space-3);
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flash-card__step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+/* A keycap: the inset shadow is its skirt, a finished step sinks into it. */
+.flash-card__cap {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--wb-4);
+  color: var(--wb-10);
+  box-shadow: inset 0 -3px 0 var(--wb-7);
+  font: 700 10.5px/1 var(--font-mono);
+  transition:
+    background-color var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-spring);
+}
+
+.flash-card__step-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--wb-9);
+  white-space: nowrap;
+  transition: color var(--duration-base) var(--ease-out);
+}
+
+.flash-card__step--active .flash-card__cap {
+  background: var(--color-device);
+  color: var(--gray-950);
+  box-shadow: inset 0 -3px 0 var(--color-device-skirt), 0 0 14px var(--color-device-glow);
+}
+.flash-card__step--active .flash-card__step-label {
+  color: var(--color-device);
+}
+
+.flash-card__step--done .flash-card__cap {
+  background: var(--color-action-primary);
+  color: var(--gray-950);
+  transform: translateY(2px);
+  box-shadow: inset 0 -1px 0 #8fb300;
+}
+.flash-card__step--done .flash-card__step-label {
+  color: var(--wb-11);
+}
+
+/* Build reused: pressed like a done step, but quiet. */
+.flash-card__step--skipped .flash-card__cap {
+  background: var(--wb-5);
+  color: var(--wb-11);
+  transform: translateY(2px);
+  box-shadow: inset 0 -1px 0 var(--wb-7);
+}
+
+.flash-card__step--error .flash-card__cap {
+  background: var(--color-feedback-error);
+  color: var(--gray-0);
+  box-shadow: inset 0 -3px 0 var(--pink-600);
+}
+.flash-card__step--error .flash-card__step-label {
+  color: var(--color-feedback-error);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The current step keeps getting pressed, like the sticker's key. */
+  .flash-card__step--active .flash-card__cap {
+    animation: flash-cap-press 900ms var(--ease-in-out) infinite;
+  }
+  /* A step finishing presses in with a small overshoot. */
+  .flash-card__step--done .flash-card__cap {
+    animation: flash-cap-land 360ms var(--ease-spring);
+  }
+  .flash-card__step--error .flash-card__cap {
+    animation: flash-cap-shake 420ms var(--ease-out);
+  }
+  .flash-card--done .flash-card__step--done .flash-card__cap {
+    animation: flash-cap-wave 520ms var(--ease-spring) calc(var(--i) * 70ms) both;
+  }
+}
+
+@keyframes flash-cap-press {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow: inset 0 -3px 0 var(--color-device-skirt), 0 0 14px var(--color-device-glow);
+  }
+  45% {
+    transform: translateY(2px);
+    box-shadow: inset 0 -1px 0 var(--color-device-skirt), 0 0 4px var(--color-device-glow);
+  }
+}
+@keyframes flash-cap-land {
+  0% {
+    transform: translateY(0) scale(1.12);
+  }
+  100% {
+    transform: translateY(2px) scale(1);
+  }
+}
+@keyframes flash-cap-shake {
+  20%,
+  60% {
+    transform: translateX(-3px);
+  }
+  40%,
+  80% {
+    transform: translateX(3px);
+  }
+}
+/* On success every cap pops once, left to right, like a run of keystrokes. */
+@keyframes flash-cap-wave {
+  0% {
+    transform: translateY(2px);
+  }
+  40% {
+    transform: translateY(-3px);
+  }
+  100% {
+    transform: translateY(2px);
+  }
+}
+
+/* ── The board's first words ────────────────────────────────────────── */
+
+.flash-card__boot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-terminal-bg);
+  border: 1px solid var(--color-feedback-success-border);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-feedback-success);
+  overflow: hidden;
+}
+.flash-card__boot code {
+  font: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.flash-card__boot-led {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-feedback-success);
+  box-shadow: 0 0 8px var(--color-feedback-success);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .flash-card__boot {
+    animation: flash-boot-in 380ms var(--ease-out);
+  }
+  .flash-card__boot code {
+    display: inline-block;
+    animation: flash-boot-type 700ms steps(24) both;
+  }
+}
+@keyframes flash-boot-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes flash-boot-type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+
+.flash-card__port {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+}
+.flash-card__port-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-device);
+  box-shadow: 0 0 6px var(--color-device-glow);
+}

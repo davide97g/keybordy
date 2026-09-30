@@ -43,3 +43,9 @@ Changed or added:
 - Dockerfile: the frontend stage installs with Bun from the lockfile, the backend env is a uv venv at `/app/.venv`, and every app layer (sdk, nginx config, entrypoint, migrations, backend code, built UI) comes after the ESP-IDF layers, with BuildKit cache mounts for Bun and uv.
 - Entrypoint: arduino-cli cores are installed only when missing (a core that fails to install is remembered; `VELXIO_REFRESH_CORES=1` retries), migrations run before uvicorn when `DATABASE_URL` is set, uvicorn reloads with `UVICORN_RELOAD=1`, and nginx starts once `/health` answers. nginx accepts request bodies up to 64 MB on `/api/`.
 - The unused two-service files (`backend/Dockerfile`, `frontend/Dockerfile`, `frontend/nginx.conf`) are removed.
+
+## Real board over Web Serial (2026-09-30)
+
+- The toolbar has a device dock (`components/editor/DeviceDock.tsx`): a status chip whose LED shows whether a paired ESP32 is on USB, a Flash button that fills as its own progress bar, and an Attach toggle. State lives in `store/useDeviceStore.ts` (Web Serial `connect`/`disconnect`, flash run, monitor).
+- Flash is keybordy's own flasher on esptool-js (`lib/esp32Flash.ts`), replacing upstream's closed pro implementation. It flashes the simulator's own ESP32 image, skips the NVS partition so stored credentials survive, verifies each region's MD5 (`lib/md5.ts`), then attaches and resets the board. `FlashProgressCard` reports Build, Connect, Write, Verify and Boot, and ends on the board's first serial line.
+- Attach streams the board's serial into a USB tab of the serial monitor. While attached, the key HUD reads the board instead of the simulation. The status bar shows a USB item. Cyan (`--color-device*` tokens) marks everything that is the real board.

@@ -12,7 +12,19 @@ import type { BoardKind } from '../../types/board';
 import { boardDisplayName, isPiBoardKind } from '../../types/board';
 import { PiTerminal } from '../raspberry-pi/PiTerminal';
 import { boardAccent, keyColorsFromComponents } from '../../utils/boardColors';
+import { useDeviceStore } from '../../store/useDeviceStore';
 import './SerialMonitor.css';
+
+/** Tab id for the real board on USB (keybordy); never a board id. */
+const DEVICE_TAB = '__usb__';
+
+/** ANSI escapes and stray control bytes a <pre> cannot render. */
+function cleanTerminalText(text: string): string {
+  return text
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+    .replace(/\x1b[=>]/g, '')
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+}
 
 // Short labels for tabs
 const BOARD_SHORT_LABEL: Partial<Record<string, string>> = {
@@ -114,15 +126,38 @@ export const SerialMonitor: React.FC = () => {
   const components = useSimulatorStore((s) => s.components);
   const keyColors = useMemo(() => keyColorsFromComponents(components), [components]);
 
+  // keybordy: the real board on USB gets its own tab once it is around.
+  const deviceSupported = useDeviceStore((s) => s.supported);
+  const devicePort = useDeviceStore((s) => s.port);
+  const devicePortLabel = useDeviceStore((s) => s.portLabel);
+  const deviceMode = useDeviceStore((s) => s.mode);
+  const deviceOutput = useDeviceStore((s) => s.output);
+  const monitorFocus = useDeviceStore((s) => s.monitorFocus);
+  const showDeviceTab =
+    deviceSupported && (!!devicePort || deviceMode !== 'idle' || deviceOutput.length > 0);
+  const [deviceSeenLen, setDeviceSeenLen] = useState(0);
+
+  useEffect(() => {
+    if (monitorFocus > 0) setActiveTabId(DEVICE_TAB);
+  }, [monitorFocus]);
+
   // Sync active tab to activeBoardId when it changes
   useEffect(() => {
     if (activeBoardId) setActiveTabId(activeBoardId);
   }, [activeBoardId]);
 
   // Fallback: if activeTab is gone, pick first board
-  const resolvedTabId =
-    (boards.find((b) => b.id === activeTabId) ? activeTabId : boards[0]?.id) ?? null;
+  const deviceTabActive = showDeviceTab && activeTabId === DEVICE_TAB;
+  const resolvedTabId = deviceTabActive
+    ? null
+    : ((boards.find((b) => b.id === activeTabId) ? activeTabId : boards[0]?.id) ?? null);
   const activeBoard = boards.find((b) => b.id === resolvedTabId);
+
+  // Snapshot on entering AND leaving the USB tab, not on every byte: bytes
+  // that arrive while it is open are read, the unread dot is hidden anyway.
+  useEffect(() => {
+    setDeviceSeenLen(useDeviceStore.getState().output.length);
+  }, [deviceTabActive]);
 
   // Snapshot the current length the moment a tab becomes active so any
   // future bytes register as unread on *other* tabs. Deliberately omits
@@ -148,10 +183,10 @@ export const SerialMonitor: React.FC = () => {
     if (autoscroll && outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
-  }, [activeBoard?.serialOutput, autoscroll]);
+  }, [activeBoard?.serialOutput, deviceTabActive, deviceOutput, autoscroll]);
 
   const handleSend = useCallback(() => {
-    if (!resolvedTabId) return;
+    if (!deviceTabActive && !resolvedTabId) return;
     if (!inputValue && lineEnding === 'none') return;
     let text = inputValue;
     switch (lineEnding) {
@@ -165,9 +200,10 @@ export const SerialMonitor: React.FC = () => {
         text += '\r\n';
         break;
     }
-    serialWriteToBoard(resolvedTabId, text);
+    if (deviceTabActive) void useDeviceStore.getState().write(text);
+    else if (resolvedTabId) serialWriteToBoard(resolvedTabId, text);
     setInputValue('');
-  }, [resolvedTabId, inputValue, lineEnding, serialWriteToBoard]);
+  }, [deviceTabActive, resolvedTabId, inputValue, lineEnding, serialWriteToBoard]);
 
   const isMicroPython = activeBoard?.languageMode === 'micropython';
 
@@ -200,7 +236,7 @@ export const SerialMonitor: React.FC = () => {
     }
   };
 
-  if (boards.length === 0) {
+  if (boards.length === 0 && !showDeviceTab) {
     return (
       <div style={styles.container}>
         <div style={styles.header}>
@@ -240,14 +276,69 @@ export const SerialMonitor: React.FC = () => {
           );
         })}
 
+        {showDeviceTab && (
+          <button
+            className={'serial-usb-tab' + (deviceMode === 'attached' ? ' serial-usb-tab--live' : '')}
+            style={{
+              ...styles.tab,
+              ...(deviceTabActive
+                ? { ...styles.tabActive, borderBottomColor: 'var(--color-device)', color: 'var(--color-device)' }
+                : {}),
+            }}
+            onClick={() => {
+              setActiveTabId(DEVICE_TAB);
+              setDeviceSeenLen(deviceOutput.length);
+            }}
+            title={`The real board on ${devicePortLabel || 'USB'}`}
+          >
+            <span className="serial-usb-tab__led" aria-hidden="true" />
+            USB · {devicePortLabel || 'board'}
+            {deviceOutput.length > deviceSeenLen && !deviceTabActive && (
+              <span style={{ ...styles.unreadDot, background: 'var(--color-device)' }} />
+            )}
+          </button>
+        )}
+
         {/* Right-side controls */}
         <div style={styles.tabControls}>
-          {isMicroPython && (
+          {deviceTabActive && (
+            <>
+              <span style={styles.baudRate} title="The rate the monitor reads the board at.">
+                115,200 baud
+              </span>
+              {deviceMode === 'attached' && (
+                <button
+                  onClick={() => void useDeviceStore.getState().reset()}
+                  style={styles.clearBtn}
+                  title="Pulse EN to reboot the board (its boot log shows up here)"
+                >
+                  Reset board
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  const d = useDeviceStore.getState();
+                  void (deviceMode === 'attached' ? d.detach() : d.attach());
+                }}
+                disabled={deviceMode === 'flashing'}
+                style={{
+                  ...styles.clearBtn,
+                  ...(deviceMode === 'attached'
+                    ? { color: 'var(--color-device)', borderColor: 'var(--color-device-border)' }
+                    : {}),
+                }}
+                title={deviceMode === 'attached' ? 'Stop reading and free the port' : "Stream the board's serial"}
+              >
+                {deviceMode === 'attached' ? 'Detach' : 'Attach'}
+              </button>
+            </>
+          )}
+          {!deviceTabActive && isMicroPython && (
             <span style={{ color: 'var(--lavender-400)', fontSize: 11, fontWeight: 600 }}>
               MicroPython REPL
             </span>
           )}
-          {!isMicroPython && activeBoard?.serialLink?.source === 'usb-cdc' && (
+          {!deviceTabActive && !isMicroPython && activeBoard?.serialLink?.source === 'usb-cdc' && (
             <span
               style={styles.baudRate}
               title="This console is a USB device endpoint, not a UART. As on the real board, the terminal's baud setting is ignored."
@@ -255,7 +346,8 @@ export const SerialMonitor: React.FC = () => {
               USB CDC
             </span>
           )}
-          {activeBoard?.serialBaudRate != null &&
+          {!deviceTabActive &&
+            activeBoard?.serialBaudRate != null &&
             activeBoard.serialBaudRate > 0 &&
             activeBoard.serialLink?.source !== 'usb-cdc' &&
             !isMicroPython && (
@@ -273,7 +365,11 @@ export const SerialMonitor: React.FC = () => {
             {t('editor.serial.autoscroll')}
           </label>
           <button
-            onClick={() => resolvedTabId && clearBoardSerialOutput(resolvedTabId)}
+            onClick={() =>
+              deviceTabActive
+                ? useDeviceStore.getState().clearOutput()
+                : resolvedTabId && clearBoardSerialOutput(resolvedTabId)
+            }
             style={styles.clearBtn}
             title={t('editor.serial.clearTitle')}
           >
@@ -285,9 +381,30 @@ export const SerialMonitor: React.FC = () => {
       {/* Output area. QEMU-Linux boards get the interactive xterm (shell
           input, line editing, ANSI) instead of the read-only mirror — this
           replaced the separate RaspberryPiWorkspace as the one terminal. */}
-      {isPiBoardKind(activeBoard?.boardKind ?? '') &&
-      activeBoard?.running &&
-      activeBoard?.engineMode !== 'instant' ? (
+      {deviceTabActive ? (
+        <pre ref={outputRef} style={styles.output}>
+          {deviceOutput ? (
+            (() => {
+              const text = cleanTerminalText(deviceOutput);
+              return keyColors.size > 0 ? colorizeKeyLines(text, keyColors) : text;
+            })()
+          ) : (
+            <span className="serial-empty">
+              {deviceMode === 'attached'
+                ? 'Listening to the board. Press a key, or Reset board to see it boot.'
+                : deviceMode === 'flashing'
+                  ? 'Flashing the board...'
+                  : devicePort
+                    ? "Board on USB. Attach to stream what it prints."
+                    : 'Plug the board in, then Attach.'}
+              <span className="serial-empty__caret" aria-hidden="true" />
+              {'\n'}
+            </span>
+          )}
+        </pre>
+      ) : isPiBoardKind(activeBoard?.boardKind ?? '') &&
+        activeBoard?.running &&
+        activeBoard?.engineMode !== 'instant' ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           <PiTerminal key={activeBoard.id} boardId={activeBoard.id} />
         </div>
@@ -404,11 +521,12 @@ export const SerialMonitor: React.FC = () => {
       )}
 
       {/* Input row — the xterm handles Pi input itself */}
-      {!(
-        isPiBoardKind(activeBoard?.boardKind ?? '') &&
-        activeBoard?.running &&
-        activeBoard?.engineMode !== 'instant'
-      ) && (
+      {(deviceTabActive ||
+        !(
+          isPiBoardKind(activeBoard?.boardKind ?? '') &&
+          activeBoard?.running &&
+          activeBoard?.engineMode !== 'instant'
+        )) && (
         <div style={styles.inputRow}>
           <input
             type="text"
@@ -421,7 +539,7 @@ export const SerialMonitor: React.FC = () => {
                 : t('editor.serial.placeholderText')
             }
             style={styles.input}
-            disabled={!activeBoard?.running}
+            disabled={deviceTabActive ? deviceMode !== 'attached' : !activeBoard?.running}
           />
           <select
             value={lineEnding}
@@ -433,7 +551,11 @@ export const SerialMonitor: React.FC = () => {
             <option value="cr">{t('editor.serial.lineEnd.cr')}</option>
             <option value="both">{t('editor.serial.lineEnd.both')}</option>
           </select>
-          <button onClick={handleSend} disabled={!activeBoard?.running} style={styles.sendBtn}>
+          <button
+            onClick={handleSend}
+            disabled={deviceTabActive ? deviceMode !== 'attached' : !activeBoard?.running}
+            style={styles.sendBtn}
+          >
             {t('editor.serial.send')}
           </button>
         </div>
