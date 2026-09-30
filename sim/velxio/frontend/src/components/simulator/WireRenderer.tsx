@@ -16,6 +16,9 @@ interface WireRendererProps {
   previewWaypoints?: { x: number; y: number }[];
   /** Override the full SVG path string (used during segment drag preview) */
   overridePath?: string;
+  /** Pin map emphasis: 'linked' wires touch the mapped part, 'focus' ones the
+      pin under the pointer, and every other wire is 'dim'. */
+  emphasis?: 'focus' | 'linked' | 'dim';
 }
 
 export const WireRenderer: React.FC<WireRendererProps> = ({
@@ -24,6 +27,7 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
   isHovered,
   previewWaypoints,
   overridePath,
+  emphasis,
 }) => {
   // Breadboard seating wires are pure connectivity — the part visually
   // sits in the holes, so there is nothing to draw.
@@ -41,12 +45,29 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
   // hover/selection strokes were invisible outright.
   const outline = cssVar('--color-wire-outline');
   const marker = cssVar('--color-wire-marker');
-  const strokeW = isSelected ? 3 : 2;
-  const outlineW = isSelected ? 6 : 5;
-  const opacity = isSelected || isHovered ? 1 : 0.95;
+  const lifted = isSelected || emphasis === 'focus' || emphasis === 'linked';
+  const strokeW = emphasis === 'focus' ? 3.5 : lifted ? 3 : 2;
+  const outlineW = lifted ? 6 : 5;
+  const opacity = isSelected || isHovered || lifted ? 1 : 0.95;
 
   return (
-    <g style={{ pointerEvents: 'none' }} strokeLinecap="round" strokeLinejoin="round">
+    <g
+      style={{ pointerEvents: 'none' }}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={emphasis === 'dim' ? 'wire--pinmap-dim' : undefined}
+    >
+      {/* Pin map glow in the wire's own color, under everything else */}
+      {(emphasis === 'focus' || emphasis === 'linked') && (
+        <path
+          d={path}
+          stroke={color}
+          strokeWidth={emphasis === 'focus' ? 13 : 9}
+          fill="none"
+          opacity={emphasis === 'focus' ? 0.4 : 0.22}
+        />
+      )}
+
       {/* Contrast outline, so wires stay readable where they cross */}
       <path d={path} stroke={outline} strokeWidth={outlineW} fill="none" />
 
@@ -70,6 +91,19 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
         />
       )}
 
+      {/* Pin map focus: current flowing along the wire */}
+      {emphasis === 'focus' && (
+        <path
+          className="wire-pinmap-flow"
+          d={path}
+          stroke={marker}
+          strokeWidth="1.5"
+          fill="none"
+          strokeDasharray="2,8"
+          opacity="0.9"
+        />
+      )}
+
       {/* Endpoint dots */}
       <circle
         cx={wire.start.x}
@@ -80,6 +114,12 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
         strokeWidth="1"
       />
       <circle cx={wire.end.x} cy={wire.end.y} r="3" fill={color} stroke={outline} strokeWidth="1" />
+      {emphasis === 'focus' && (
+        <>
+          <circle cx={wire.start.x} cy={wire.start.y} r="6" fill="none" stroke={color} strokeWidth="1.5" />
+          <circle cx={wire.end.x} cy={wire.end.y} r="6" fill="none" stroke={color} strokeWidth="1.5" />
+        </>
+      )}
     </g>
   );
 };

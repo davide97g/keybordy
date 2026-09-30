@@ -1,0 +1,414 @@
+/* Pin map: a sheet on the canvas's right edge listing every pin of the part a
+   left click picked, with where its wire goes. It slaps in like a sticker. */
+
+.pin-map {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-6);
+  z-index: 58;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-width: calc(100% - 2 * var(--space-6));
+  max-height: calc(100% - var(--space-6) - 60px); /* clear of the zoom controls */
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--wb-2) 94%, transparent);
+  box-shadow: 0 0 0 1px var(--wb-6), var(--shadow-3);
+  backdrop-filter: blur(8px);
+  color: var(--wb-12);
+  cursor: default;
+  user-select: text;
+  overflow: hidden;
+  transform-origin: top right;
+  animation: pin-map-in 380ms var(--ease-spring);
+}
+
+@keyframes pin-map-in {
+  from { opacity: 0; transform: translateX(18px) rotate(1.5deg) scale(0.96); }
+}
+
+.pin-map__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: 12px 12px 10px 14px;
+  border-bottom: 1px solid var(--wb-5);
+}
+
+.pin-map__head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pin-map__kind {
+  font: 500 9.5px/1.1 var(--font-mono);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent-fg);
+}
+
+.pin-map__title {
+  margin: 0;
+  font: 700 18px/1.15 var(--font-display);
+  color: var(--wb-13);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pin-map__subtitle {
+  font: 400 10.5px/1.3 var(--font-mono);
+  color: var(--wb-10);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pin-map__close {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 0;
+  border-radius: 7px;
+  background: var(--wb-4);
+  box-shadow: inset 0 -2px 0 var(--wb-1);
+  color: var(--wb-11);
+  cursor: pointer;
+  transition: transform 70ms var(--ease-out), background-color 120ms var(--ease-out);
+}
+
+.pin-map__close:hover { background: var(--wb-5); color: var(--wb-13); }
+.pin-map__close:active { transform: translateY(1px); box-shadow: inset 0 -1px 0 var(--wb-1); }
+
+.pin-map__stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--wb-4);
+  font: 500 10px/1 var(--font-mono);
+  color: var(--wb-10);
+}
+
+.pin-map__stats b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--wb-13);
+}
+
+.pin-map__live,
+.pin-map__stale {
+  margin-left: auto;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 9px;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+
+.pin-map__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: color-mix(in srgb, var(--mint-400) 16%, transparent);
+  color: var(--mint-400);
+}
+
+.pin-map__live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pin-map-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pin-map-pulse {
+  50% { opacity: 0.3; }
+}
+
+.pin-map__stale {
+  background: var(--wb-4);
+  color: var(--wb-10);
+}
+
+.pin-map__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0 10px;
+  scrollbar-width: thin;
+}
+
+.pin-map__empty {
+  margin: 14px;
+  font: 400 12px/1.4 var(--font-sans);
+  color: var(--wb-10);
+}
+
+.pin-map__section { padding-top: 6px; }
+
+.pin-map__section-title,
+.pin-map__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 14px 4px;
+  font: 500 9.5px/1.1 var(--font-mono);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--wb-10);
+}
+
+.pin-map__toggle {
+  width: 100%;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pin-map__toggle:hover { color: var(--wb-12); }
+
+.pin-map__caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform 150ms var(--ease-out);
+}
+
+.pin-map__toggle[aria-expanded='true'] .pin-map__caret { transform: rotate(90deg); }
+
+.pin-map__count {
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--wb-4);
+  color: var(--wb-11);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.pin-map__rows,
+.pin-map__links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pin-map__row {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: start;
+  gap: 8px;
+  margin: 1px 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: background-color 90ms var(--ease-out), box-shadow 90ms var(--ease-out);
+  animation: pin-map-row-in 300ms var(--ease-out) both;
+  animation-delay: calc(60ms + min(var(--i), 14) * 18ms);
+}
+
+@keyframes pin-map-row-in {
+  from { opacity: 0; transform: translateX(8px); }
+}
+
+.pin-map__row:hover,
+.pin-map__row--active,
+.pin-map__row:focus-visible {
+  background: var(--wb-4);
+  box-shadow: inset 0 -2px 0 var(--wb-2);
+}
+
+.pin-map__row:focus-visible { box-shadow: 0 0 0 2px var(--color-focus-ring); }
+
+.pin-map__pin {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 3px;
+}
+
+.pin-map__pin-name {
+  /* Geist, not Martian Mono: its l and 1 look alike, and pins are named 1.l */
+  font: 700 13px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--wb-13);
+}
+
+.pin-map__pin-sub {
+  font: 400 9px/1 var(--font-mono);
+  color: var(--wb-9);
+}
+
+.pin-map__links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+div.pin-map__links {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.pin-map__link {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pin-map__nc {
+  font: italic 400 11px/1 var(--font-sans);
+  color: var(--wb-9);
+}
+
+.pin-map__arrow {
+  font: 600 12px/1 var(--font-mono);
+  color: var(--wb-10);
+}
+
+.pin-map__swatch {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--color-wire-outline);
+}
+
+.pin-map__peer {
+  display: inline-flex;
+  align-items: baseline;
+  flex: 0 1 auto;
+  gap: 5px;
+  min-width: 0;
+  padding: 3px 7px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--wb-3);
+  box-shadow: inset 0 -2px 0 var(--wb-1);
+  color: var(--wb-12);
+  cursor: pointer;
+  transition: transform 70ms var(--ease-out), background-color 90ms var(--ease-out);
+}
+
+.pin-map__peer:hover:not(:disabled) { background: var(--wb-5); }
+.pin-map__peer:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 -1px 0 var(--wb-1); }
+.pin-map__peer:disabled { cursor: default; }
+
+.pin-map__peer-part {
+  font: 600 11.5px/1 var(--font-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pin-map__role,
+.pin-map__swatch,
+.pin-map__arrow,
+.pin-map__peer-pin { flex: none; }
+
+.pin-map__peer-pin {
+  font: 700 12px/1 var(--font-sans);
+  color: var(--wb-13);
+}
+
+/* Role chip: what the pin does, and its pull/level once the sketch has run. */
+.pin-map__role {
+  --rc: var(--wb-10);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--rc) 15%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rc) 35%, transparent);
+  color: var(--rc);
+  font: 700 9.5px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.pin-map__role-detail {
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.pin-map__role--in { --rc: var(--mint-400); }
+.pin-map__role--out { --rc: var(--amber-400); }
+.pin-map__role--gnd { --rc: var(--wb-11); }
+.pin-map__role--pwr { --rc: var(--pink-400); }
+.pin-map__role--uart { --rc: var(--lavender-400); }
+.pin-map__role--ctl { --rc: var(--cyan-400); }
+
+/* ── Canvas side ─────────────────────────────────────────────────────── */
+
+/* Wires that do not touch the mapped part step back. */
+.wire--pinmap-dim { opacity: 0.16; transition: opacity 160ms var(--ease-out); }
+
+.wire-pinmap-flow { animation: wire-pinmap-flow 700ms linear infinite; }
+
+@keyframes wire-pinmap-flow {
+  to { stroke-dashoffset: -20; }
+}
+
+/* The mapped part and the parts its wires reach. Parts get a ring on their
+   wrapper; a board is its own element, whose shadow root would hide a
+   pseudo-element, so it gets an outline instead. */
+[data-component-id][data-pinmap]::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 10px;
+  pointer-events: none;
+  animation: pin-map-ring-in 260ms var(--ease-spring);
+}
+
+[data-component-id][data-pinmap='self']::after {
+  box-shadow: 0 0 0 2px var(--color-accent-fg), 0 0 18px color-mix(in srgb, var(--color-accent-fg) 45%, transparent);
+}
+
+[data-component-id][data-pinmap='peer']::after {
+  box-shadow: 0 0 0 2px var(--pinmap-c), 0 0 14px color-mix(in srgb, var(--pinmap-c) 55%, transparent);
+}
+
+[data-pinmap-board] {
+  border-radius: 8px;
+  outline-offset: 5px;
+}
+
+[data-pinmap-board][data-pinmap='self'] {
+  outline: 2px solid var(--color-accent-fg);
+}
+
+[data-pinmap-board][data-pinmap='peer'] {
+  outline: 2px solid var(--pinmap-c);
+}
+
+@keyframes pin-map-ring-in {
+  from { opacity: 0; transform: scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-map,
+  .pin-map__row,
+  [data-component-id][data-pinmap]::after {
+    animation: none;
+  }
+  .pin-map__live::before,
+  .wire-pinmap-flow {
+    animation: none;
+  }
+}

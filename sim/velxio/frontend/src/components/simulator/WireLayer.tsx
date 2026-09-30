@@ -5,6 +5,8 @@ import { useResolvedTheme } from '../../hooks/useTheme';
 import { cssVar } from '../../lib/theme';
 import { WireInProgressRenderer } from './WireInProgressRenderer';
 import { useIsCoarsePointer } from '../../utils/useTouchDevice';
+import { usePinMapStore } from '../../store/usePinMapStore';
+import type { Wire } from '../../types/wire';
 
 export interface SegmentHandle {
   segIndex: number;
@@ -61,6 +63,8 @@ export const WireLayer: React.FC<WireLayerProps> = ({
   const wireInProgress = useSimulatorStore((s) => s.wireInProgress);
   const selectedWireId = useSimulatorStore((s) => s.selectedWireId);
   const isTouchDevice = useIsCoarsePointer();
+  const pinMapId = usePinMapStore((s) => s.target?.id ?? null);
+  const pinMapHover = usePinMapStore((s) => s.hoverPin);
   // One subscription for the whole layer: WireRenderer reads its outline and
   // selection colours from the token layer at render time, and every wire is
   // a child of this component, so re-rendering here repaints all of them when
@@ -83,12 +87,13 @@ export const WireLayer: React.FC<WireLayerProps> = ({
         zIndex: 35,
       }}
     >
-      {wires.map((wire) => (
+      {orderForPinMap(wires, pinMapId, pinMapHover).map(({ wire, emphasis }) => (
         <WireRenderer
           key={wire.id}
           wire={wire}
           isSelected={wire.id === selectedWireId}
           isHovered={wire.id === hoveredWireId}
+          emphasis={emphasis}
           overridePath={
             segmentDragPreview?.wireId === wire.id ? segmentDragPreview.overridePath : undefined
           }
@@ -170,3 +175,31 @@ export const WireLayer: React.FC<WireLayerProps> = ({
     </svg>
   );
 };
+
+type WireEmphasis = 'focus' | 'linked' | 'dim';
+
+/**
+ * Pin map emphasis per wire, with the emphasised wires drawn last so they sit
+ * on top of the ones they cross. With no part mapped the order is unchanged.
+ */
+function orderForPinMap(
+  wires: Wire[],
+  partId: string | null,
+  hoverPin: string | null,
+): { wire: Wire; emphasis?: WireEmphasis }[] {
+  if (!partId) return wires.map((wire) => ({ wire }));
+  const rank: Record<WireEmphasis, number> = { dim: 0, linked: 1, focus: 2 };
+  const onPart = (e: Wire['start']) => e.componentId === partId;
+  const onPin = (e: Wire['start']) => onPart(e) && e.pinName === hoverPin;
+  return wires
+    .map((wire) => {
+      let emphasis: WireEmphasis = 'dim';
+      if (hoverPin) {
+        if (onPin(wire.start) || onPin(wire.end)) emphasis = 'focus';
+      } else if (onPart(wire.start) || onPart(wire.end)) {
+        emphasis = 'linked';
+      }
+      return { wire, emphasis };
+    })
+    .sort((a, b) => rank[a.emphasis] - rank[b.emphasis]);
+}

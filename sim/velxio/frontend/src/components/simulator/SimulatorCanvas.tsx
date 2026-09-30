@@ -86,6 +86,8 @@ import { useOscilloscopeStore } from '../../store/useOscilloscopeStore';
 import { resolveProbe } from '../../simulation/probeResolve';
 import { showMessageDialog } from '../../store/useMessageDialogStore';
 import { SelectionActionBar } from './SelectionActionBar';
+import { PinMapPanel } from './PinMapPanel';
+import { usePinMapStore } from '../../store/usePinMapStore';
 import { WireModeBanner } from './WireModeBanner';
 import { PinPickerDialog } from './PinPickerDialog';
 import { useButtonKeyBindings } from '../../hooks/useButtonKeyBindings';
@@ -475,6 +477,36 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
   const panRef = useRef({ x: 0, y: 0 });
   const zoomRef = useRef(1);
 
+  // The pin map sits over the canvas's right edge. When the part it maps is
+  // under it, slide the bench left so the part and its wires stay in view.
+  const pinMapTarget = usePinMapStore((s) => s.target);
+  useEffect(() => {
+    if (!pinMapTarget) return;
+    const raf = requestAnimationFrame(() => {
+      const canvas = canvasRef.current;
+      const panel = canvas?.querySelector<HTMLElement>('.pin-map');
+      const part =
+        pinMapTarget.kind === 'component'
+          ? canvas?.querySelector<HTMLElement>(
+              `[data-component-id="${CSS.escape(pinMapTarget.id)}"]`,
+            )
+          : document.getElementById(pinMapTarget.id);
+      if (!canvas || !panel || !part) return;
+      const c = canvas.getBoundingClientRect();
+      const p = panel.getBoundingClientRect();
+      const r = part.getBoundingClientRect();
+      const margin = 24;
+      if (r.bottom < p.top || r.top > p.bottom || r.right + margin <= p.left) return;
+      // Never push the part's left edge off the canvas to clear the panel.
+      const dx = Math.max(p.left - margin - r.right, c.left + margin - r.left);
+      if (dx >= 0) return;
+      const next = { x: panRef.current.x + dx, y: panRef.current.y };
+      panRef.current = next;
+      setPan(next);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [pinMapTarget]);
+
   // Board-less SPICE circuits (analog / digital examples with no MCU on
   // the canvas) have no concept of a board to "start", so `running` is
   // always false. But the simulation IS effectively live the moment the
@@ -699,6 +731,8 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
     const el = canvasRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      // Overlays on the canvas (the pin map) scroll their own content.
+      if ((e.target as Element | null)?.closest?.('[data-canvas-overlay]')) return;
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const factor = e.deltaY < 0 ? 1.1 : 0.9;
@@ -760,6 +794,9 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
 
       // Identify what element was touched
       const target = document.elementFromPoint(touch.clientX, touch.clientY);
+
+      // ── 0. Canvas overlay (the pin map) → its own buttons and scrolling ──
+      if (target?.closest('[data-canvas-overlay]')) return;
 
       // ── 1. Pin overlay → let pin's onTouchEnd React handler call handlePinClick ──
       if (target?.closest('[data-pin-overlay]')) {
@@ -2009,8 +2046,10 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
       if (posDiff < 5 && timeDiff < 300) {
         if (draggedComponentId.startsWith('__board__:')) {
           // Click on a board — make it the active board (editor switches to its code)
+          // and map its pins.
           const boardId = draggedComponentId.slice('__board__:'.length);
           useSimulatorStore.getState().setActiveBoardId(boardId);
+          usePinMapStore.getState().open({ kind: 'board', id: boardId });
         } else if (draggedComponentId !== '__board__') {
           const component = components.find((c) => c.id === draggedComponentId);
           if (component) {
@@ -2080,7 +2119,9 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
               // which one was yours. Properties and pins now live on the
               // right-click menu, where a destructive-ish, deliberate action
               // belongs. (Touch keeps tap → dialog: there is no right button.)
+              // The pin map on the right lists where each of its pins goes.
               setSelectedComponentId(draggedComponentId);
+              usePinMapStore.getState().open({ kind: 'component', id: draggedComponentId });
             }
           }
         }
@@ -3245,6 +3286,10 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             } else {
               setSelectedWire(null);
               setSelectedComponentId(null);
+              // Empty bench: put the pin map away. A click that landed on a
+              // part or board bubbles here too; that one just opened it.
+              const hit = (e.target as Element).closest?.('[data-component-id], [data-board-id]');
+              if (!hit) usePinMapStore.getState().close();
             }
           }}
           onDoubleClick={(e) => {
@@ -3466,6 +3511,15 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
               }
               return null;
             })()}
+
+          {/* Pin map: every pin of the clicked part and where its wire goes */}
+          <PinMapPanel
+            onNavigate={(t) => {
+              usePinMapStore.getState().open(t);
+              if (t.kind === 'component' && !interactionRunning) setSelectedComponentId(t.id);
+              if (t.kind === 'board') useSimulatorStore.getState().setActiveBoardId(t.id);
+            }}
+          />
 
           {/* Floating zoom controls — pinned to the canvas' bottom-right
               corner (they lived in the canvas header, which gets too tight
