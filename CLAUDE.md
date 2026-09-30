@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A hand-wired keyboard on a classic ESP32 DevKit: eight MX-style switches wired with jumpers only (no breadboard, no PCB, no solder), plus a rotary encoder to add later. The repo holds the Arduino firmware, a Wokwi circuit diagram, a fully local simulator (a vendored Velxio fork in Docker), bench notes in `docs/`, and an interactive wiring guide in `guide/`.
+A hand-wired keyboard on a classic ESP32 DevKit: eight MX-style switches wired with jumpers only (no breadboard, no PCB, no solder), plus a rotary encoder to add later. The repo holds the Arduino firmware, a Wokwi circuit diagram, a fully local simulator (a vendored Velxio fork in Docker), bench notes in `docs/`, an interactive wiring guide in `guide/`, and the Mac side in `host/`: Hammerspoon turns the board's Bluetooth F13–F20 presses into actions and serves a keymap editor.
 
 Firmware and wiring are verified with `sim/harness/simcheck.py` (see "Headless checks" below): a static lint of the diagram against the sketch, and a headless run in the simulator's QEMU that presses keys and asserts serial output. After any change to a sketch, `diagram.json` or the README pin table, run `just sim-check` and report its result. Flashing and reading serial stays the final check on real hardware. The vendored simulator has its own test suites (see below).
 
@@ -26,7 +26,7 @@ The pin map is duplicated in `firmware/keys8/keys8.ino` (`KEY_PINS`/`GND_PINS`),
 
 Sketches live in `firmware/<name>/<name>.ino`. The FQBN is `esp32:esp32:esp32`.
 
-- `keys8`: the current 8-key firmware. It debounces for 15 ms and prints `keys8 ready`, then `key N down` / `key N up`, at 115200.
+- `keys8`: the current 8-key firmware. It debounces for 15 ms and prints `keys8 ready`, then `key N down` / `key N up`, at 115200. It is also a BLE HID keyboard named `keybordy` (core `BLE` library, Bluedroid, "Just Works" bonding): K1..K8 send F13..F20 (usages 0x68..0x6F, so the report map's usage range goes to 0xE7). It prints `ble advertising` / `ble connected` / `ble disconnected`. QEMU has no radio and `BLEDevice::init` stalls the whole chip there, so the sketch skips BLE when the eFuse MAC is QEMU's default `10:01:00:c4:0a:24` and prints `ble off in simulator`. The app is about 1.1 MB of the 1.25 MB default partition; switch to `PartitionScheme=huge_app` if it outgrows it.
 - `switches_oled`, `rotary_oled`: earlier OLED demos on the old breadboard wiring (OLED I2C on 21/22 at `0x3C`, rotary on 25/26/27). They need the Adafruit SSD1306 and Adafruit GFX libraries. Their pins now clash with the `keys8` GPIO grounds.
 
 ```sh
@@ -37,6 +37,15 @@ just fw-monitor          # arduino-cli monitor -c baudrate=115200
 ```
 
 Reading serial from a script: opening the port resets the board once, and the macOS driver can replay old buffered lines. Repeated `ready` lines do not by themselves mean a boot loop, so look for `rst:` lines. The system `python3` has no pyserial. Use `/opt/homebrew/opt/esptool/libexec/bin/python3`, which does.
+
+## Mac actions (`host/`)
+
+Hammerspoon does the Mac side; there is no other server and nothing to build.
+
+- `host/hammerspoon/keybordy.lua`: binds F13..F20 with `hs.hotkey` (no Accessibility needed) and runs each key's action from `~/.config/keybordy/keymap.json` (outside git; seeded from `host/keymap.default.json`). Action types and their fields are the `FIELDS` table; `cleanAction` drops anything else. Runners: `app`, `terminal` (Ghostty 1.3 AppleScript `new surface configuration`, the command goes in as `initial input`), `shell` (`zsh -lc`, output recorded), `url`, `shortcut` (`shortcuts run`), and `keys`/`text`/`media`, which need Accessibility and fail with a message without it. `M.fire(i, source, draft, label)` is the one path for board presses and simulated ones and logs events (last 40). Watchers reload Hammerspoon when `host/hammerspoon/*.lua` changes and reload the keymap when `keymap.json` changes. It requires `hs.ipc`, so `~/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -t 3 -c '<lua>'` runs Lua in it (e.g. `require("keybordy").fire(3, "board")` stands in for a real press). Reload with `hs.timer.doAfter(0.2, hs.reload)` so the call returns first.
+- `host/hammerspoon/keybordy_web.lua`: `hs.httpserver` on `localhost:7373`. Serves `host/ui/` plus the simulator's `src/tokens/`, `public/fonts/` and `public/keybordy/sticker.css` straight from `sim/velxio/frontend`, and cuts the sticker SVG out of its `index.html`, so the editor's look has one source. API routes are listed at the top of the file. Security: loopback only, `Host` must be `localhost:7373`/`127.0.0.1:7373`, a foreign `Origin` gets 403, and `/api/*` (except icons) needs `X-Keybordy-Token`, which is embedded in the served page and stored in `~/.config/keybordy/token`. Keep all three checks: the API runs shell commands.
+- `host/ui/`: plain HTML/CSS/ES module, no build. `app.js` holds the action catalog (`TYPES`, `DEFAULTS`), the editor, and a 400 ms poll of `/api/events` that lights a cap per new event. Cap colors come from `firmware/keys8/diagram.json`. Check UI changes with agent-browser at http://localhost:7373.
+- `just host-install` installs the Hammerspoon cask into `~/Applications` (`/Applications` needs sudo, which has no TTY here), symlinks `keybordy.lua` into `~/.hammerspoon` and requires it from `init.lua`. The Mac pairs with the board in System Settings > Bluetooth. `just keymap` opens the editor.
 
 ## Wokwi diagram
 

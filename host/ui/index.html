@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="keybordy-token" content="__TOKEN__" />
+    <title>keybordy keymap</title>
+    <!-- Served by host/hammerspoon/keybordy_web.lua. Tokens, fonts and the
+         sticker come from the simulator frontend, so both UIs stay in step. -->
+    <link rel="stylesheet" href="/tokens/index.css" />
+    <link rel="stylesheet" href="/keybordy/sticker.css" />
+    <link rel="stylesheet" href="/ui/app.css" />
+    <script type="module" src="/ui/app.js"></script>
+  </head>
+  <body>
+    <header class="top">
+      <span class="top__mark kbs-wrap kbs-slap" id="sticker" aria-hidden="true"><!-- STICKER --></span>
+      <span class="top__title">keybordy</span>
+      <span class="top__sub">keymap</span>
+      <div class="top__status" id="status"></div>
+    </header>
+
+    <main class="main">
+      <section class="panel board" aria-label="Keys">
+        <div class="panel__head">
+          <span>Board</span>
+          <span class="panel__hint">K1–K8 send F13–F20 over Bluetooth · click a cap to edit it · ▶ presses it</span>
+        </div>
+        <div class="caps" id="caps"></div>
+      </section>
+
+      <div class="split">
+        <section class="panel editor" id="editor" aria-label="Key editor"></section>
+
+        <section class="panel activity" aria-label="Activity">
+          <div class="panel__head">
+            <span>Activity</span>
+            <span class="panel__hint">board presses and simulated ones</span>
+          </div>
+          <ol class="log" id="log"></ol>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "keys": [
+    { "label": "Claude Code", "action": { "type": "terminal", "dir": "~", "command": "claude" } },
+    { "label": "Notes", "action": { "type": "app", "app": "Notes" } },
+    { "label": "", "action": { "type": "none" } },
+    { "label": "", "action": { "type": "none" } },
+    { "label": "", "action": { "type": "none" } },
+    { "label": "", "action": { "type": "none" } },
+    { "label": "", "action": { "type": "none" } },
+    { "label": "", "action": { "type": "none" } }
+  ]
+}

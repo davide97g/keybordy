@@ -31,6 +31,20 @@ fw-monitor:
 fw-bin name=sketch:
     arduino-cli compile --fqbn {{fqbn}} --output-dir firmware/{{name}}/build firmware/{{name}}
 
+# ── Mac actions (Hammerspoon) ───────────────────────────────────────────────
+
+# Install Hammerspoon (into ~/Applications, no sudo), link host/hammerspoon/keybordy.lua into ~/.hammerspoon, start it
+host-install:
+    brew list --cask hammerspoon >/dev/null 2>&1 || brew install --cask --appdir="$HOME/Applications" hammerspoon
+    mkdir -p ~/.hammerspoon
+    ln -sf "{{justfile_directory()}}/host/hammerspoon/keybordy.lua" ~/.hammerspoon/keybordy.lua
+    grep -qs 'require("keybordy")' ~/.hammerspoon/init.lua || echo 'require("keybordy")' >> ~/.hammerspoon/init.lua
+    open -a Hammerspoon 2>/dev/null || open "$HOME/Applications/Hammerspoon.app"
+
+# Keymap editor, served by Hammerspoon (also in its ⌨︎ menu-bar menu)
+keymap:
+    open http://localhost:7373/
+
 # ── Simulator ───────────────────────────────────────────────────────────────
 
 # Once: QEMU .so + ESP32 ROMs into sim/velxio/prebuilt/qemu/
