@@ -1,0 +1,694 @@
+<title>keybordy MP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,400..900&family=Geist:wght@400;500;600&family=Martian+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one dark stage with the model, a control rail under it, then three spec columns.
+   keybordy is dark only ("Procedure Online"): black ground, lime + pink signals, lavender secondary. */
+:root {
+  color-scheme: dark;
+  --ground: #070608;
+  --panel: #121015;
+  --line: #2c2833;
+  --fg: #f4f1f8;
+  --muted: #a59fb2;
+  --lime: #d6ff1f;
+  --pink: #ff2e74;
+  --lavender: #b9a8ff;
+  --display: "Anybody", "Arial Narrow", system-ui, sans-serif;
+  --body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+html, body { background: var(--ground); color: var(--fg); }
+body { font: 15px/1.55 var(--body); padding-inline: 16px; padding-block: 20px 48px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 18px; }
+
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1 { margin: 0; font: 900 clamp(38px, 7vw, 72px)/0.9 var(--display); font-stretch: 130%; letter-spacing: -0.02em; text-wrap: balance; }
+h1 .mp { display: inline-block; transform: rotate(-6deg) translateY(-0.12em); margin-left: 0.18em; padding: 0.06em 0.22em 0.02em;
+  background: var(--lime); color: var(--ground); font-size: 0.42em; font-stretch: 100%; border-radius: 6px; box-shadow: 0 6px 0 #8fb300; }
+.sub { margin: 8px 0 0; color: var(--muted); max-width: 62ch; }
+.tag { font: 600 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--lavender);
+  border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; white-space: nowrap; }
+
+.stage { position: relative; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--ground);
+  aspect-ratio: 16 / 9; max-height: 76vh; width: 100%; min-height: 360px; touch-action: none; }
+.stage canvas { display: block; width: 100%; height: 100%; outline: none; }
+.stage canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--lime); }
+.hint { position: absolute; left: 14px; top: 12px; right: 14px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+.hint span { font: 500 11px/1 var(--mono); color: var(--muted); background: rgba(18,16,21,0.78); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; }
+.hint b { color: var(--fg); font-weight: 600; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font: 600 12px var(--mono); color: var(--muted); letter-spacing: 0.1em; }
+
+.rail { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.views { display: flex; flex-wrap: wrap; gap: 6px; }
+button.v { font: 600 12px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; cursor: pointer; box-shadow: inset 0 -3px 0 #070608; }
+button.v:hover { border-color: var(--lavender); }
+button.v[aria-pressed="true"] { background: var(--lime); color: var(--ground); border-color: var(--lime); box-shadow: inset 0 -3px 0 #8fb300; }
+button.v:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+.explode { display: flex; align-items: center; gap: 10px; font: 600 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.explode input { width: min(240px, 50vw); accent-color: var(--lime); }
+.status { margin-left: auto; font: 500 12px var(--mono); color: var(--muted); min-width: 0; }
+.status b { color: var(--lime); font-weight: 600; }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+section { min-width: 0; border-top: 2px solid var(--fg); padding-top: 12px; }
+h2 { margin: 0 0 10px; font: 800 20px/1.1 var(--display); font-stretch: 120%; letter-spacing: 0.01em; text-transform: uppercase; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; }
+dt { color: var(--muted); font-size: 13px; }
+dd { margin: 0; font: 500 13px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font: 600 10.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 8px 6px 0; border-bottom: 1px solid var(--line); }
+td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.m { font: 500 12px var(--mono); color: var(--muted); white-space: nowrap; }
+.sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1px solid #4b4456; }
+.note { margin: 10px 0 0; color: var(--muted); font-size: 13px; max-width: 65ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>keybordy<span class="mp">MP</span></h1>
+      <p class="sub">ESP32-S3 macropad: 22 MX keys in three sizes, three knobs, a white 2.42″ OLED, a mic and a speaker. Black case, white caps, gray mods, one green talk bar. Every part is printable on the A1 in Bambu PLA Basic.</p>
+    </div>
+    <span class="tag">Concept render · from layout/macropad.json</span>
+  </header>
+
+  <div class="stage" id="stage">
+    <div class="loading" id="loading">LOADING MODEL…</div>
+    <div class="hint" aria-hidden="true">
+      <span><b>Drag</b> orbit</span><span><b>Click</b> a key</span><span><b>Click / scroll</b> a knob</span><span><b>Hold</b> TALK or Space</span>
+    </div>
+  </div>
+
+  <div class="rail">
+    <div class="views" role="group" aria-label="Camera">
+      <button class="v" id="v-hero" aria-pressed="true">Hero</button>
+      <button class="v" id="v-top" aria-pressed="false">Top</button>
+      <button class="v" id="v-side" aria-pressed="false">Side</button>
+      <button class="v" id="v-rear" aria-pressed="false">Rear</button>
+      <button class="v" id="v-explode" aria-pressed="false">Exploded</button>
+    </div>
+    <label class="explode" for="explode">Explode <input id="explode" type="range" min="0" max="1" step="0.01" value="0"></label>
+    <div class="status" id="status" aria-live="polite">Idle. OLED shows layer, link and battery.</div>
+  </div>
+
+  <div class="cols">
+    <section>
+      <h2>Shape</h2>
+      <dl id="dims"></dl>
+      <p class="note">The top deck prints face down on the Textured PEI plate, so the top surface gets the plate's fine texture with no sanding. The caps float 3 mm above the deck, showing the switches.</p>
+    </section>
+    <section>
+      <h2>Printed parts</h2>
+      <table>
+        <thead><tr><th>Part</th><th>PLA Basic</th><th>Print</th></tr></thead>
+        <tbody id="prints"></tbody>
+      </table>
+    </section>
+    <section>
+      <h2>Electronics</h2>
+      <table>
+        <thead><tr><th>Part</th><th>LCSC</th></tr></thead>
+        <tbody>
+          <tr><td>ESP32-S3-WROOM-1-N16R8 · USB HID, BLE, Wi-Fi</td><td class="m">C2913202</td></tr>
+          <tr><td>2.42″ SSD1309 128×64 OLED, white</td><td class="m">module</td></tr>
+          <tr><td>Bourns PEC11R encoder ×3, 24 detents + push</td><td class="m">C143797</td></tr>
+          <tr><td>TDK ICS-43434 I²S mic, behind a kill switch</td><td class="m">C5656610</td></tr>
+          <tr><td>MAX98357A I²S amp → 8 Ω 2 W speaker</td><td class="m">C910544</td></tr>
+          <tr><td>Kailh MX hotswap ×22</td><td class="m">C41430893</td></tr>
+          <tr><td>BQ24075 charger · 1000 mAh LiPo</td><td class="m">C15464</td></tr>
+        </tbody>
+      </table>
+      <p class="note">PCB: 2 layers, black mask, all SMD on the bottom so JLCPCB's single-sided economic assembly can place it.</p>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/geometries/RoundedBoxGeometry.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<script>
+THREE.ColorManagement.legacyMode = false;
+const L = __LAYOUT__;
+
+// Example keymap for the preview only (the real one lives in ~/.config/keybordy/keymap.json).
+const KEYMAP = {
+  K1: ["CLAUDE", "terminal", "claude"], K2: ["NOTES", "app", "Notes"], K3: ["TERM", "terminal", "~"],
+  K4: ["CODE", "app", "VS Code"], K5: ["WEB", "url", "localhost:3080"], K6: ["MAIL", "app", "Mail"],
+  K7: ["SLACK", "app", "Slack"], K8: ["MEET", "url", "meet.new"], K9: ["MUSIC", "media", "play/pause"],
+  K10: ["SHOT", "keys", "⇧⌘4"], K11: ["CLIP", "app", "Clipboard"], K12: ["LOCK", "keys", "⌃⌘Q"],
+  K13: ["◀ DESK", "keys", "⌃←"], K14: ["DESK ▶", "keys", "⌃→"], K15: ["MUTE", "media", "mute"],
+  K16: ["DND", "shortcut", "Focus"], K17: ["TIMER", "shortcut", "25 min"], K18: ["SLEEP", "shell", "pmset displaysleepnow"],
+  K19: ["LAYER", "layer", "next"], K20: ["FN", "layer", "hold"], K21: ["TALK", "voice", "push to talk"], K22: ["ENTER", "keys", "↩"],
+};
+const ENC = { E1: { name: "VOLUME", short: "VOL", v: 42, step: 2 }, E2: { name: "SCROLL", short: "SCRL", v: 50, step: 5 }, E3: { name: "LIGHT", short: "LIGHT", v: 70, step: 5 } };
+const PAL = L.finish.palette;
+const U = L.u_mm, C = L.case;
+
+// ── geometry frame ────────────────────────────────────────────────────────
+// Layout: x right, y toward the user, mm. Scene: X right, Y up, Z toward the viewer.
+const po = L.pcb.outline_mm, off = C.wall_mm + C.gap_mm;
+const CASE = [po[0] - off, po[1] - off, po[2] + off, po[3] + off];
+const CX = (CASE[0] + CASE[2]) / 2, CZ = (CASE[1] + CASE[3]) / 2;
+const X = (lx) => lx - CX, Z = (ly) => ly - CZ;
+const DEPTH = CASE[3] - CASE[1], WIDTH = CASE[2] - CASE[0];
+const ALPHA = Math.atan((C.rear_h_mm - C.front_h_mm) / DEPTH);
+const SA = Math.sin(ALPHA), CA = Math.cos(ALPHA);
+const DECK_TOP = C.deck_mm, DECK_BOT = 0, PLATE_TOP = 0, PCB_TOP = -5, CAP_Y = 7;
+const ZMIN = Z(CASE[1]), ZMAX = Z(CASE[3]);
+const PIV = C.rear_h_mm - DECK_TOP * CA + ZMIN * SA;          // tilt group height
+const floorY = (zl) => (zl * SA - PIV) / CA;                  // local y that lands on the table
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function rr(p, x0, z0, x1, z1, r) {
+  r = Math.max(0.01, Math.min(r, (x1 - x0) / 2 - 0.01, (z1 - z0) / 2 - 0.01));
+  const y0 = -z1, y1 = -z0;
+  p.moveTo(x0 + r, y0);
+  p.lineTo(x1 - r, y0); p.absarc(x1 - r, y0 + r, r, -Math.PI / 2, 0, false);
+  p.lineTo(x1, y1 - r); p.absarc(x1 - r, y1 - r, r, 0, Math.PI / 2, false);
+  p.lineTo(x0 + r, y1); p.absarc(x0 + r, y1 - r, r, Math.PI / 2, Math.PI, false);
+  p.lineTo(x0, y0 + r); p.absarc(x0 + r, y0 + r, r, Math.PI, Math.PI * 1.5, false);
+  return p;
+}
+const rrC = (p, cx, cz, w, d, r) => rr(p, cx - w / 2, cz - d / 2, cx + w / 2, cz + d / 2, r);
+function circ(p, cx, cz, r) { p.absarc(cx, -cz, r, 0, Math.PI * 2, true); return p; }
+function extrude(shape, opts, yBottom) {
+  const g = new THREE.ExtrudeGeometry(shape, Object.assign({ curveSegments: 18 }, opts));
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, yBottom + (opts.bevelEnabled ? opts.bevelThickness : 0), 0);
+  return g;
+}
+// Tapered rounded box, bottom at y=0: used for caps and switch housings.
+function taperBox(W, H, D, r, inX, inZ) {
+  const g = new THREE.RoundedBoxGeometry(W, H, D, 3, r);
+  const p = g.attributes.position, n = g.attributes.normal;
+  const kx = inX / H, kz = inZ / H, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i), t = (y + H / 2) / H;
+    p.setX(i, p.getX(i) * (1 - t * (2 * inX) / W));
+    p.setZ(i, p.getZ(i) * (1 - t * (2 * inZ) / D));
+    p.setY(i, y + H / 2);
+    v.set(n.getX(i), n.getY(i), n.getZ(i));
+    v.y += Math.abs(v.x) * kx + Math.abs(v.z) * kz;
+    v.normalize(); n.setXYZ(i, v.x, v.y, v.z);
+  }
+  return g;
+}
+
+// ── renderer, scene ───────────────────────────────────────────────────────
+const stage = document.getElementById("stage");
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+catch (e) { document.getElementById("loading").textContent = "WEBGL IS OFF IN THIS BROWSER"; throw e; }
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x070608);
+renderer.domElement.tabIndex = 0;
+renderer.domElement.setAttribute("aria-label", "3D model of the keybordy MP macropad");
+stage.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x070608, 700, 1500);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new THREE.RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(28, 16 / 9, 1, 4000);
+const key = new THREE.DirectionalLight(0xfff6ee, 1.7);
+key.position.set(140, 260, 170); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.4;
+Object.assign(key.shadow.camera, { left: -160, right: 160, top: 160, bottom: -160, near: 50, far: 700 });
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xb9a8ff, 0.55); rim.position.set(-220, 120, -240); scene.add(rim);
+scene.add(new THREE.HemisphereLight(0xf4f1f8, 0x070608, 0.12));
+
+// table: dark matte with a soft pool of light under the board
+const table = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshStandardMaterial({ color: 0x0b0a0d, roughness: 0.96, envMapIntensity: 0.04 }));
+table.rotation.x = -Math.PI / 2; table.receiveShadow = true; scene.add(table);
+{
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const g = c.getContext("2d"), gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gr.addColorStop(0, "rgba(34,31,40,0.9)"); gr.addColorStop(1, "rgba(34,31,40,0)");
+  g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(520, 520), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+  pool.rotation.x = -Math.PI / 2; pool.position.y = 0.05; scene.add(pool);
+}
+
+// ── materials ─────────────────────────────────────────────────────────────
+const pla = (hex, rough = 0.6) => new THREE.MeshPhysicalMaterial({ color: hex, roughness: rough, metalness: 0, clearcoat: 0.08, clearcoatRoughness: 0.6, envMapIntensity: 0.32 });
+const caseBlack = 0x161519;
+function noiseTex() {
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const g = c.getContext("2d"), d = g.createImageData(256, 256);
+  for (let i = 0; i < d.data.length; i += 4) { const v = 110 + Math.random() * 90; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+  g.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 5); return t;
+}
+const M = {
+  case: pla(caseBlack, 0.7),
+  deck: Object.assign(pla(caseBlack, 0.78), { bumpMap: noiseTex(), bumpScale: 0.25 }),
+  white: pla(PAL["Jade White"] === "#FFFFFF" ? 0xf1efeb : PAL["Jade White"], 0.5),
+  gray: pla(0x8e9089, 0.55),
+  green: pla(0x00ae42, 0.5),
+  knob: pla(0x1a191d, 0.55),
+  plate: pla(0x8e9089, 0.6),
+  pcb: new THREE.MeshPhysicalMaterial({ color: 0x101312, roughness: 0.35, clearcoat: 0.5, clearcoatRoughness: 0.3 }),
+  gold: new THREE.MeshStandardMaterial({ color: 0xd9a94a, metalness: 1, roughness: 0.3 }),
+  steel: new THREE.MeshStandardMaterial({ color: 0xc8c9cf, metalness: 1, roughness: 0.28 }),
+  darkMetal: new THREE.MeshStandardMaterial({ color: 0x3a3a42, metalness: 0.8, roughness: 0.4 }),
+  chip: new THREE.MeshStandardMaterial({ color: 0x1b1b1f, roughness: 0.5 }),
+  housing: new THREE.MeshStandardMaterial({ color: 0x2b2a31, roughness: 0.45 }),
+  stem: new THREE.MeshStandardMaterial({ color: 0xf0c43a, roughness: 0.45 }),
+  hole: new THREE.MeshBasicMaterial({ color: 0x030303 }),
+  glass: new THREE.MeshPhysicalMaterial({ color: 0x050506, roughness: 0.06, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05 }),
+  pouch: new THREE.MeshStandardMaterial({ color: 0xa9b3c2, metalness: 0.55, roughness: 0.32 }),
+  speaker: new THREE.MeshStandardMaterial({ color: 0x1d1c21, roughness: 0.6 }),
+};
+const mesh = (g, m, parent, cast = true) => { const o = new THREE.Mesh(g, m); o.castShadow = cast; o.receiveShadow = true; parent.add(o); return o; };
+
+// text decal (engraved look): a transparent canvas on a plane
+function decal(lines, wmm, hmm, color, opts = {}) {
+  const ppm = 28, c = document.createElement("canvas");
+  c.width = Math.round(wmm * ppm); c.height = Math.round(hmm * ppm);
+  const g = c.getContext("2d");
+  g.fillStyle = color; g.textAlign = opts.align || "center"; g.textBaseline = "middle";
+  const fs = (opts.size || 3) * ppm;
+  g.font = `${opts.weight || 600} ${fs}px ${opts.family || '"Martian Mono", monospace'}`;
+  const x = opts.align === "left" ? 0 : c.width / 2;
+  lines.forEach((ln, i) => g.fillText(ln, x, c.height / 2 + (i - (lines.length - 1) / 2) * fs * 1.25));
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  const m = new THREE.MeshStandardMaterial({ map: t, transparent: true, depthWrite: false, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2 });
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(wmm, hmm), m);
+  p.rotation.x = -Math.PI / 2;
+  return p;
+}
+
+// ── model ─────────────────────────────────────────────────────────────────
+const tilt = new THREE.Group(); tilt.position.y = PIV; tilt.rotation.x = ALPHA; scene.add(tilt);
+const G = {};
+["body", "inner", "pcb", "plate", "oled", "sw", "caps", "deck", "knobs"].forEach((k) => { G[k] = new THREE.Group(); tilt.add(G[k]); });
+const EXPLODE = { body: 0, inner: 20, pcb: 40, plate: 62, oled: 66, sw: 68, caps: 96, deck: 120, knobs: 136 };
+
+// case tray: walls follow the deck on top and the table at the bottom
+{
+  const s = rr(new THREE.Shape(), X(CASE[0]), Z(CASE[1]), X(CASE[2]), Z(CASE[3]), C.corner_r_mm);
+  const w = C.wall_mm;
+  s.holes.push(rr(new THREE.Path(), X(CASE[0]) + w, Z(CASE[1]) + w, X(CASE[2]) - w, Z(CASE[3]) - w, C.corner_r_mm - w));
+  const g = extrude(s, { depth: 1, bevelEnabled: false }, 0);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) < 0.5 ? floorY(p.getZ(i)) : DECK_BOT);
+  mesh(g, M.case, G.body);
+  const f = rr(new THREE.Shape(), X(CASE[0]) + w - 0.1, Z(CASE[1]) + w - 0.1, X(CASE[2]) - w + 0.1, Z(CASE[3]) - w + 0.1, C.corner_r_mm - w);
+  const fg = extrude(f, { depth: 1, bevelEnabled: false }, 0), fp = fg.attributes.position;
+  for (let i = 0; i < fp.count; i++) fp.setY(i, floorY(fp.getZ(i)) + (fp.getY(i) < 0.5 ? 0 : 2));
+  mesh(fg, M.case, G.body);
+
+  // speaker slots on the front wall, ports and switches on the rear wall
+  const sp = L.speaker.at;
+  for (let k = -4; k <= 4; k++) {   // vertical slots, as in cad/macropad.py
+    const y0 = floorY(ZMAX) + C.floor_mm + 3, y1 = PCB_TOP - 1.6 - 2.5;
+    const slot = mesh(new THREE.BoxGeometry(1.5, y1 - y0, 0.8), M.hole, G.body, false);
+    slot.position.set(X(sp[0]) + k * 3.0, (y0 + y1) / 2, ZMAX - 0.25);
+  }
+  const usb = mesh(new THREE.RoundedBoxGeometry(9.6, 3.6, 1.2, 2, 1.4), M.hole, G.body, false);
+  usb.position.set(X(L.usb_c.at[0]), PCB_TOP - 1.6 - 1.7, ZMIN + 0.3);
+  const tongue = mesh(new THREE.BoxGeometry(6.6, 0.7, 0.4), M.steel, G.body, false);
+  tongue.position.set(X(L.usb_c.at[0]), PCB_TOP - 1.6 - 1.7, ZMIN - 0.15);
+  for (const sw of L.switches) {
+    const slot = mesh(new THREE.RoundedBoxGeometry(9, 3, 1.2, 2, 0.8), M.hole, G.body, false);
+    slot.position.set(X(sw.at[0]), PCB_TOP - 1.6 - 1.6, ZMIN + 0.3);
+    const nub = mesh(new THREE.BoxGeometry(2.6, 2, 1.6), sw.id === "MIC" ? M.green : M.white, G.body, false);
+    nub.position.set(X(sw.at[0]) + (sw.id === "MIC" ? 1.6 : -1.6), PCB_TOP - 1.6 - 1.6, ZMIN - 0.4);
+    const lbl = decal([sw.id], 12, 4, "rgba(150,145,160,0.55)", { size: 2.6 });
+    lbl.rotation.set(0, Math.PI, 0); lbl.position.set(X(sw.at[0]), PCB_TOP - 1.6 + 2.2, ZMIN - 0.05); G.body.add(lbl);
+  }
+}
+
+// keys
+const keyHits = [];
+const caps = {};
+for (const k of L.keys) {
+  const cx = X((k.x + k.w / 2) * U), cz = Z((k.y + k.h / 2) * U);
+  const W = k.w * U - 0.95, D = k.h * U - 0.95, H = 8.2, inX = 2.2, inZ = 2.0;
+  const mat = k.role === "ptt" ? M.green : k.role === "mod" ? M.gray : M.white;
+  const ink = k.role === "ptt" ? "rgba(0,60,22,0.85)" : k.role === "mod" ? "rgba(40,42,38,0.9)" : "rgba(92,89,84,0.85)";
+  const grp = new THREE.Group(); grp.position.set(cx, CAP_Y, cz); G.caps.add(grp);
+  const cap = mesh(taperBox(W, H, D, 1.3, inX, inZ), mat, grp);
+  cap.userData.key = k.id; keyHits.push(cap);
+  const label = (KEYMAP[k.id] || [k.id])[0];
+  const lines = k.role === "ptt" ? ["● TALK"] : [label];
+  const dw = W - 2 * inX - 1.4, dd = D - 2 * inZ - 1.4;
+  const lg = decal(lines, dw, dd, ink, { size: label.length > 5 ? 2.0 : 2.4 });
+  lg.position.y = H + 0.03; grp.add(lg);
+  caps[k.id] = { grp, base: CAP_Y, target: CAP_Y };
+  // switch: housing on the plate, stem on top
+  const sw = new THREE.Group(); sw.position.set(cx, PLATE_TOP, cz); G.sw.add(sw);
+  mesh(taperBox(15.4, 6.4, 15.4, 1.0, 2.0, 1.8), M.housing, sw);
+  const s1 = mesh(new THREE.BoxGeometry(4.0, 3.6, 1.2), M.stem, sw); s1.position.y = 6.4 + 1.8;
+  const s2 = mesh(new THREE.BoxGeometry(1.2, 3.6, 4.0), M.stem, sw); s2.position.y = 6.4 + 1.8;
+  if (k.stab) for (const sx of [-11.938, 11.938]) {
+    const st = mesh(new THREE.BoxGeometry(6.4, 5.2, 10.5), M.housing, sw); st.position.set(sx, 2.6, 1.0);
+  }
+}
+
+// plate: switch cutouts, stab cutouts, encoder and OLED windows
+{
+  const w = C.wall_mm + C.gap_mm;
+  const s = rr(new THREE.Shape(), X(CASE[0]) + w, Z(CASE[1]) + w, X(CASE[2]) - w, Z(CASE[3]) - w, C.corner_r_mm - w);
+  for (const k of L.keys) {
+    const cx = X((k.x + k.w / 2) * U), cz = Z((k.y + k.h / 2) * U);
+    s.holes.push(rrC(new THREE.Path(), cx, cz, 14.0, 14.0, 0.3));
+    if (k.stab) for (const sx of [-11.938, 11.938]) s.holes.push(rrC(new THREE.Path(), cx + sx, cz + 1.0, 6.75, 12.3, 0.5));
+  }
+  for (const e of L.encoders) s.holes.push(rrC(new THREE.Path(), X(e.at[0]), Z(e.at[1]), 14.2, 15.2, 1));
+  const o = L.oled;
+  s.holes.push(rrC(new THREE.Path(), X(o.at[0]), Z(o.at[1]), o.module_mm[0] + 1, o.module_mm[1] + 1, 1));
+  mesh(extrude(s, { depth: L.case.plate_mm, bevelEnabled: false }, PLATE_TOP - L.case.plate_mm), M.plate, G.plate);
+}
+
+// PCB with the parts that matter to the eye
+{
+  const s = rr(new THREE.Shape(), X(po[0]), Z(po[1]), X(po[2]), Z(po[3]), L.pcb.corner_r_mm);
+  for (const h of L.pcb.holes_mm) s.holes.push(circ(new THREE.Path(), X(h[0]), Z(h[1]), L.pcb.hole_d_mm / 2));
+  mesh(extrude(s, { depth: 1.6, bevelEnabled: false }, PCB_TOP - 1.6), M.pcb, G.pcb);
+  const bot = PCB_TOP - 1.6;
+  for (const k of L.keys) {
+    const cx = X((k.x + k.w / 2) * U), cz = Z((k.y + k.h / 2) * U);
+    for (const [dx, dz] of [[-3.81, -2.54], [2.54, -5.08]]) {
+      const pad = mesh(new THREE.CylinderGeometry(1.25, 1.25, 0.05, 20), M.gold, G.pcb, false); pad.position.set(cx + dx, PCB_TOP + 0.03, cz + dz);
+    }
+    const c = mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.05, 24), M.hole, G.pcb, false); c.position.set(cx, PCB_TOP + 0.03, cz);
+    const sock = mesh(new THREE.BoxGeometry(10.9, 1.8, 5.9), M.chip, G.pcb); sock.position.set(cx - 0.6, bot - 0.9, cz - 3.8);
+    const dio = mesh(new THREE.BoxGeometry(2.7, 1.0, 1.6), M.chip, G.pcb); dio.position.set(cx + 7.0, bot - 0.5, cz + 4.5);
+  }
+  const m = L.mcu.at; // module on the bottom, antenna to the rear edge
+  const mod = mesh(new THREE.BoxGeometry(18, 0.8, 25.5), M.pcb, G.pcb); mod.position.set(X(m[0]), bot - 0.4, Z(m[1]) + 2);
+  const can = mesh(new THREE.BoxGeometry(15.8, 2.4, 17.6), M.steel, G.pcb); can.position.set(X(m[0]), bot - 0.8 - 1.2, Z(m[1]) + 5.5);
+  const lbl = decal(["keybordy MP", "rev B · ESP32-S3"], 46, 12, "rgba(238,235,242,0.9)", { size: 3.4, family: '"Anybody", sans-serif', weight: 800 });
+  lbl.position.set(X(30.75), PCB_TOP + 0.04, Z(10)); G.pcb.add(lbl);
+  for (const e of L.encoders) {
+    const ex = X(e.at[0]), ez = Z(e.at[1]);
+    const body = mesh(new THREE.BoxGeometry(L.encoder_part.body_mm[0], 6.5, L.encoder_part.body_mm[1]), M.darkMetal, G.pcb); body.position.set(ex, PCB_TOP + 3.25, ez);
+    const bush = mesh(new THREE.CylinderGeometry(3.5, 3.5, 5, 28), M.steel, G.pcb); bush.position.set(ex, PCB_TOP + 6.5 + 2.5, ez);
+    const shaft = mesh(new THREE.CylinderGeometry(3, 3, 12, 24), M.steel, G.pcb); shaft.position.set(ex, PCB_TOP + 11.5 + 6, ez);
+  }
+  const hdr = mesh(new THREE.BoxGeometry(17.8, 8.5, 2.5), M.chip, G.pcb); hdr.position.set(X(L.oled.at[0]), PCB_TOP + 4.25, Z(L.oled.at[1] + 16));
+  const mic = mesh(new THREE.BoxGeometry(4, 1, 3), M.steel, G.pcb); mic.position.set(X(L.mic.at[0]), bot - 0.5, Z(L.mic.at[1]));
+  const usbr = mesh(new THREE.BoxGeometry(8.9, 3.2, 7.3), M.steel, G.pcb); usbr.position.set(X(L.usb_c.at[0]), bot - 1.7, Z(po[1]) + 3.2);
+}
+
+// battery and speaker sit on the case floor
+{
+  const b = L.battery, bz = Z(b.at[1]);
+  const bat = mesh(new THREE.RoundedBoxGeometry(b.box_mm[0], b.box_mm[2], b.box_mm[1], 2, 1.2), M.pouch, G.inner);
+  bat.position.set(X(b.at[0]), floorY(bz) + 2 + b.box_mm[2] / 2, bz);
+  const s = L.speaker, sz = Z(s.at[1]);
+  const spk = mesh(new THREE.RoundedBoxGeometry(s.box_mm[0], s.box_mm[2], s.box_mm[1], 2, 1.5), M.speaker, G.inner);
+  spk.position.set(X(s.at[0]), floorY(sz) + 2 + s.box_mm[2] / 2, sz);
+}
+
+// OLED: glass in the deck window, live 128x64 texture
+const oc = document.createElement("canvas"); oc.width = 128; oc.height = 64;
+const og = oc.getContext("2d");
+const oledTex = new THREE.CanvasTexture(oc);
+oledTex.magFilter = THREE.NearestFilter; oledTex.minFilter = THREE.LinearFilter; oledTex.generateMipmaps = false; oledTex.encoding = THREE.sRGBEncoding;
+{
+  const o = L.oled, ox = X(o.at[0]), oz = Z(o.at[1]);
+  const pcb = mesh(new THREE.BoxGeometry(o.module_mm[0], 1.6, o.module_mm[1]), M.pcb, G.oled); pcb.position.set(ox, -1.2, oz);
+  const glass = mesh(new THREE.BoxGeometry(o.active_mm[0] + 5, 1.4, o.active_mm[1] + 7), M.glass, G.oled); glass.position.set(ox, 0.3, oz);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(o.active_mm[0], o.active_mm[1]), new THREE.MeshBasicMaterial({ map: oledTex, toneMapped: false }));
+  scr.rotation.x = -Math.PI / 2; scr.position.set(ox, 1.02, oz); G.oled.add(scr);
+}
+
+// top deck: textured, rounded edges, cut for keys, screen and knobs
+let micLed;
+{
+  const s = 1.0, w = C.wall_mm;
+  const shape = rr(new THREE.Shape(), X(CASE[0]) + s, Z(CASE[1]) + s, X(CASE[2]) - s, Z(CASE[3]) - s, C.corner_r_mm - s);
+  shape.holes.push(rr(new THREE.Path(), X(-1.0), Z(2.25 * U - 1.0), X(6 * U + 1.0), Z(6.25 * U + 1.0), 2.6));
+  const o = L.oled;
+  shape.holes.push(rrC(new THREE.Path(), X(o.at[0]), Z(o.at[1]), o.active_mm[0] + 3, o.active_mm[1] + 3, 1.6));
+  { // one channel round the three knobs
+    const kr = L.encoder_part.knob_d_mm / 2 + 1.2, xs = L.encoders.map((e) => e.at[0]);
+    shape.holes.push(rr(new THREE.Path(), X(Math.min(...xs) - kr), Z(L.encoders[0].at[1] - kr), X(Math.max(...xs) + kr), Z(L.encoders[0].at[1] + kr), kr));
+  }
+  const deck = mesh(extrude(shape, { depth: DECK_TOP - DECK_BOT - 2 * s, bevelEnabled: true, bevelThickness: s, bevelSize: s, bevelSegments: 4 }, DECK_BOT), M.deck, G.deck);
+  // engraving: wordmark, knob labels, mic port, mic LED
+  const wm = decal(["keybordy"], 40, 7, "rgba(70,66,78,0.9)", { size: 4.5, family: '"Anybody", sans-serif', weight: 900, align: "left" });
+  wm.position.set(X(2) + 20, DECK_TOP + 0.02, Z(-2.0)); G.deck.add(wm);
+  for (const e of L.encoders) {
+    const t = decal([ENC[e.id].short], 16, 4, "rgba(80,76,88,0.95)", { size: 2.4 });
+    t.position.set(X(e.at[0]), DECK_TOP + 0.02, Z(e.at[1] + L.encoder_part.knob_d_mm / 2 + 4.6)); G.deck.add(t);
+  }
+  const port = mesh(new THREE.CircleGeometry(0.75, 20), M.hole, G.deck, false);
+  port.rotation.x = -Math.PI / 2; port.position.set(X(L.mic.at[0]), DECK_TOP + 0.03, Z(L.mic.at[1]));
+  const portRing = decal(["MIC"], 10, 3.5, "rgba(80,76,88,0.95)", { size: 2.0 });
+  portRing.position.set(X(L.mic.at[0]) + 6.5, DECK_TOP + 0.02, Z(L.mic.at[1])); G.deck.add(portRing);
+  micLed = new THREE.Mesh(new THREE.CircleGeometry(1.0, 24), new THREE.MeshBasicMaterial({ color: 0x1e1d22, toneMapped: false }));
+  micLed.rotation.x = -Math.PI / 2; micLed.position.set(X(L.mic_led.at[0]), DECK_TOP + 0.03, Z(L.mic_led.at[1])); G.deck.add(micLed);
+}
+
+// knobs: knurled, with an indicator groove
+const knobs = {};
+const knobHits = [];
+{
+  const R = L.encoder_part.knob_d_mm / 2, Hk = L.encoder_part.knob_h_mm, n = 72, b = 0.5;
+  const star = new THREE.Shape();
+  for (let i = 0; i <= n * 2; i++) {
+    const a = (i / (n * 2)) * Math.PI * 2, r = (i % 2 ? R - b - 0.32 : R - b);
+    i ? star.lineTo(Math.cos(a) * r, Math.sin(a) * r) : star.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  const kg = extrude(star, { depth: Hk - 2 * b, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 2, curveSegments: 1 }, 0);
+  for (const e of L.encoders) {
+    const grp = new THREE.Group(); grp.position.set(X(e.at[0]), PCB_TOP + L.encoder_part.shaft_top_above_pcb_mm - 12, Z(e.at[1])); G.knobs.add(grp);
+    const k = mesh(kg, M.knob, grp); k.userData.enc = e.id; knobHits.push(k);
+    const top = mesh(new THREE.CylinderGeometry(R - 1.6, R - 1.6, 0.3, 48), M.chip, grp, false); top.position.y = Hk + 0.05;
+    const ind = mesh(new THREE.BoxGeometry(1.0, 0.3, R - 2.2), new THREE.MeshStandardMaterial({ color: 0xd8d4de, roughness: 0.5 }), grp, false);
+    ind.position.set(0, Hk + 0.12, -(R - 2.2) / 2 - 0.6);
+    knobs[e.id] = { grp, angle: 0, target: 0 };
+  }
+}
+
+// ── OLED UI (1-bit, thresholded like the real panel) ──────────────────────
+const S = { layer: 0, battery: 82, mode: "idle", until: 0, key: null, enc: "E1", listening: false, transcript: "", wave: [] };
+function px(font) { og.font = font; }
+function oledFrame(draw) {
+  og.fillStyle = "#000"; og.fillRect(0, 0, 128, 64);
+  og.fillStyle = "#fff"; og.strokeStyle = "#fff"; og.textBaseline = "top";
+  draw();
+  const d = og.getImageData(0, 0, 128, 64);
+  for (let i = 0; i < d.data.length; i += 4) { const v = d.data[i] > 118 ? 255 : 0; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+  og.putImageData(d, 0, 0);
+  oledTex.needsUpdate = true;
+}
+function statusBar() {
+  px('600 8px "Martian Mono", monospace');
+  og.textAlign = "left"; og.fillText("L" + S.layer, 1, 0);
+  og.fillText(S.listening ? "● MIC" : "BLE", 20, 0);
+  og.textAlign = "right"; og.fillText(S.battery + "%", 110, 0);
+  og.strokeRect(112.5, 1.5, 13, 6); og.fillRect(126, 3, 1.5, 3); og.fillRect(114, 3, Math.round(10 * S.battery / 100), 3);
+  og.fillRect(0, 10, 128, 1);
+}
+function centered(text, y, font) { px(font); og.textAlign = "center"; og.fillText(text, 64, y); }
+function drawOled(t) {
+  oledFrame(() => {
+    statusBar();
+    if (S.listening) {
+      centered("LISTENING", 15, '700 9px "Martian Mono", monospace');
+      for (let i = 0; i < 30; i++) {
+        const h = 2 + Math.abs(Math.sin(t / 140 + i * 0.7) * Math.sin(t / 370 + i * 1.3)) * 22;
+        og.fillRect(4 + i * 4, 44 - h / 2, 2, h);
+      }
+      return;
+    }
+    if (S.mode === "heard") {
+      centered("“" + S.transcript + "”", 16, '400 9px "Martian Mono", monospace');
+      centered("› Notes", 34, '800 16px "Anybody", sans-serif');
+      return;
+    }
+    if (S.mode === "key" && S.key) {
+      const [label, type, arg] = KEYMAP[S.key] || [S.key, "", ""];
+      centered(label, 15, '900 22px "Anybody", sans-serif');
+      centered(type + " › " + arg, 44, '400 8px "Martian Mono", monospace');
+      return;
+    }
+    if (S.mode === "enc") {
+      const e = ENC[S.enc];
+      px('700 9px "Martian Mono", monospace'); og.textAlign = "left"; og.fillText(S.enc + " " + e.name, 2, 16);
+      centered(String(e.v), 26, '900 22px "Anybody", sans-serif');
+      og.strokeRect(2.5, 53.5, 123, 8); og.fillRect(4, 55, Math.round(120 * e.v / 100), 5);
+      return;
+    }
+    centered("keybordy", 17, '900 19px "Anybody", sans-serif');
+    px('400 8px "Martian Mono", monospace'); og.textAlign = "center";
+    og.fillText(`VOL ${ENC.E1.v}  SCRL  LIGHT ${ENC.E3.v}`, 64, 50);
+  });
+}
+
+// ── interaction ───────────────────────────────────────────────────────────
+const status = document.getElementById("status");
+const say = (html) => { status.innerHTML = html; };
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+function hit(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const h = ray.intersectObjects([...keyHits, ...knobHits], false)[0];
+  return h ? h.object.userData : null;
+}
+let held = null, downAt = null;
+function pressKey(id) { caps[id].target = CAP_Y - 3.6; }
+function releaseKey(id) { caps[id].target = CAP_Y; }
+function startTalk() {
+  S.listening = true; S.mode = "listen"; pressKey("K21");
+  micLed.material.color.set(0xd6ff1f);
+  say("<b>Listening.</b> Mic LED on, audio streams to the Mac over Wi-Fi.");
+}
+function stopTalk() {
+  if (!S.listening) return;
+  S.listening = false; releaseKey("K21");
+  micLed.material.color.set(0x1e1d22);
+  S.transcript = "open my notes"; S.mode = "heard"; S.until = performance.now() + 2600;
+  say("Heard <b>“open my notes”</b>. Whisper on the Mac → matched the NOTES key → Notes opens.");
+}
+function turn(id, dir) {
+  const e = ENC[id]; e.v = Math.max(0, Math.min(100, e.v + dir * e.step));
+  knobs[id].target += dir * (Math.PI * 2 / 24);
+  S.mode = "enc"; S.enc = id; S.until = performance.now() + 1800;
+  say(`<b>${id} ${e.name}</b> ${dir > 0 ? "clockwise" : "counter-clockwise"}: ${e.v}. Modes are set per knob in the keymap editor.`);
+}
+function fireKey(id) {
+  const [label, type, arg] = KEYMAP[id] || [id, "", ""];
+  S.mode = "key"; S.key = id; S.until = performance.now() + 1800;
+  say(`<b>${id} ${label}</b>: ${type} › ${arg}`);
+}
+const cvs = renderer.domElement;
+cvs.addEventListener("pointerdown", (ev) => {
+  const h = hit(ev); if (!h) return;
+  stopIntro(); controls.enabled = false; downAt = [ev.clientX, ev.clientY]; held = h;
+  try { cvs.setPointerCapture(ev.pointerId); } catch (e) {}
+  if (h.key === "K21") startTalk();
+  else if (h.key) pressKey(h.key);
+  else if (h.enc) turn(h.enc, ev.shiftKey ? -1 : 1);
+});
+const endPress = () => {
+  if (!held) return;
+  if (held.key === "K21") stopTalk();
+  else if (held.key) { releaseKey(held.key); fireKey(held.key); }
+  held = null; controls.enabled = true;
+};
+cvs.addEventListener("pointerup", endPress);
+cvs.addEventListener("pointercancel", endPress);
+cvs.addEventListener("wheel", (ev) => {
+  const h = hit(ev); if (!h || !h.enc) return;
+  ev.preventDefault(); ev.stopImmediatePropagation(); stopIntro();
+  turn(h.enc, ev.deltaY < 0 ? 1 : -1);
+}, { passive: false });
+addEventListener("keydown", (ev) => {
+  if (ev.code === "Space" && !ev.repeat && (document.activeElement === cvs || document.activeElement === document.body)) { ev.preventDefault(); startTalk(); }
+});
+addEventListener("keyup", (ev) => { if (ev.code === "Space") stopTalk(); });
+
+const controls = new THREE.OrbitControls(camera, cvs);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 120; controls.maxDistance = 900; controls.maxPolarAngle = Math.PI * 0.49;
+controls.enablePan = false;
+
+// ── camera views + explode ────────────────────────────────────────────────
+const VIEWS = {
+  hero: { pos: [165, 185, 255], at: [0, 12, 6] },
+  top: { pos: [0, 380, 40], at: [0, 10, 0] },
+  side: { pos: [330, 70, 30], at: [0, 14, 0] },
+  rear: { pos: [-150, 120, -270], at: [0, 12, 0] },
+  explode: { pos: [250, 260, 330], at: [0, 70, 0] },
+};
+let tween = null, explode = 0, explodeTarget = 0, intro = !reduced;
+function stopIntro() { intro = false; }
+function go(name) {
+  const v = VIEWS[name];
+  document.querySelectorAll("button.v").forEach((b) => b.setAttribute("aria-pressed", String(b.id === "v-" + name)));
+  explodeTarget = name === "explode" ? 1 : 0;
+  document.getElementById("explode").value = explodeTarget;
+  const to = { pos: new THREE.Vector3(...v.pos), at: new THREE.Vector3(...v.at) };
+  if (reduced) { camera.position.copy(to.pos); controls.target.copy(to.at); explode = explodeTarget; return; }
+  tween = { from: { pos: camera.position.clone(), at: controls.target.clone() }, to, t0: performance.now(), dur: 1100 };
+}
+for (const n of Object.keys(VIEWS)) document.getElementById("v-" + n).addEventListener("click", () => { stopIntro(); go(n); });
+document.getElementById("explode").addEventListener("input", (e) => {
+  stopIntro(); explodeTarget = +e.target.value; if (reduced) explode = explodeTarget;
+  document.querySelectorAll("button.v").forEach((b) => b.setAttribute("aria-pressed", "false"));
+});
+cvs.addEventListener("pointerdown", stopIntro);
+camera.position.set(...VIEWS.hero.pos); controls.target.set(...VIEWS.hero.at);
+
+// ── spec tables ───────────────────────────────────────────────────────────
+{
+  const sizes = {};
+  for (const k of L.keys) sizes[k.w + "u"] = (sizes[k.w + "u"] || 0) + 1;
+  const rows = [
+    ["Footprint", `${WIDTH.toFixed(1)} × ${DEPTH.toFixed(1)} mm`],
+    ["Height", `${C.front_h_mm} mm front → ${C.rear_h_mm} mm rear`],
+    ["Typing angle", `${(ALPHA * 180 / Math.PI).toFixed(1)}°`],
+    ["Keys", `${L.keys.length}: ` + Object.entries(sizes).map(([s, n]) => `${n}×${s}`).join(", ")],
+    ["Key pitch", `1u = ${U} mm, MX hotswap`],
+    ["Knobs", `${L.encoders.length} × ⌀${L.encoder_part.knob_d_mm} mm, ${(L.encoders[1].at[0] - L.encoders[0].at[0]).toFixed(1)} mm apart`],
+    ["Screen", `${L.oled.active_mm[0]} × ${L.oled.active_mm[1]} mm, 128×64 white`],
+    ["Matrix", `${L.matrix.rows} × ${L.matrix.cols}, ${L.matrix.diode}`],
+  ];
+  document.getElementById("dims").innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("");
+  const n1 = L.keys.filter((k) => !k.role && k.w === 1).length;
+  const sw = (name) => `<span class="sw" style="background:${PAL[name]}"></span>${name}`;
+  const prints = [
+    ["Case tray", sw(L.finish.case), "upright, floor on the plate"],
+    ["Top deck", sw(L.finish.case), "face down: textured top"],
+    ["Switch plate, 1.5 mm", sw("Gray"), "flat"],
+    [`Keycaps 1u ×${n1}`, sw(L.finish.keycaps), "upside down, engraved legends"],
+    ["Keycaps 1.5u ×2", sw(L.finish.mods), "upside down"],
+    ["Talk bar 2u", sw(L.finish.ptt), "upside down, stab stems"],
+    ["Knobs ×3", sw(L.finish.knobs), "knurled, D-bore 6.1 / 4.6 mm"],
+  ];
+  document.getElementById("prints").innerHTML = prints.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="m">${r[2]}</td></tr>`).join("");
+}
+
+// ── loop ──────────────────────────────────────────────────────────────────
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h;
+  camera.fov = w / h < 1.1 ? 40 : 28; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+let lastOled = 0, t0 = performance.now();
+function frame(t) {
+  if (tween) {
+    const k = Math.min(1, (t - tween.t0) / tween.dur), e = ease(k);
+    camera.position.lerpVectors(tween.from.pos, tween.to.pos, e);
+    controls.target.lerpVectors(tween.from.at, tween.to.at, e);
+    if (k === 1) tween = null;
+  } else if (intro) {
+    const a = Math.sin((t - t0) / 5200) * 0.42, r = 345;
+    camera.position.set(Math.sin(a) * r * 0.62, 185, Math.cos(a) * r * 0.78);
+  }
+  explode += (explodeTarget - explode) * (reduced ? 1 : 0.08);
+  for (const k in G) G[k].position.y = EXPLODE[k] * explode;
+  for (const id in caps) { const c = caps[id]; c.grp.position.y += (c.target - c.grp.position.y) * (reduced ? 1 : 0.35); }
+  for (const id in knobs) { const k = knobs[id]; k.angle += (k.target - k.angle) * (reduced ? 1 : 0.25); k.grp.rotation.y = -k.angle; }
+  if (S.until && t > S.until && !S.listening) { S.mode = "idle"; S.until = 0; }
+  if (t - lastOled > 66) { drawOled(t); lastOled = t; }
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+document.fonts.ready.then(() => drawOled(0));
+Promise.all(['900 24px "Anybody"', '600 8px "Martian Mono"'].map((f) => document.fonts.load(f).catch(() => {}))).then(() => drawOled(0));
+document.getElementById("loading").remove();
+requestAnimationFrame(frame);
+</script>

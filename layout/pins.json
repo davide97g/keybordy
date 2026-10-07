@@ -1,0 +1,28 @@
+{
+  "_doc": [
+    "GPIO map for keybordy MP on an ESP32-S3-WROOM-1-N16R8. `just mp-gen` writes firmware/macropad/main/board_pins.h from it; `just mp-lint` checks it.",
+    "Off-limits on this module: 19/20 (native USB), 26-32 (flash), 33/34 (not bonded out), 35-37 (octal PSRAM).",
+    "Strapping pins (0, 3, 45, 46) are allowed only with a `strap` note saying why the boot level stays right.",
+    "43/44 are UART0. Logs go over USB-Serial-JTAG, so they are free, but the ROM prints on 43 at boot."
+  ],
+  "matrix": {
+    "rows": [4, 5, 6, 7, 15],
+    "cols": [16, 17, 18, 8, 9, 10]
+  },
+  "encoders": {
+    "E1": { "a": 11, "b": 12 },
+    "E2": { "a": 13, "b": 14 },
+    "E3": { "a": 21, "b": 47 }
+  },
+  "i2s": { "bclk": 38, "ws": 39, "mic_sd": 40, "amp_din": 41 },
+  "amp_sd": { "gpio": 46, "strap": "MAX98357A SD_MODE has an internal 100k pull-down, so GPIO46 reads low at boot (boot-mode strap wants low)" },
+  "oled": {
+    "sck": 42, "mosi": 2, "cs": 48,
+    "dc":  { "gpio": 43, "note": "ROM boot chatter on U0TXD only toggles DC while CS is high, so the panel ignores it" },
+    "res": "EN"
+  },
+  "vbat_adc": 1,
+  "charge_stat": 44,
+  "mic_led": { "gpio": 45, "strap": "LED + resistor to GND holds GPIO45 low at boot (VDD_SPI strap wants low for 3.3 V flash)" },
+  "boot_button": 0
+}

@@ -1,0 +1,9 @@
+[project]
+name = "keybordy-cad"
+version = "0.1.0"
+description = "keybordy MP printed parts (build123d), generated from layout/macropad.json"
+requires-python = ">=3.12,<3.13"
+dependencies = ["build123d>=0.9"]
+
+[tool.uv]
+package = false

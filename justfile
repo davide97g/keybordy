@@ -31,6 +31,42 @@ fw-monitor:
 fw-bin name=sketch:
     arduino-cli compile --fqbn {{fqbn}} --output-dir firmware/{{name}}/build firmware/{{name}}
 
+# ── keybordy MP (ESP32-S3 macropad; layout/ is the single source) ─────────────
+
+# Lint layout/macropad.json + layout/pins.json against the ESP32-S3 module rules
+mp-lint *args:
+    @python3 layout/gen.py check {{args}}
+
+# Regenerate firmware/macropad/main/board_pins.h from the layout and pin map
+mp-gen:
+    @python3 layout/gen.py header
+
+# 3D concept render from the layout, opened in the browser
+mp-preview:
+    @python3 layout/gen.py preview
+    open layout/preview/keybordy-mp.html
+
+# Printed parts from the layout (build123d): STL + STEP into cad/out/ (e.g. `just cad-build knob cap1`)
+[working-directory: 'cad']
+cad-build *parts:
+    uv run python macropad.py {{parts}}
+
+# Put the parts and stand-ins for the electronics together and report collisions
+[working-directory: 'cad']
+cad-check:
+    uv run python fitcheck.py
+
+# Slice into Bambu Studio projects, one plate per colour, into cad/out/plates/ (print 01-fit first)
+[working-directory: 'cad']
+cad-slice *plates:
+    uv run python slice.py {{plates}}
+
+# Print preview page (real meshes on the sliced plates + assembly) into cad/out/preview/, after cad-slice
+[working-directory: 'cad']
+cad-preview:
+    uv run python preview.py
+    open out/preview/keybordy-mp-prints.html
+
 # ── Mac actions (Hammerspoon) ───────────────────────────────────────────────
 
 # Install Hammerspoon (into ~/Applications, no sudo), link host/hammerspoon/keybordy.lua into ~/.hammerspoon, start it

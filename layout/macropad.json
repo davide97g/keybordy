@@ -1,0 +1,100 @@
+{
+  "_doc": [
+    "keybordy MP layout: the single source for pcb/macropad/build.py, cad/, the firmware header (layout/gen.py) and the host editor.",
+    "Origin is the top-left corner of the key field, x right, y toward the user (KiCad orientation). U = 19.05 mm.",
+    "keys[].x/y/w/h are in u (top-left corner and size, KLE style). Every other position is in mm, as the part's centre.",
+    "matrix: diodes COL2ROW, rows are driven LOW one at a time, columns read with pull-ups. Encoder pushes sit in matrix row 4.",
+    "Change pins in layout/pins.json, then `just mp-gen` and `just mp-lint`."
+  ],
+  "name": "keybordy-mp",
+  "u_mm": 19.05,
+  "matrix": { "rows": 5, "cols": 6, "diode": "COL2ROW" },
+
+  "keys": [
+    { "id": "K1",  "x": 0,   "y": 2.25, "w": 1,   "h": 1, "row": 0, "col": 0 },
+    { "id": "K2",  "x": 1,   "y": 2.25, "w": 1,   "h": 1, "row": 0, "col": 1 },
+    { "id": "K3",  "x": 2,   "y": 2.25, "w": 1,   "h": 1, "row": 0, "col": 2 },
+    { "id": "K4",  "x": 3,   "y": 2.25, "w": 1,   "h": 1, "row": 0, "col": 3 },
+    { "id": "K5",  "x": 4,   "y": 2.25, "w": 1,   "h": 1, "row": 0, "col": 4 },
+    { "id": "K6",  "x": 5,   "y": 2.25, "w": 1,   "h": 1, "row": 0, "col": 5 },
+    { "id": "K7",  "x": 0,   "y": 3.25, "w": 1,   "h": 1, "row": 1, "col": 0 },
+    { "id": "K8",  "x": 1,   "y": 3.25, "w": 1,   "h": 1, "row": 1, "col": 1 },
+    { "id": "K9",  "x": 2,   "y": 3.25, "w": 1,   "h": 1, "row": 1, "col": 2 },
+    { "id": "K10", "x": 3,   "y": 3.25, "w": 1,   "h": 1, "row": 1, "col": 3 },
+    { "id": "K11", "x": 4,   "y": 3.25, "w": 1,   "h": 1, "row": 1, "col": 4 },
+    { "id": "K12", "x": 5,   "y": 3.25, "w": 1,   "h": 1, "row": 1, "col": 5 },
+    { "id": "K13", "x": 0,   "y": 4.25, "w": 1,   "h": 1, "row": 2, "col": 0 },
+    { "id": "K14", "x": 1,   "y": 4.25, "w": 1,   "h": 1, "row": 2, "col": 1 },
+    { "id": "K15", "x": 2,   "y": 4.25, "w": 1,   "h": 1, "row": 2, "col": 2 },
+    { "id": "K16", "x": 3,   "y": 4.25, "w": 1,   "h": 1, "row": 2, "col": 3 },
+    { "id": "K17", "x": 4,   "y": 4.25, "w": 1,   "h": 1, "row": 2, "col": 4 },
+    { "id": "K18", "x": 5,   "y": 4.25, "w": 1,   "h": 1, "row": 2, "col": 5 },
+    { "id": "K19", "x": 0,   "y": 5.25, "w": 1.5, "h": 1, "row": 3, "col": 0, "role": "mod" },
+    { "id": "K20", "x": 1.5, "y": 5.25, "w": 1,   "h": 1, "row": 3, "col": 2 },
+    { "id": "K21", "x": 2.5, "y": 5.25, "w": 2,   "h": 1, "row": 3, "col": 3, "role": "ptt", "stab": true },
+    { "id": "K22", "x": 4.5, "y": 5.25, "w": 1.5, "h": 1, "row": 3, "col": 5, "role": "mod" }
+  ],
+
+  "encoders": [
+    { "id": "E1", "at": [72.0, 21.0],  "push": { "row": 4, "col": 0 } },
+    { "id": "E2", "at": [89.4, 21.0],  "push": { "row": 4, "col": 1 } },
+    { "id": "E3", "at": [106.8, 21.0], "push": { "row": 4, "col": 2 } }
+  ],
+  "encoder_part": {
+    "name": "Bourns PEC11R-4220F-S0024", "lcsc": "C143797",
+    "body_mm": [12.4, 13.4], "shaft_d_mm": 6.0, "knob_d_mm": 15.0, "knob_h_mm": 14.0,
+    "shaft_top_above_pcb_mm": 21.5,
+    "shaft_note": "verify: 21.5 assumes the 15 mm flatted shaft (PEC11R-4215F). C143797 is the 20 mm shaft, which lifts the knob 5 mm"
+  },
+
+  "oled": {
+    "name": "Waveshare 2.42inch OLED Module (SSD1309, 128x64, white)",
+    "at": [30.75, 21.0],
+    "module_mm": [61.5, 39.5],
+    "active_mm": [55.0, 27.5],
+    "mount": "plate standoffs, GH1.25-to-dupont cable onto a 1x7 2.54 mm header on the PCB",
+    "verify": "hole positions and active-area offset with calipers before freezing the case"
+  },
+
+  "mic":     { "part": "TDK ICS-43434", "lcsc": "C5656610", "at": [80.7, 4.0], "port_d_mm": 0.9 },
+  "mic_led": { "at": [98.1, 4.0] },
+  "speaker": { "part": "8 ohm 2 W cavity speaker 20x30", "at": [22.0, 104.0], "box_mm": [30.0, 20.0, 5.0], "verify": "thickness", "fires": "down + front slots" },
+  "usb_c":   { "at": [57.15, -6.0], "edge": "rear" },
+  "mcu":     { "part": "ESP32-S3-WROOM-1-N16R8", "lcsc": "C2913202", "at": [22.0, 7.0], "side": "bottom", "antenna": "rear edge, keep-out" },
+  "battery": { "part": "LiPo 603450 1000 mAh", "at": [78.0, 64.0], "box_mm": [50.0, 34.0, 6.0], "why": "a 10 mm cell does not fit under the PCB at the front height" },
+  "switches": [
+    { "id": "PWR", "at": [30.0, -6.0], "edge": "rear" },
+    { "id": "MIC", "at": [98.1, -6.0], "edge": "rear", "cuts": "mic VDD" }
+  ],
+
+  "pcb": {
+    "outline_mm": [-6.0, -6.0, 120.3, 125.06],
+    "corner_r_mm": 3.0,
+    "holes_mm": [[-3.0, -3.0], [117.3, -3.0], [-3.0, 122.06], [117.3, 122.06], [64.5, 41.8]],
+    "hole_d_mm": 2.2,
+    "pillar_d_mm": 7.0,
+    "screws": "M2: corners M2x12 from below through tray pillar, PCB, plate standoff and plate into the deck; centre M2x8 into the plate standoff"
+  },
+
+  "case": {
+    "wall_mm": 3.0,
+    "gap_mm": 0.5,
+    "front_h_mm": 19.0,
+    "rear_h_mm": 29.0,
+    "edge_chamfer_mm": 2.0,
+    "corner_r_mm": 6.0,
+    "plate_mm": 1.5,
+    "deck_mm": 4.0,
+    "floor_mm": 2.0,
+    "pcb_below_plate_mm": 5.0
+  },
+
+  "finish": {
+    "case": "Black",
+    "keycaps": "Jade White",
+    "mods": "Gray",
+    "ptt": "Bambu Green",
+    "knobs": "Black",
+    "palette": { "Black": "#000000", "Jade White": "#FFFFFF", "Gray": "#8E9089", "Bambu Green": "#00AE42" }
+  }
+}

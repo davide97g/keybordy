@@ -1,0 +1,334 @@
+<title>keybordy MP Prints</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,400..900&family=Geist:wght@400;500;600&family=Martian+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the stage holds six build plates (or the assembly); a rail of plate chips under it, then the parts list.
+   keybordy is dark only: black ground, lime signal, lavender secondary. */
+:root {
+  color-scheme: dark;
+  --ground: #070608;
+  --panel: #121015;
+  --line: #2c2833;
+  --fg: #f4f1f8;
+  --muted: #a59fb2;
+  --lime: #d6ff1f;
+  --lavender: #b9a8ff;
+  --display: "Anybody", "Arial Narrow", system-ui, sans-serif;
+  --body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+html, body { background: var(--ground); color: var(--fg); }
+body { font: 15px/1.55 var(--body); padding-inline: 16px; padding-block: 20px 48px; }
+.wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1 { margin: 0; font: 900 clamp(34px, 6vw, 60px)/0.92 var(--display); font-stretch: 130%; letter-spacing: -0.02em; }
+h1 em { font-style: normal; color: var(--lime); }
+.sub { margin: 8px 0 0; color: var(--muted); max-width: 64ch; }
+.totals { display: flex; gap: 18px; font: 600 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.totals b { display: block; font: 800 26px/1 var(--display); font-stretch: 115%; color: var(--fg); letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+
+.stage { position: relative; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--ground);
+  aspect-ratio: 16 / 9; max-height: 74vh; width: 100%; min-height: 360px; touch-action: none; }
+.stage canvas { display: block; width: 100%; height: 100%; outline: none; }
+.tip { position: absolute; pointer-events: none; font: 600 11px/1.3 var(--mono); background: rgba(18,16,21,0.92); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; transform: translate(12px, 12px); white-space: nowrap; }
+.tip span { color: var(--muted); font-weight: 400; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font: 600 12px var(--mono); color: var(--muted); letter-spacing: 0.1em; }
+
+.rail { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.seg { display: flex; gap: 6px; }
+button.v { font: 600 12px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; cursor: pointer; box-shadow: inset 0 -3px 0 #070608; }
+button.v:hover { border-color: var(--lavender); }
+button.v[aria-pressed="true"] { background: var(--lime); color: var(--ground); border-color: var(--lime); box-shadow: inset 0 -3px 0 #8fb300; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+.explode { display: flex; align-items: center; gap: 10px; font: 600 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.explode input { width: min(220px, 45vw); accent-color: var(--lime); }
+.explode[hidden] { display: none !important; }
+
+.chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.chip { text-align: left; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: center; color: var(--fg);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; font: inherit; }
+.chip:hover { border-color: var(--lavender); }
+.chip[aria-pressed="true"] { border-color: var(--lime); box-shadow: inset 0 0 0 1px var(--lime); }
+.chip .sw { grid-row: span 2; width: 22px; height: 22px; border-radius: 5px; border: 1px solid #4b4456; }
+.chip .n { font: 700 13px var(--mono); }
+.chip .m { font: 400 11.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip .c { grid-column: 2; font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.notes section { min-width: 0; border-top: 2px solid var(--fg); padding-top: 10px; }
+h2 { margin: 0 0 8px; font: 800 18px/1.1 var(--display); font-stretch: 120%; text-transform: uppercase; }
+.notes p, .notes li { color: var(--muted); font-size: 13.5px; max-width: 65ch; }
+.notes ol, .notes ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.notes b { color: var(--fg); font-weight: 600; }
+code { font: 12px var(--mono); color: var(--lavender); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>keybordy MP <em>prints</em></h1>
+      <p class="sub">Every printed part, from the real CAD meshes, placed on the bed exactly as Bambu Studio arranged it. One plate per filament colour: 0.20 mm Standard, PLA Basic, Textured PEI.</p>
+    </div>
+    <div class="totals" id="totals"></div>
+  </header>
+
+  <div class="stage" id="stage">
+    <div class="loading" id="loading">DECODING MESHES…</div>
+    <div class="tip" id="tip" hidden></div>
+  </div>
+
+  <div class="rail">
+    <div class="seg" role="group" aria-label="View">
+      <button class="v" id="v-plates" aria-pressed="true">Print plates</button>
+      <button class="v" id="v-asm" aria-pressed="false">Assembled</button>
+    </div>
+    <label class="explode" id="explode-wrap" for="explode" hidden>Explode <input id="explode" type="range" min="0" max="1" step="0.01" value="0.35"></label>
+  </div>
+
+  <div class="chips" id="chips" role="group" aria-label="Plates"></div>
+
+  <div class="notes">
+    <section>
+      <h2>Print order</h2>
+      <ol>
+        <li><b>01-fit first.</b> Check that a switch clips into the 14.1 mm hole, that the cap holds on the stem, and which knob bore (1–3 notches) fits the encoder shaft.</li>
+        <li>Caps and plate next (02, 03, 04). They don't depend on the PCB.</li>
+        <li>Deck and knobs (05), then the tray (06). The tray's USB and switch cutouts follow the layout, but the PCB isn't designed yet: treat this tray as the prototype.</li>
+      </ol>
+    </section>
+    <section>
+      <h2>On the bed</h2>
+      <ul>
+        <li>Caps, knobs, plate and deck print <b>top face down</b>, so their tops pick up the plate texture and every bore's mouth is the last layer.</li>
+        <li>The tray prints <b>floor down</b>; its 4° slope is in the walls.</li>
+        <li>No supports anywhere. Wash the plate before each print and watch the first layer.</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Regenerate</h2>
+      <p><code>just cad-build</code>, <code>just cad-check</code>, <code>just cad-slice</code>, then <code>cd cad && uv run python preview.py</code>. The sliced projects are in <code>cad/out/plates/</code>.</p>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<script>
+THREE.ColorManagement.legacyMode = false;
+const D = __DATA__;
+const L = D.layout, U = L.u_mm;
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const LABEL = { fit_plate: "Plate fit test (2u slice)", fit_bores: "Knob bore test ×3", cap1: "Keycap 1u", cap15: "Keycap 1.5u",
+  cap2_talk: "Talk bar 2u", knob: "Knob", plate: "Switch plate", deck: "Top deck", tray: "Case tray" };
+
+// ── meshes ────────────────────────────────────────────────────────────────
+function b64(s, T) { const bin = atob(s), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new T(a.buffer); }
+const GEO = {};            // CAD frame (Z up), as modelled
+const PRINT = {};          // turned to print orientation, centred on its bounding box
+for (const [name, m] of Object.entries(D.meshes)) {
+  const p = b64(m.p, Int16Array), idx = b64(m.i, Uint32Array);
+  const pos = new Float32Array(p.length); for (let i = 0; i < p.length; i++) pos[i] = p[i] / 100;
+  let g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g = g.toNonIndexed(); g.computeVertexNormals();
+  GEO[name] = g;
+  const q = g.clone(), o = D.orient[name];
+  if (o === "upside_down") q.rotateX(Math.PI);
+  if (o === "floor_down") q.rotateX(THREE.MathUtils.degToRad(D.frame.tilt_deg));
+  q.computeBoundingBox(); const c = new THREE.Vector3(); q.boundingBox.getCenter(c); q.translate(-c.x, -c.y, -c.z);
+  PRINT[name] = q;
+}
+
+// ── renderer ──────────────────────────────────────────────────────────────
+const stage = document.getElementById("stage");
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+catch (e) { document.getElementById("loading").textContent = "WEBGL IS OFF IN THIS BROWSER"; throw e; }
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.88;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x070608);
+renderer.domElement.setAttribute("aria-label", "3D view of the keybordy MP printed parts");
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x070608, 1600, 3200);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new THREE.RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(30, 16 / 9, 1, 6000);
+const sun = new THREE.DirectionalLight(0xfff6ee, 1.6);
+sun.position.set(300, 700, 450); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0012; sun.shadow.normalBias = 1.2;
+Object.assign(sun.shadow.camera, { left: -600, right: 600, top: 500, bottom: -500, near: 100, far: 2000 });
+scene.add(sun);
+const rim = new THREE.DirectionalLight(0xe4ddff, 0.22); rim.position.set(-500, 300, -600); scene.add(rim);
+scene.add(new THREE.HemisphereLight(0xf4f1f8, 0x070608, 0.15));
+const table = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), new THREE.MeshStandardMaterial({ color: 0x0c0b0e, roughness: 0.95, envMapIntensity: 0.05 }));
+table.rotation.x = -Math.PI / 2; table.position.y = -2.2; table.receiveShadow = true; scene.add(table);
+
+const pla = (hex) => {
+  const c = new THREE.Color(hex);
+  if (c.getHSL({}).l < 0.05) c.set(0x1b1a1e);        // black PLA reads as dark grey, not a hole
+  return new THREE.MeshPhysicalMaterial({ color: c, roughness: 0.55, clearcoat: 0.06, clearcoatRoughness: 0.6, envMapIntensity: 0.35 });
+};
+const MAT = {}; const matFor = (hex) => (MAT[hex] ||= pla(hex));
+
+// textured PEI build plate: bronze, fine noise
+function peiTexture() {
+  const c = document.createElement("canvas"); c.width = c.height = 512;
+  const g = c.getContext("2d"), d = g.createImageData(512, 512);
+  for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 40; d.data[i] = 78 + v; d.data[i + 1] = 58 + v * 0.8; d.data[i + 2] = 30 + v * 0.5; d.data[i + 3] = 255; }
+  g.putImageData(d, 0, 0);
+  g.strokeStyle = "rgba(20,14,8,0.35)"; g.lineWidth = 1;
+  for (let i = 0; i <= 512; i += 512 / 8) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 512); g.moveTo(0, i); g.lineTo(512, i); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+}
+const peiMat = new THREE.MeshStandardMaterial({ map: peiTexture(), roughness: 0.75, metalness: 0.25 });
+const sheetMat = new THREE.MeshStandardMaterial({ color: 0x1d1c20, roughness: 0.6, metalness: 0.4 });
+
+function label(text, w, h, size = 13, color = "#f4f1f8") {
+  const ppm = 6, c = document.createElement("canvas"); c.width = w * ppm; c.height = h * ppm;
+  const g = c.getContext("2d"); g.fillStyle = color; g.textBaseline = "middle"; g.font = `800 ${size * ppm}px "Anybody", sans-serif`;
+  g.fillText(text, 0, c.height / 2);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }));
+  p.rotation.x = -Math.PI / 2; return p;
+}
+
+// ── plates view: bed coordinates (X right, Y back, Z up) inside a group turned to three's Y-up ──
+const hits = [];
+const platesRoot = new THREE.Group(); scene.add(platesRoot);
+const BED = 256, GAP = 300, COLS = 3;
+const plateCenters = [];
+D.plates.forEach((pl, i) => {
+  const col = i % COLS, row = Math.floor(i / COLS);
+  const ox = (col - (COLS - 1) / 2) * GAP, oz = (row - 0.5) * (GAP + 40);
+  const bed = new THREE.Group(); bed.position.set(ox - BED / 2, 0, oz + BED / 2); bed.rotation.x = -Math.PI / 2; platesRoot.add(bed);
+  const sheet = new THREE.Mesh(new THREE.BoxGeometry(BED + 14, BED + 14, 2), sheetMat); sheet.position.set(BED / 2, BED / 2, -1.6); sheet.receiveShadow = true; bed.add(sheet);
+  const pei = new THREE.Mesh(new THREE.PlaneGeometry(BED, BED), peiMat); pei.position.set(BED / 2, BED / 2, -0.55); pei.receiveShadow = true; bed.add(pei);
+  for (const it of pl.items) {
+    const mesh = new THREE.Mesh(PRINT[it.part], matFor(pl.hex));
+    const r = it.rot, M = new THREE.Matrix4().set(r[0], r[3], r[6], it.at[0], r[1], r[4], r[7], it.at[1], r[2], r[5], r[8], it.at[2], 0, 0, 0, 1);
+    mesh.matrixAutoUpdate = false; mesh.matrix.copy(M);
+    mesh.castShadow = mesh.receiveShadow = true; mesh.userData = { part: it.part, plate: pl.name };
+    bed.add(mesh); hits.push(mesh);
+  }
+  const tag = label(pl.name, 150, 16, 11); tag.position.set(ox - BED / 2 + 75, 0.2, oz + BED / 2 + 22); platesRoot.add(tag);
+  plateCenters.push(new THREE.Vector3(ox, 0, oz));
+});
+
+// ── assembled view: CAD frame (Z up), tilted onto the table ───────────────
+const asmRoot = new THREE.Group(); scene.add(asmRoot); asmRoot.visible = false;
+const asm = new THREE.Group(); asm.rotation.x = -Math.PI / 2; asmRoot.add(asm);
+const tilt = new THREE.Group(); tilt.rotation.x = THREE.MathUtils.degToRad(D.frame.tilt_deg); asm.add(tilt);
+const F = L.finish, P = F.palette;
+const layers = {};
+function layer(name) { const g = new THREE.Group(); tilt.add(g); layers[name] = g; return g; }
+function place(geoName, hex, parent, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(GEO[geoName], matFor(hex)); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true;
+  m.userData = { part: geoName, plate: "assembled" }; parent.add(m); hits.push(m); return m;
+}
+place("tray", P[F.case], layer("tray"));
+place("plate", P.Gray, layer("plate"));
+place("deck", P[F.case], layer("deck"));
+const capsL = layer("caps");
+for (const k of L.keys) {
+  const cx = (k.x + k.w / 2) * U, cy = (k.y + k.h / 2) * U;
+  const g = k.w >= 2 ? "cap2_talk" : k.w === 1.5 ? "cap15" : "cap1";
+  const hex = k.role === "ptt" ? P[F.ptt] : k.role === "mod" ? P[F.mods] : P[F.keycaps];
+  place(g, hex, capsL, cx, -cy, D.frame.cap_up);
+}
+const knobsL = layer("knobs");
+const knobZ = D.frame.pcb_top + L.encoder_part.shaft_top_above_pcb_mm - D.frame.bore_depth;
+for (const e of L.encoders) place("knob", P[F.knobs], knobsL, e.at[0], -e.at[1], knobZ);
+// centre the assembly and stand it on the table
+{
+  const box = new THREE.Box3().setFromObject(asmRoot);
+  const c = box.getCenter(new THREE.Vector3());
+  asm.position.set(-c.x, -box.min.y - 2.2 + 0.01, -c.z);
+}
+const EXPLODE = { tray: 0, plate: 28, caps: 64, deck: 92, knobs: 118 };
+let explode = 0.35, explodeTarget = 0.35;
+
+// ── totals and chips ──────────────────────────────────────────────────────
+function minutes(t) { let m = 0; (t.match(/(\d+)\s*([dhms])/g) || []).forEach((p) => { const n = parseInt(p), u = p.slice(-1); m += u === "d" ? n * 1440 : u === "h" ? n * 60 : u === "m" ? n : n / 60; }); return m; }
+const totalMin = D.plates.reduce((s, p) => s + minutes(p.time), 0), totalG = D.plates.reduce((s, p) => s + (p.grams || 0), 0);
+const nParts = D.plates.reduce((s, p) => s + p.items.length, 0);
+document.getElementById("totals").innerHTML =
+  `<div><b>${D.plates.length}</b>plates</div><div><b>${nParts}</b>parts</div><div><b>${Math.floor(totalMin / 60)} h ${Math.round(totalMin % 60)}</b>print time</div><div><b>${Math.round(totalG)} g</b>PLA</div>`;
+const chips = document.getElementById("chips");
+D.plates.forEach((pl, i) => {
+  const counts = {}; pl.items.forEach((it) => (counts[it.part] = (counts[it.part] || 0) + 1));
+  const b = document.createElement("button"); b.className = "chip"; b.setAttribute("aria-pressed", "false"); b.id = "chip-" + i;
+  b.innerHTML = `<span class="sw" style="background:${pl.hex}"></span><span class="n">${pl.name}</span>
+    <span class="m">${pl.colour} · ${pl.time} · ${pl.grams ?? "?"} g</span>
+    <span class="c">${Object.entries(counts).map(([k, n]) => `${LABEL[k] || k}${n > 1 ? " ×" + n : ""}`).join(", ")}</span>`;
+  b.addEventListener("click", () => focusPlate(i));
+  chips.appendChild(b);
+});
+
+// ── camera ────────────────────────────────────────────────────────────────
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = Math.PI * 0.48;
+controls.minDistance = 60; controls.maxDistance = 2600;
+let tween = null;
+function fly(pos, at) {
+  if (reduced) { camera.position.copy(pos); controls.target.copy(at); return; }
+  tween = { a: camera.position.clone(), b: pos, ta: controls.target.clone(), tb: at, t0: performance.now(), dur: 1000 };
+}
+const OVERVIEW = { pos: new THREE.Vector3(0, 900, 980), at: new THREE.Vector3(0, 0, 10) };
+function pressed(id, on) { const el = document.getElementById(id); if (el) el.setAttribute("aria-pressed", String(on)); }
+function setView(v) {
+  platesRoot.visible = v === "plates"; asmRoot.visible = v === "asm";
+  pressed("v-plates", v === "plates"); pressed("v-asm", v === "asm");
+  document.getElementById("explode-wrap").hidden = v !== "asm";
+  D.plates.forEach((_, i) => pressed("chip-" + i, false));
+  if (v === "plates") fly(OVERVIEW.pos.clone(), OVERVIEW.at.clone());
+  else fly(new THREE.Vector3(210, 230, 300), new THREE.Vector3(0, 35, 0));
+}
+function focusPlate(i) {
+  if (!platesRoot.visible) { platesRoot.visible = true; asmRoot.visible = false; pressed("v-plates", true); pressed("v-asm", false); document.getElementById("explode-wrap").hidden = true; }
+  D.plates.forEach((_, j) => pressed("chip-" + j, j === i));
+  const c = plateCenters[i];
+  fly(new THREE.Vector3(c.x + 120, 300, c.z + 330), c.clone());
+}
+document.getElementById("v-plates").addEventListener("click", () => setView("plates"));
+document.getElementById("v-asm").addEventListener("click", () => setView("asm"));
+document.getElementById("explode").addEventListener("input", (e) => { explodeTarget = +e.target.value; if (reduced) explode = explodeTarget; });
+camera.position.copy(OVERVIEW.pos); controls.target.copy(OVERVIEW.at);
+
+// hover: name the part
+const tip = document.getElementById("tip"), ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+renderer.domElement.addEventListener("pointermove", (ev) => {
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const h = ray.intersectObjects(hits.filter((m) => (platesRoot.visible ? m.userData.plate !== "assembled" : m.userData.plate === "assembled")), false)[0];
+  if (!h) { tip.hidden = true; return; }
+  const u = h.object.userData;
+  tip.innerHTML = `${LABEL[u.part] || u.part} <span>· ${u.plate}</span>`;
+  tip.style.left = ev.clientX - r.left + "px"; tip.style.top = ev.clientY - r.top + "px"; tip.hidden = false;
+});
+renderer.domElement.addEventListener("pointerleave", () => (tip.hidden = true));
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 1.1 ? 44 : 30; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+function frame(t) {
+  if (tween) {
+    const k = Math.min(1, (t - tween.t0) / tween.dur), e = ease(k);
+    camera.position.lerpVectors(tween.a, tween.b, e); controls.target.lerpVectors(tween.ta, tween.tb, e);
+    if (k === 1) tween = null;
+  }
+  explode += (explodeTarget - explode) * (reduced ? 1 : 0.1);
+  for (const k in layers) layers[k].position.z = EXPLODE[k] * explode;
+  controls.update(); renderer.render(scene, camera); requestAnimationFrame(frame);
+}
+document.getElementById("loading").remove();
+requestAnimationFrame(frame);
+</script>

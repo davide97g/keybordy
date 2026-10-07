@@ -116,6 +116,27 @@ Rev A carrier board: DevKit, OLED (1x4) and KY-040 (1x5 right angle) on female h
 - DevKit orientation follows the Wokwi DOIT V1 part: USB toward you, the VIN side is on the left. The top row in `build.py` is the VIN side, rows 25.4 mm apart.
 - The hotswap footprint is marbastlib's (CERN-OHL-P), drawn from the back and flipped onto B.Cu. Hole-to-hole minimum is 0.45 mm because that footprint has 0.46 mm between a pin hole and the 5-pin peg hole.
 
+## keybordy MP (`layout/`)
+
+This is the next device: an ESP32-S3-WROOM-1-N16R8 macropad with 22 MX keys (1u/1.5u/2u), 3 encoders, a white 2.42" SSD1309 OLED, an ICS-43434 mic, a MAX98357A speaker amp and a LiPo, on a JLCPCB-assembled PCB in a printed case. `docs/macropad.md` has the spec, parts, pin table and phase plan.
+
+- `layout/macropad.json` is the single source for the PCB build, the CAD, the firmware and the host editor. Keys are in u (top-left corner, KLE style); every other position is a part centre in mm. The origin is the key field's top-left corner and y points toward the user.
+- `layout/pins.json` is the GPIO map. Strapping pins (0, 3, 45, 46) need a `strap` note. VBAT must be on ADC1. 19/20, 26–32 and 35–37 are off-limits.
+- `layout/gen.py` (stdlib):
+  - `just mp-lint` runs `check`: layout overlaps, matrix slots, stabilizers on 2u+, knob gaps, mounting holes near switches, battery/speaker fit, pin rules, and whether `board_pins.h` is stale. It has been checked against deliberate faults.
+  - `just mp-gen` writes `firmware/macropad/main/board_pins.h`. Do not edit that file by hand.
+  - `just mp-preview` writes the three.js concept render, `layout/preview/keybordy-mp.html` (gitignored), from `layout/preview/template.html`. The published copy is https://claude.ai/artifact/JGeDgLbdqCekFHqC4e5jJk; republish it after layout changes.
+- After any change to the layout or pins, run `just mp-gen` and `just mp-lint`, and report the result.
+- `cad/` (uv project, build123d) holds the printed parts, all built from the layout.
+  - `macropad.py` builds the parts and `just cad-build` exports them: tray (case bottom, printed floor down), deck (4 mm top, printed face down so it gets the plate texture), plate (1.5 mm, 14.1 mm holes, standoffs), caps 1u/1.5u/2u, knobs (D-bore 6.1/4.6), and fit tests.
+  - CAD frame: X = layout x, Y = -layout y, Z up, plate top at Z = 0.
+  - The caps are the kodemotion-26 cap, which is proven on this printer.
+  - Print rules come from `~/personal/projects/bambulab/design-rules.md`.
+  - `just cad-check` (`fitcheck.py`) places stand-in blocks for the PCB, switches, caps (up and pressed), encoders, knobs, battery, speaker, ESP32 and OLED, and fails on any clash. Some stand-in heights are estimates and are marked in the file.
+  - `just cad-slice` (`slice.py`) slices one Bambu project per filament colour into `cad/out/plates/` (gitignored). It uses the bambulab flattened profiles and their `--check`.
+  - `just cad-preview` (`preview.py` + `cad/preview/template.html`) builds a page from the real meshes, placed on the beds exactly where the slicer put them (it reads the .3mf build items), plus an assembled view. Published copy: https://claude.ai/artifact/S8rzS7jPUv2tLSBWmkwrLr. Republish it after reslicing.
+  - After changing the layout or the CAD, run `cad-build`, then `cad-check`, then `cad-slice`, then `cad-preview`.
+
 ## Wiring guide (`guide/`)
 
 A Vite + React 19 + TypeScript app using `@xyflow/react` for the wiring graph and `@react-three/fiber`/`drei` for a 3D bench. Nets, devices, and pins are defined in `src/data.ts`. It still describes the old OLED + rotary breadboard setup, not the `keys8` wiring.
