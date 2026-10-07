@@ -12,3 +12,8 @@ backups/
 
 sim/.cache/
 __pycache__/
+
+pcb/fab/
+pcb/*.kicad_prl
+pcb/fp-info-cache
+pcb/*-backups/

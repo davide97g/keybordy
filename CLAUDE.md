@@ -108,6 +108,14 @@ just sim-run [name] -s "until ready; tap K3; expect 'key 3 up'"   # any scenario
 - `--bin` runs a prebuilt image, but images from the host `arduino-cli` (core 3.3.12) do not work in this QEMU. The default QIO build fails its flash init. A `FlashMode=dio` build boots, then panics with `Cache error` on the first GPIO edge. Use the default path, which is the simulator's own compile.
 - Timing is wall clock through a pipe, with about 20 ms from a press to the serial line. Contact-chatter blips are 3 ms. Do not assert on sub-10 ms timing.
 
+## PCB (`pcb/`)
+
+Rev A carrier board: DevKit, OLED (1x4) and KY-040 (1x5 right angle) on female headers, 8 Kailh MX hotswap sockets on the back, GND pours on both layers. `pcb/build.py` is the source: it places, routes (fixed coordinates, no autorouter; Freerouting was tried and left nets unrouted) and exports the board with KiCad's bundled Python (`just pcb-build`, `just pcb-fab`, `just pcb-open`). KiCad 10 lives in `~/Applications/KiCad` (copied from the dmg; the cask wants sudo for `/Library`). `pcb-fab` fails on any DRC violation or unconnected item.
+
+- Its pin map is not the `keys8` one: keys on 16, 18, 21, 23, 4, 17, 19, 22 (K1..K8), OLED SDA 33 / SCL 32, rotary CLK 35 / DT 34 / SW 39, every switch leg B on GND. The firmware for the board must match `KEYS`, `OLED_PINS` and `ROT_PINS` in `build.py`, and `pcb/README.md` has the table.
+- DevKit orientation follows the Wokwi DOIT V1 part: USB toward you, the VIN side is on the left. The top row in `build.py` is the VIN side, rows 25.4 mm apart.
+- The hotswap footprint is marbastlib's (CERN-OHL-P), drawn from the back and flipped onto B.Cu. Hole-to-hole minimum is 0.45 mm because that footprint has 0.46 mm between a pin hole and the 5-pin peg hole.
+
 ## Wiring guide (`guide/`)
 
 A Vite + React 19 + TypeScript app using `@xyflow/react` for the wiring graph and `@react-three/fiber`/`drei` for a 3D bench. Nets, devices, and pins are defined in `src/data.ts`. It still describes the old OLED + rotary breadboard setup, not the `keys8` wiring.

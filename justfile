@@ -133,6 +133,24 @@ lint:
     cd sim/velxio/backend && uv run ruff check .
     -cd sim/velxio/frontend && bun run lint --quiet
 
+# ── PCB (KiCad 10 in ~/Applications/KiCad) ──────────────────────────────────
+
+kicad_app := env("KICAD_APP", home_directory() / "Applications/KiCad/KiCad.app")
+kicad_py := kicad_app / "Contents/Frameworks/Python.framework/Versions/Current/bin/python3"
+
+# Regenerate the board from pcb/build.py: place, route, then DRC + Gerbers into pcb/fab/
+pcb-build:
+    {{kicad_py}} pcb/build.py place
+    {{kicad_py}} pcb/build.py route
+    {{kicad_py}} pcb/build.py fab
+
+# DRC + Gerbers + renders only (after editing the board by hand in KiCad)
+pcb-fab:
+    {{kicad_py}} pcb/build.py fab
+
+pcb-open:
+    open -a "{{kicad_app}}" pcb/keybordy.kicad_pro
+
 # ── Wiring guide ────────────────────────────────────────────────────────────
 
 [working-directory: 'guide']
