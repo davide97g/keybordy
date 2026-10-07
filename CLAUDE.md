@@ -137,6 +137,15 @@ This is the next device: an ESP32-S3-WROOM-1-N16R8 macropad with 22 MX keys (1u/
   - `just cad-preview` (`preview.py` + `cad/preview/template.html`) builds a page from the real meshes, placed on the beds exactly where the slicer put them (it reads the .3mf build items), plus an assembled view. Published copy: https://claude.ai/artifact/S8rzS7jPUv2tLSBWmkwrLr. Republish it after reslicing.
   - After changing the layout or the CAD, run `cad-build`, then `cad-check`, then `cad-slice`, then `cad-preview`.
 
+## Teaser video (`video/`)
+
+A code-rendered 4K60 launch teaser for keybordy MP: three.js scenes of the real CAD meshes, with the engine vendored from mexicat/pdoom-video (MIT). The cue sheet `data/[vN/]cues.json` drives both picture and sound. Music edit, mix and master are in `audio/` (uv). `video/README.md` is the playbook: layout, commands, the version system, render gotchas, the user's likes and dislikes, and the upright cut for Reels/Shorts. Read it before touching `video/`.
+
+- Every revision is a new cut, `vN` (`?v=N`, `--v N`, `just video-draft N`). Older cuts must keep rendering unchanged: gate new behaviour with `VERSION >= N` and put shot overrides in `scenes/vN/`. The final 16:9 cut is v5.
+- Show previews before big renders: a `sheet` strip, then a short clip with `--samples 12`, then `just video-draft N`, then `just video-render N` (~66 min).
+- The 9:16 cut for Reels/Shorts is the same edit behind `?aspect=9x16` (`render.ts --vertical`, `just video-reel-draft 5`, `just video-reel-render 5`), outputs in `out/vN/9x16/`. Upright framing is the table in `app/src/scenes/_upright.ts`; type stays inside `SAFE` (`engine/gl.ts`).
+- Downloaded media (`public/vendor/`), `build/` and `out/` are gitignored. `scripts/fetch_vendor.sh` re-downloads the media, and `video/CREDITS.md` has the licenses.
+
 ## Wiring guide (`guide/`)
 
 A Vite + React 19 + TypeScript app using `@xyflow/react` for the wiring graph and `@react-three/fiber`/`drei` for a 3D bench. Nets, devices, and pins are defined in `src/data.ts`. It still describes the old OLED + rotary breadboard setup, not the `keys8` wiring.

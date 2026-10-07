@@ -22,3 +22,9 @@ layout/preview/keybordy-mp.html
 
 cad/out/
 cad/.venv/
+
+# teaser: downloaded third-party media (re-fetch with video/scripts/fetch_vendor.sh), generated audio/meshes, renders
+video/public/vendor/
+video/build/
+video/out/
+video/audio/.venv/

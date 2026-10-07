@@ -196,3 +196,54 @@ guide-dev:
 [working-directory: 'guide']
 guide-build:
     bun run build
+
+# ── Teaser video (video/; three.js renderer vendored from pdoom-video) ───────
+
+# Download the third-party media (music, switch recordings, SFX, HDRI) into video/public/vendor
+video-fetch:
+    video/scripts/fetch_vendor.sh
+
+# Export the printed parts as fine meshes for the video (after cad changes)
+[working-directory: 'cad']
+video-meshes:
+    uv run python ../video/scripts/export_meshes.py
+
+# Music edit, cue sheet, sound design, mix and master for cut v (data/[vN/]cues.json, build/[vN/]mix_*.wav)
+[working-directory: 'video/audio']
+video-audio v="2":
+    uv run python build.py --v {{v}}
+
+# Screenshots of the keymap editor with demo data, for v2's editor shot (video/build/editor)
+[working-directory: 'video/app']
+video-editor-shots:
+    bun ../scripts/capture_editor.ts
+
+# Live preview with the soundtrack (space plays, [ ] jump between scenes); add ?v=2 for the second cut
+[working-directory: 'video/app']
+video-dev:
+    bunx vite
+
+# Stills at times in seconds, e.g. `just video-stills 3,12.2,20 2`
+[working-directory: 'video/app']
+video-stills times v="2" *args:
+    bun scripts/render.ts stills --v {{v}} --t {{times}} --samples auto --shutter 0.2 {{args}}
+
+# Fast 1080p draft of cut v (12 sub-frames per frame)
+[working-directory: 'video/app']
+video-draft v="2":
+    bun scripts/render.ts video --v {{v}} --samples 12 --shutter 0.4 --preset veryfast --crf 20 --out ../out/{{ if v == "1" { "" } else { "v" + v + "/" } }}draft-1080.mp4
+
+# The final 4K60 render of cut v (adaptive motion blur, depth of field and soft shadows), then the deliverables
+video-render v="2":
+    cd video/app && bun scripts/render.ts video --v {{v}} --scale 2 --samples auto --max-samples 108 --shutter 0.3 --x264 aq-mode=3:rc-lookahead=30 --crf 16 --out ../out/{{ if v == "1" { "" } else { "v" + v + "/" } }}render-4k.mp4
+    video/scripts/mux.sh {{v}}
+
+# The upright cut of v for Reels and Shorts (?aspect=9x16, 1080x1920, same edit and soundtrack): fast draft
+[working-directory: 'video/app']
+video-reel-draft v="5":
+    bun scripts/render.ts video --v {{v}} --vertical --samples 12 --shutter 0.4 --preset veryfast --crf 20 --out ../out/{{ if v == "1" { "" } else { "v" + v + "/" } }}9x16/draft-1080x1920.mp4
+
+# The upright cut at 2160x3840 60 fps, then its deliverables (4K upright + 1080x1920, stereo)
+video-reel-render v="5":
+    cd video/app && bun scripts/render.ts video --v {{v}} --vertical --scale 2 --samples auto --max-samples 108 --shutter 0.3 --x264 aq-mode=3:rc-lookahead=30 --crf 16 --out ../out/{{ if v == "1" { "" } else { "v" + v + "/" } }}9x16/render-4k.mp4
+    video/scripts/mux.sh {{v}} 9x16

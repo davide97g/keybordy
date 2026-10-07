@@ -1,0 +1,425 @@
+{
+ "duration": 27.42,
+ "period": 0.5,
+ "beats": [
+  0.02,
+  0.52,
+  1.02,
+  1.52,
+  2.02,
+  2.52,
+  3.02,
+  3.52,
+  4.02,
+  4.52,
+  5.02,
+  5.52,
+  6.02,
+  6.52,
+  7.02,
+  7.52,
+  8.02,
+  8.52,
+  9.02,
+  9.52,
+  10.02,
+  10.52,
+  11.02,
+  11.52,
+  12.02,
+  12.52,
+  13.02,
+  13.52,
+  14.02,
+  14.52,
+  15.02,
+  15.52,
+  16.02,
+  16.52,
+  17.02,
+  17.52,
+  18.02,
+  18.52,
+  19.02,
+  19.52,
+  20.02,
+  20.52,
+  21.02,
+  21.52,
+  22.02,
+  22.52,
+  23.02,
+  23.52,
+  24.02,
+  24.52,
+  25.02,
+  25.52,
+  26.02,
+  26.52,
+  27.02,
+  27.52,
+  28.02
+ ],
+ "scenes": [
+  {
+   "id": "open",
+   "start": 0.0,
+   "end": 3.02
+  },
+  {
+   "id": "knob",
+   "start": 3.02,
+   "end": 6.02
+  },
+  {
+   "id": "oled",
+   "start": 6.02,
+   "end": 8.02
+  },
+  {
+   "id": "build",
+   "start": 8.02,
+   "end": 12.02
+  },
+  {
+   "id": "hero",
+   "start": 12.02,
+   "end": 15.02
+  },
+  {
+   "id": "montage",
+   "start": 15.02,
+   "end": 17.02
+  },
+  {
+   "id": "editor",
+   "start": 17.02,
+   "end": 19.02
+  },
+  {
+   "id": "talk",
+   "start": 19.02,
+   "end": 20.52
+  },
+  {
+   "id": "title",
+   "start": 20.52,
+   "end": 24.02
+  },
+  {
+   "id": "credit",
+   "start": 24.02,
+   "end": 27.42
+  }
+ ],
+ "events": [
+  {
+   "t": 0.02,
+   "kind": "boom_open"
+  },
+  {
+   "t": 0.02,
+   "kind": "drone",
+   "dur": 3.0
+  },
+  {
+   "t": 0.27,
+   "kind": "whoosh",
+   "dur": 2.0,
+   "pan": [
+    -0.7,
+    0.7
+   ]
+  },
+  {
+   "t": 2.02,
+   "kind": "crash",
+   "dur": 0.75
+  },
+  {
+   "t": 2.77,
+   "kind": "press",
+   "key": "K1",
+   "hold": 0.16
+  },
+  {
+   "t": 4.52,
+   "kind": "detent",
+   "knob": "E1",
+   "n": 1
+  },
+  {
+   "t": 4.77,
+   "kind": "detent",
+   "knob": "E1",
+   "n": 2
+  },
+  {
+   "t": 5.02,
+   "kind": "detent",
+   "knob": "E1",
+   "n": 3
+  },
+  {
+   "t": 5.27,
+   "kind": "detent",
+   "knob": "E1",
+   "n": 4
+  },
+  {
+   "t": 5.52,
+   "kind": "detent",
+   "knob": "E1",
+   "n": 5
+  },
+  {
+   "t": 5.77,
+   "kind": "detent",
+   "knob": "E1",
+   "n": 6
+  },
+  {
+   "t": 6.27,
+   "kind": "chirp"
+  },
+  {
+   "t": 6.27,
+   "kind": "oled_boot",
+   "dur": 1.25
+  },
+  {
+   "t": 6.52,
+   "kind": "riser",
+   "dur": 5.5
+  },
+  {
+   "t": 8.02,
+   "kind": "land",
+   "layer": "tray",
+   "heavy": true
+  },
+  {
+   "t": 8.52,
+   "kind": "land",
+   "layer": "inner",
+   "heavy": false
+  },
+  {
+   "t": 9.02,
+   "kind": "land",
+   "layer": "pcb",
+   "heavy": false
+  },
+  {
+   "t": 9.52,
+   "kind": "land",
+   "layer": "plate",
+   "heavy": false
+  },
+  {
+   "t": 10.02,
+   "kind": "land",
+   "layer": "sw",
+   "heavy": false
+  },
+  {
+   "t": 10.52,
+   "kind": "land",
+   "layer": "caps",
+   "heavy": false
+  },
+  {
+   "t": 11.02,
+   "kind": "land",
+   "layer": "deck",
+   "heavy": true
+  },
+  {
+   "t": 11.52,
+   "kind": "land",
+   "layer": "knobs",
+   "heavy": false
+  },
+  {
+   "t": 11.645,
+   "kind": "reverse_swell",
+   "dur": 0.375
+  },
+  {
+   "t": 12.02,
+   "kind": "drop"
+  },
+  {
+   "t": 12.02,
+   "kind": "braam"
+  },
+  {
+   "t": 14.27,
+   "kind": "whoosh",
+   "dur": 0.75,
+   "pan": [
+    0.6,
+    -0.6
+   ]
+  },
+  {
+   "t": 15.02,
+   "kind": "press",
+   "key": "K1",
+   "hold": 0.1
+  },
+  {
+   "t": 15.02,
+   "kind": "slam",
+   "text": "22 keys.",
+   "dur": 1.0
+  },
+  {
+   "t": 15.52,
+   "kind": "press",
+   "key": "K4",
+   "hold": 0.1
+  },
+  {
+   "t": 16.02,
+   "kind": "press",
+   "key": "K9",
+   "hold": 0.1
+  },
+  {
+   "t": 16.02,
+   "kind": "slam",
+   "text": "1 screen.",
+   "dur": 1.0
+  },
+  {
+   "t": 16.52,
+   "kind": "press",
+   "key": "K15",
+   "hold": 0.1
+  },
+  {
+   "t": 17.02,
+   "kind": "slam",
+   "text": "map every key.",
+   "dur": 2.0
+  },
+  {
+   "t": 17.52,
+   "kind": "ui_click",
+   "target": "cap5",
+   "state": "b"
+  },
+  {
+   "t": 18.02,
+   "kind": "ui_click",
+   "target": "cap6",
+   "state": "c"
+  },
+  {
+   "t": 18.52,
+   "kind": "ui_click",
+   "target": "save",
+   "state": "c"
+  },
+  {
+   "t": 19.02,
+   "kind": "slam",
+   "text": "your voice.",
+   "dur": 1.5
+  },
+  {
+   "t": 19.02,
+   "kind": "press",
+   "key": "K21",
+   "hold": 1.375
+  },
+  {
+   "t": 19.02,
+   "kind": "listen",
+   "dur": 1.375
+  },
+  {
+   "t": 20.52,
+   "kind": "whoosh",
+   "dur": 0.5,
+   "pan": [
+    -0.3,
+    0.3
+   ]
+  },
+  {
+   "t": 20.77,
+   "kind": "logo"
+  },
+  {
+   "t": 21.02,
+   "kind": "letter",
+   "i": 0,
+   "ch": "k"
+  },
+  {
+   "t": 21.27,
+   "kind": "letter",
+   "i": 1,
+   "ch": "e"
+  },
+  {
+   "t": 21.52,
+   "kind": "letter",
+   "i": 2,
+   "ch": "y"
+  },
+  {
+   "t": 21.77,
+   "kind": "letter",
+   "i": 3,
+   "ch": "b"
+  },
+  {
+   "t": 22.02,
+   "kind": "letter",
+   "i": 4,
+   "ch": "o"
+  },
+  {
+   "t": 22.27,
+   "kind": "letter",
+   "i": 5,
+   "ch": "r"
+  },
+  {
+   "t": 22.52,
+   "kind": "letter",
+   "i": 6,
+   "ch": "d"
+  },
+  {
+   "t": 22.77,
+   "kind": "letter",
+   "i": 7,
+   "ch": "y"
+  },
+  {
+   "t": 23.645,
+   "kind": "reverse_swell",
+   "dur": 0.375
+  },
+  {
+   "t": 24.02,
+   "kind": "impact"
+  },
+  {
+   "t": 24.02,
+   "kind": "sticker"
+  },
+  {
+   "t": 24.02,
+   "kind": "credit"
+  },
+  {
+   "t": 27.4,
+   "kind": "end"
+  }
+ ]
+}
