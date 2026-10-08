@@ -10,6 +10,7 @@
 //            --workers N headless Chromes render chunks of --chunk frames into one ffmpeg, in order (see video())
 //   --scale N (all modes): render at N× the 1920x1080 layout (--scale 2 = true 3840x2160); stills are then saved
 //            full-res from the pixel buffer, videos are encoded at the physical size.
+//   --thumb (all modes): thumbnail plates (?thumb=1, see src/version.ts THUMB); outputs as usual, pass --out.
 //   --vertical (all modes): the upright cut for Reels and Shorts (?aspect=9x16, 1080x1920 logical), any version;
 //            default outputs go to out/[vN/]9x16/.
 // Uses the Vite dev server at --url (default http://localhost:5181); starts a private one if unreachable.
@@ -73,7 +74,7 @@ async function openPage(url: string) {
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
   page.on('crash', () => console.error('[page crashed]'));
   const only = opt('only');
-  await page.goto(`${url}/?export=1${only ? `&only=${only}` : ''}${SCALE !== 1 ? `&scale=${SCALE}` : ''}${VERSION !== 1 ? `&v=${VERSION}` : ''}${VERTICAL ? '&aspect=9x16' : ''}`);
+  await page.goto(`${url}/?export=1${only ? `&only=${only}` : ''}${SCALE !== 1 ? `&scale=${SCALE}` : ''}${VERSION !== 1 ? `&v=${VERSION}` : ''}${VERTICAL ? '&aspect=9x16' : ''}${flag('thumb') ? '&thumb=1' : ''}`);
   await page.waitForFunction(() => (window as any).__video?.ready || (window as any).__video?.error, null, { timeout: 120000 });
   const err = await page.evaluate(() => (window as any).__video.error);
   if (err) throw new Error(`app failed to boot:\n${err}\n${logs.join('\n')}`);

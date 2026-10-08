@@ -17,3 +17,8 @@ function readVersion() {
 export const VERSION = readVersion();
 /** URL prefix of this version's generated files under data/ and audio/ ('' for v1). */
 export const VDIR = VERSION === 1 ? '' : `v${VERSION}/`;
+/**
+ * `?thumb=1`: thumbnail plates, not a cut. Scenes drop their type and may relight (scenes/v5/title.ts lights the
+ * case edge on the silhouette); without the flag every version renders exactly as before.
+ */
+export const THUMB = typeof location !== 'undefined' && new URLSearchParams(location.search).has('thumb');
