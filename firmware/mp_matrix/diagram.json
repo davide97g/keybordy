@@ -1,0 +1,1003 @@
+{
+  "version": 1,
+  "author": "keybordy",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-velxio-esp32-s3",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k1",
+      "top": 40,
+      "left": 220,
+      "attrs": {
+        "color": "#d6ff1f",
+        "label": "K1"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk1",
+      "top": 102,
+      "left": 220,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k2",
+      "top": 40,
+      "left": 330,
+      "attrs": {
+        "color": "#ff2e74",
+        "label": "K2"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk2",
+      "top": 102,
+      "left": 330,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k3",
+      "top": 40,
+      "left": 440,
+      "attrs": {
+        "color": "#2ec5ff",
+        "label": "K3"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk3",
+      "top": 102,
+      "left": 440,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k4",
+      "top": 40,
+      "left": 550,
+      "attrs": {
+        "color": "#ffb11f",
+        "label": "K4"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk4",
+      "top": 102,
+      "left": 550,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k5",
+      "top": 40,
+      "left": 660,
+      "attrs": {
+        "color": "#b07cff",
+        "label": "K5"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk5",
+      "top": 102,
+      "left": 660,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k6",
+      "top": 40,
+      "left": 770,
+      "attrs": {
+        "color": "#3dffa8",
+        "label": "K6"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk6",
+      "top": 102,
+      "left": 770,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k7",
+      "top": 165,
+      "left": 220,
+      "attrs": {
+        "color": "#d6ff1f",
+        "label": "K7"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk7",
+      "top": 227,
+      "left": 220,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k8",
+      "top": 165,
+      "left": 330,
+      "attrs": {
+        "color": "#ff2e74",
+        "label": "K8"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk8",
+      "top": 227,
+      "left": 330,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k9",
+      "top": 165,
+      "left": 440,
+      "attrs": {
+        "color": "#2ec5ff",
+        "label": "K9"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk9",
+      "top": 227,
+      "left": 440,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k10",
+      "top": 165,
+      "left": 550,
+      "attrs": {
+        "color": "#ffb11f",
+        "label": "K10"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk10",
+      "top": 227,
+      "left": 550,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k11",
+      "top": 165,
+      "left": 660,
+      "attrs": {
+        "color": "#b07cff",
+        "label": "K11"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk11",
+      "top": 227,
+      "left": 660,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k12",
+      "top": 165,
+      "left": 770,
+      "attrs": {
+        "color": "#3dffa8",
+        "label": "K12"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk12",
+      "top": 227,
+      "left": 770,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k13",
+      "top": 290,
+      "left": 220,
+      "attrs": {
+        "color": "#d6ff1f",
+        "label": "K13"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk13",
+      "top": 352,
+      "left": 220,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k14",
+      "top": 290,
+      "left": 330,
+      "attrs": {
+        "color": "#ff2e74",
+        "label": "K14"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk14",
+      "top": 352,
+      "left": 330,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k15",
+      "top": 290,
+      "left": 440,
+      "attrs": {
+        "color": "#2ec5ff",
+        "label": "K15"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk15",
+      "top": 352,
+      "left": 440,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k16",
+      "top": 290,
+      "left": 550,
+      "attrs": {
+        "color": "#ffb11f",
+        "label": "K16"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk16",
+      "top": 352,
+      "left": 550,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k17",
+      "top": 290,
+      "left": 660,
+      "attrs": {
+        "color": "#b07cff",
+        "label": "K17"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk17",
+      "top": 352,
+      "left": 660,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k18",
+      "top": 290,
+      "left": 770,
+      "attrs": {
+        "color": "#3dffa8",
+        "label": "K18"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk18",
+      "top": 352,
+      "left": 770,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k19",
+      "top": 415,
+      "left": 220,
+      "attrs": {
+        "color": "#d6ff1f",
+        "label": "K19"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk19",
+      "top": 477,
+      "left": 220,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k20",
+      "top": 415,
+      "left": 440,
+      "attrs": {
+        "color": "#2ec5ff",
+        "label": "K20"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk20",
+      "top": 477,
+      "left": 440,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k21",
+      "top": 415,
+      "left": 550,
+      "attrs": {
+        "color": "#ffb11f",
+        "label": "K21"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk21",
+      "top": 477,
+      "left": 550,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "k22",
+      "top": 415,
+      "left": 770,
+      "attrs": {
+        "color": "#3dffa8",
+        "label": "K22"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "dk22",
+      "top": 477,
+      "left": 770,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "e1p",
+      "top": 540,
+      "left": 220,
+      "attrs": {
+        "color": "#d6ff1f",
+        "label": "E1 push"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "de1p",
+      "top": 602,
+      "left": 220,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "e2p",
+      "top": 540,
+      "left": 330,
+      "attrs": {
+        "color": "#ff2e74",
+        "label": "E2 push"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "de2p",
+      "top": 602,
+      "left": 330,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "e3p",
+      "top": 540,
+      "left": 440,
+      "attrs": {
+        "color": "#2ec5ff",
+        "label": "E3 push"
+      }
+    },
+    {
+      "type": "wokwi-diode-1n4148",
+      "id": "de3p",
+      "top": 602,
+      "left": 440,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-ky-040",
+      "id": "e1",
+      "top": -170,
+      "left": 220,
+      "attrs": {
+        "label": "E1"
+      }
+    },
+    {
+      "type": "wokwi-ky-040",
+      "id": "e2",
+      "top": -170,
+      "left": 380,
+      "attrs": {
+        "label": "E2"
+      }
+    },
+    {
+      "type": "wokwi-ky-040",
+      "id": "e3",
+      "top": -170,
+      "left": 540,
+      "attrs": {
+        "label": "E3"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "esp:TX",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
+    [
+      "k1:1.l",
+      "esp:16",
+      "#d6ff1f",
+      []
+    ],
+    [
+      "k1:2.l",
+      "dk1:A",
+      "#d6ff1f",
+      []
+    ],
+    [
+      "dk1:C",
+      "esp:4",
+      "#888888",
+      []
+    ],
+    [
+      "k2:1.l",
+      "esp:17",
+      "#ff2e74",
+      []
+    ],
+    [
+      "k2:2.l",
+      "dk2:A",
+      "#ff2e74",
+      []
+    ],
+    [
+      "dk2:C",
+      "dk1:C",
+      "#888888",
+      []
+    ],
+    [
+      "k3:1.l",
+      "esp:18",
+      "#2ec5ff",
+      []
+    ],
+    [
+      "k3:2.l",
+      "dk3:A",
+      "#2ec5ff",
+      []
+    ],
+    [
+      "dk3:C",
+      "dk2:C",
+      "#888888",
+      []
+    ],
+    [
+      "k4:1.l",
+      "esp:8",
+      "#ffb11f",
+      []
+    ],
+    [
+      "k4:2.l",
+      "dk4:A",
+      "#ffb11f",
+      []
+    ],
+    [
+      "dk4:C",
+      "dk3:C",
+      "#888888",
+      []
+    ],
+    [
+      "k5:1.l",
+      "esp:9",
+      "#b07cff",
+      []
+    ],
+    [
+      "k5:2.l",
+      "dk5:A",
+      "#b07cff",
+      []
+    ],
+    [
+      "dk5:C",
+      "dk4:C",
+      "#888888",
+      []
+    ],
+    [
+      "k6:1.l",
+      "esp:10",
+      "#3dffa8",
+      []
+    ],
+    [
+      "k6:2.l",
+      "dk6:A",
+      "#3dffa8",
+      []
+    ],
+    [
+      "dk6:C",
+      "dk5:C",
+      "#888888",
+      []
+    ],
+    [
+      "k7:1.l",
+      "k1:1.r",
+      "#d6ff1f",
+      []
+    ],
+    [
+      "k7:2.l",
+      "dk7:A",
+      "#d6ff1f",
+      []
+    ],
+    [
+      "dk7:C",
+      "esp:5",
+      "#888888",
+      []
+    ],
+    [
+      "k8:1.l",
+      "k2:1.r",
+      "#ff2e74",
+      []
+    ],
+    [
+      "k8:2.l",
+      "dk8:A",
+      "#ff2e74",
+      []
+    ],
+    [
+      "dk8:C",
+      "dk7:C",
+      "#888888",
+      []
+    ],
+    [
+      "k9:1.l",
+      "k3:1.r",
+      "#2ec5ff",
+      []
+    ],
+    [
+      "k9:2.l",
+      "dk9:A",
+      "#2ec5ff",
+      []
+    ],
+    [
+      "dk9:C",
+      "dk8:C",
+      "#888888",
+      []
+    ],
+    [
+      "k10:1.l",
+      "k4:1.r",
+      "#ffb11f",
+      []
+    ],
+    [
+      "k10:2.l",
+      "dk10:A",
+      "#ffb11f",
+      []
+    ],
+    [
+      "dk10:C",
+      "dk9:C",
+      "#888888",
+      []
+    ],
+    [
+      "k11:1.l",
+      "k5:1.r",
+      "#b07cff",
+      []
+    ],
+    [
+      "k11:2.l",
+      "dk11:A",
+      "#b07cff",
+      []
+    ],
+    [
+      "dk11:C",
+      "dk10:C",
+      "#888888",
+      []
+    ],
+    [
+      "k12:1.l",
+      "k6:1.r",
+      "#3dffa8",
+      []
+    ],
+    [
+      "k12:2.l",
+      "dk12:A",
+      "#3dffa8",
+      []
+    ],
+    [
+      "dk12:C",
+      "dk11:C",
+      "#888888",
+      []
+    ],
+    [
+      "k13:1.l",
+      "k7:1.r",
+      "#d6ff1f",
+      []
+    ],
+    [
+      "k13:2.l",
+      "dk13:A",
+      "#d6ff1f",
+      []
+    ],
+    [
+      "dk13:C",
+      "esp:6",
+      "#888888",
+      []
+    ],
+    [
+      "k14:1.l",
+      "k8:1.r",
+      "#ff2e74",
+      []
+    ],
+    [
+      "k14:2.l",
+      "dk14:A",
+      "#ff2e74",
+      []
+    ],
+    [
+      "dk14:C",
+      "dk13:C",
+      "#888888",
+      []
+    ],
+    [
+      "k15:1.l",
+      "k9:1.r",
+      "#2ec5ff",
+      []
+    ],
+    [
+      "k15:2.l",
+      "dk15:A",
+      "#2ec5ff",
+      []
+    ],
+    [
+      "dk15:C",
+      "dk14:C",
+      "#888888",
+      []
+    ],
+    [
+      "k16:1.l",
+      "k10:1.r",
+      "#ffb11f",
+      []
+    ],
+    [
+      "k16:2.l",
+      "dk16:A",
+      "#ffb11f",
+      []
+    ],
+    [
+      "dk16:C",
+      "dk15:C",
+      "#888888",
+      []
+    ],
+    [
+      "k17:1.l",
+      "k11:1.r",
+      "#b07cff",
+      []
+    ],
+    [
+      "k17:2.l",
+      "dk17:A",
+      "#b07cff",
+      []
+    ],
+    [
+      "dk17:C",
+      "dk16:C",
+      "#888888",
+      []
+    ],
+    [
+      "k18:1.l",
+      "k12:1.r",
+      "#3dffa8",
+      []
+    ],
+    [
+      "k18:2.l",
+      "dk18:A",
+      "#3dffa8",
+      []
+    ],
+    [
+      "dk18:C",
+      "dk17:C",
+      "#888888",
+      []
+    ],
+    [
+      "k19:1.l",
+      "k13:1.r",
+      "#d6ff1f",
+      []
+    ],
+    [
+      "k19:2.l",
+      "dk19:A",
+      "#d6ff1f",
+      []
+    ],
+    [
+      "dk19:C",
+      "esp:7",
+      "#888888",
+      []
+    ],
+    [
+      "k20:1.l",
+      "k15:1.r",
+      "#2ec5ff",
+      []
+    ],
+    [
+      "k20:2.l",
+      "dk20:A",
+      "#2ec5ff",
+      []
+    ],
+    [
+      "dk20:C",
+      "dk19:C",
+      "#888888",
+      []
+    ],
+    [
+      "k21:1.l",
+      "k16:1.r",
+      "#ffb11f",
+      []
+    ],
+    [
+      "k21:2.l",
+      "dk21:A",
+      "#ffb11f",
+      []
+    ],
+    [
+      "dk21:C",
+      "dk20:C",
+      "#888888",
+      []
+    ],
+    [
+      "k22:1.l",
+      "k18:1.r",
+      "#3dffa8",
+      []
+    ],
+    [
+      "k22:2.l",
+      "dk22:A",
+      "#3dffa8",
+      []
+    ],
+    [
+      "dk22:C",
+      "dk21:C",
+      "#888888",
+      []
+    ],
+    [
+      "e1p:1.l",
+      "k19:1.r",
+      "#d6ff1f",
+      []
+    ],
+    [
+      "e1p:2.l",
+      "de1p:A",
+      "#d6ff1f",
+      []
+    ],
+    [
+      "de1p:C",
+      "esp:15",
+      "#888888",
+      []
+    ],
+    [
+      "e2p:1.l",
+      "k14:1.r",
+      "#ff2e74",
+      []
+    ],
+    [
+      "e2p:2.l",
+      "de2p:A",
+      "#ff2e74",
+      []
+    ],
+    [
+      "de2p:C",
+      "de1p:C",
+      "#888888",
+      []
+    ],
+    [
+      "e3p:1.l",
+      "k20:1.r",
+      "#2ec5ff",
+      []
+    ],
+    [
+      "e3p:2.l",
+      "de3p:A",
+      "#2ec5ff",
+      []
+    ],
+    [
+      "de3p:C",
+      "de2p:C",
+      "#888888",
+      []
+    ],
+    [
+      "e1:CLK",
+      "esp:11",
+      "#ffffff",
+      []
+    ],
+    [
+      "e1:DT",
+      "esp:12",
+      "#cccccc",
+      []
+    ],
+    [
+      "e1:GND",
+      "esp:GND.1",
+      "#000000",
+      []
+    ],
+    [
+      "e1:VCC",
+      "esp:3V3.1",
+      "#ff0000",
+      []
+    ],
+    [
+      "e2:CLK",
+      "esp:13",
+      "#ffffff",
+      []
+    ],
+    [
+      "e2:DT",
+      "esp:14",
+      "#cccccc",
+      []
+    ],
+    [
+      "e2:GND",
+      "esp:GND.1",
+      "#000000",
+      []
+    ],
+    [
+      "e2:VCC",
+      "esp:3V3.1",
+      "#ff0000",
+      []
+    ],
+    [
+      "e3:CLK",
+      "esp:21",
+      "#ffffff",
+      []
+    ],
+    [
+      "e3:DT",
+      "esp:47",
+      "#cccccc",
+      []
+    ],
+    [
+      "e3:GND",
+      "esp:GND.1",
+      "#000000",
+      []
+    ],
+    [
+      "e3:VCC",
+      "esp:3V3.1",
+      "#ff0000",
+      []
+    ]
+  ],
+  "dependencies": {}
+}
