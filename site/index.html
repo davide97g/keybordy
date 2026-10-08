@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>keybordy MP</title>
+  <meta name="description" content="keybordy MP: a 22-key macropad with a screen, three knobs and a push-to-talk mic. ESP32-S3, hot-swap MX switches, custom PCB, 3D-printed case. Follow the build.">
+  <meta name="theme-color" content="#070608">
+  <link rel="canonical" href="https://keybordy.davideghiotto.it/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="keybordy">
+  <meta property="og:title" content="keybordy MP: a macropad that listens">
+  <meta property="og:description" content="22 keys. 1 screen. 3 knobs. Your voice. An ESP32-S3 macropad on a custom PCB in a 3D-printed case.">
+  <meta property="og:url" content="https://keybordy.davideghiotto.it/">
+  <meta property="og:image" content="https://keybordy.davideghiotto.it/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preload" href="/models/tray.kbm" as="fetch" crossorigin>
+  <link rel="preload" href="/models/deck.kbm" as="fetch" crossorigin>
+</head>
+<body>
+  <!-- the 3D stage sits behind the hero and the story chapters; later sections cover it -->
+  <canvas id="gl" aria-label="3D model of the keybordy MP macropad"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="loader" id="loader" aria-hidden="true">
+    <span class="sticker sticker--xl sticker--slap"><svg viewBox="0 0 100 100"><use href="#logo"/></svg></span>
+    <div class="loader-bar"><i id="loader-fill"></i></div>
+    <div class="loader-caption"><span id="loader-pct">0</span>% · loading the CAD</div>
+  </div>
+
+  <header class="nav" id="nav">
+    <a class="brand" href="#top" aria-label="keybordy, back to top">
+      <span class="sticker sticker--sm"><svg viewBox="0 0 100 100"><use href="#logo"/></svg></span>
+      <span class="brand-word">keybordy</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#story">Device</a>
+      <a href="#trailer">Trailer</a>
+      <a href="#yours">Keymap</a>
+      <a href="#build">Build log</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="sound" aria-pressed="false" aria-label="Key sounds" title="Key sounds">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="mute" d="M16 9l6 6M22 9l-6 6"/></svg>
+      </button>
+      <a class="btn btn--ghost btn--sm magnetic" href="https://discord.gg/zzMpwQnEm" target="_blank" rel="noopener">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-discord"/></svg><span>Discord</span>
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero chapter" id="top" data-shot="hero">
+      <div class="hero-copy">
+        <p class="eyebrow reveal"><span class="dot"></span>ESP32-S3 macropad · prototype in progress</p>
+        <h1 class="hero-title" aria-label="keybordy MP">
+          <span class="type" data-type="keybordy">keybordy</span><span class="mp-tag">MP</span>
+        </h1>
+        <p class="hero-lede reveal" style="--d:.15s">22 keys. 1 screen. 3 knobs. <em>Your voice.</em><br>A macropad that runs your Mac, built from scratch, from the PCB to the caps.</p>
+        <div class="hero-ctas reveal" style="--d:.3s">
+          <button class="btn btn--key magnetic" data-open-trailer>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg><span>Watch the trailer</span>
+          </button>
+          <a class="btn btn--ghost magnetic" href="https://discord.gg/zzMpwQnEm" target="_blank" rel="noopener">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-discord"/></svg><span>Join the Discord</span>
+          </a>
+        </div>
+        <p class="hero-hint reveal" style="--d:.45s"><kbd>click</kbd> a key <span class="sep">·</span> or type <kbd>1</kbd>–<kbd>6</kbd> <kbd>Q</kbd>…<kbd>Y</kbd> <span class="sep">·</span> hold <kbd>space</kbd> to talk</p>
+      </div>
+      <a class="scroll-cue" href="#story" aria-label="Scroll to the device">
+        <span>scroll</span><i></i>
+      </a>
+    </section>
+
+    <!-- STORY: the canvas stays put, the camera flies -->
+    <div class="story" id="story">
+      <section class="chapter chapter--left" data-shot="keys" id="ch-keys">
+        <div class="card">
+          <p class="num">01</p>
+          <h2><span class="label">22 keys.</span></h2>
+          <p>Hot-swap MX switches in three sizes: 1u, 1.5u and a 2u talk bar on a screw-in stabilizer. Each cap carries only its number, so any keymap fits without reprinting a thing.</p>
+          <ul class="facts"><li>Kailh hot-swap sockets</li><li>5×6 matrix</li><li>USB HID or Bluetooth</li></ul>
+        </div>
+      </section>
+
+      <section class="chapter chapter--right" data-shot="oled" id="ch-oled">
+        <div class="card">
+          <p class="num">02</p>
+          <h2><span class="label">1 screen.</span></h2>
+          <p>A white 2.42″ OLED names every key's action the moment you press it. No legends to memorise, no cheat sheet taped to the desk.</p>
+          <ul class="facts"><li>SSD1309 · 128×64</li><li>Layer, link, battery</li><li>Shows each action as you press</li></ul>
+        </div>
+      </section>
+
+      <section class="chapter chapter--left" data-shot="knobs" id="ch-knobs">
+        <div class="card">
+          <p class="num">03</p>
+          <h2><span class="label">3 knobs.</span></h2>
+          <p>Volume, scroll, brightness, whatever you want. Scroll this page and they turn. 24 detents a turn, and every knob also clicks.</p>
+          <div class="meter" aria-hidden="true"><span>VOL</span><b id="knob-val">42</b><i><em id="knob-bar"></em></i></div>
+        </div>
+      </section>
+
+      <section class="chapter chapter--right" data-shot="talk" id="ch-talk">
+        <div class="card">
+          <p class="num">04</p>
+          <h2><span class="label label--talk">your voice.</span></h2>
+          <p>Hold the green bar and talk. The mic streams to your Mac, gets transcribed, and the intent runs as an action. A speaker answers back with sounds, speech and notifications.</p>
+          <ul class="facts"><li>I²S MEMS mic, hardware kill switch</li><li>2 W speaker</li><li>Hold <kbd>space</kbd> to try it</li></ul>
+        </div>
+      </section>
+
+      <section class="chapter chapter--explode" data-shot="explode" id="ch-explode">
+        <div class="card card--wide">
+          <p class="num">05</p>
+          <h2><span class="label">every layer.</span></h2>
+          <p>A custom PCB that JLCPCB assembles, inside a case printed in one piece on a Bambu Lab A1. Every part comes from one layout file, so the CAD, the PCB, the firmware and this page all agree.</p>
+          <ol class="layers" id="layers">
+            <li data-layer="knobs"><b>Knobs</b><span>printed, D-bore</span></li>
+            <li data-layer="deck"><b>Top deck</b><span>printed face down, PEI texture</span></li>
+            <li data-layer="caps"><b>Keycaps</b><span>PLA, waterslide legends</span></li>
+            <li data-layer="sw"><b>Switches</b><span>MX, hot-swap</span></li>
+            <li data-layer="plate"><b>Plate</b><span>1.5 mm printed</span></li>
+            <li data-layer="pcb"><b>PCB</b><span>ESP32-S3, all SMD on one side</span></li>
+            <li data-layer="inner"><b>Battery &amp; speaker</b><span>1000 mAh LiPo</span></li>
+            <li data-layer="tray"><b>Case</b><span>133 × 138 mm, 4° typing angle</span></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="chapter chapter--center" data-shot="final" id="ch-final">
+        <div class="final">
+          <p class="eyebrow"><span class="dot"></span>keybordy MP</p>
+          <h2 class="big">Printed. Assembled. <span class="hl">Yours.</span></h2>
+          <div class="hero-ctas">
+            <button class="btn btn--key magnetic" data-open-trailer>
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg><span>Watch the trailer</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- TRAILER -->
+    <section class="trailer solid" id="trailer">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow reveal"><span class="dot"></span>The trailer</p>
+          <h2 class="reveal" style="--d:.08s">27 seconds,<br><span class="hl">rendered from the real CAD.</span></h2>
+          <p class="reveal" style="--d:.16s">No camera and no product shoot. Every frame is three.js drawing the same meshes the case gets printed from, cut to the beat of the music.</p>
+        </div>
+        <button class="trailer-card reveal tilt" data-open-trailer aria-label="Play the trailer with sound">
+          <video id="trailer-loop" muted loop playsinline preload="none" poster="/media/poster.jpg">
+            <source src="/media/trailer.mp4" type="video/mp4">
+          </video>
+          <span class="trailer-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></span>
+          <span class="trailer-meta"><b>keybordy MP</b> · teaser · 0:27 <span class="pill">sound on</span></span>
+        </button>
+        <div class="trailer-actions reveal">
+          <a class="btn btn--yt magnetic" id="yt-trailer" href="https://www.youtube.com/channel/UCp-6Cv5ksm2mY-xLJqvLVKw?sub_confirmation=1" target="_blank" rel="noopener">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-yt"/></svg><span id="yt-trailer-label">Full trailer on YouTube soon · Subscribe</span>
+          </a>
+          <a class="btn btn--ghost magnetic" href="https://discord.gg/zzMpwQnEm" target="_blank" rel="noopener">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-discord"/></svg><span>Talk about it on Discord</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- SPECS -->
+    <section class="specs solid" id="specs">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow reveal"><span class="dot"></span>What's inside</p>
+          <h2 class="reveal" style="--d:.08s">Small box.<br><span class="hl">Lots going on.</span></h2>
+        </div>
+        <div class="bento">
+          <article class="tile tile--keys reveal tilt">
+            <p class="tile-k">Keys</p>
+            <p class="tile-n"><span data-count="22">0</span></p>
+            <p class="tile-d">MX hot-swap, in 1u, 1.5u and 2u</p>
+            <div class="mini-keys" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="m"></i><i></i><i class="t"></i><i class="m"></i></div>
+          </article>
+          <article class="tile tile--oled reveal tilt" style="--d:.06s">
+            <p class="tile-k">Screen</p>
+            <canvas class="oled-canvas" id="oled-tile" width="512" height="256" aria-label="OLED preview"></canvas>
+            <p class="tile-d">2.42″ white OLED, 128×64</p>
+          </article>
+          <article class="tile reveal tilt" style="--d:.12s">
+            <p class="tile-k">Knobs</p>
+            <p class="tile-n"><span data-count="3">0</span><small>× 24 detents</small></p>
+            <p class="tile-d">Bourns encoders that also click</p>
+          </article>
+          <article class="tile tile--voice reveal tilt" style="--d:.18s">
+            <p class="tile-k">Voice</p>
+            <div class="wave-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <p class="tile-d">Push-to-talk mic + 2 W speaker</p>
+          </article>
+          <article class="tile reveal tilt">
+            <p class="tile-k">Brain</p>
+            <p class="tile-n tile-n--sm">ESP32-S3</p>
+            <p class="tile-d">16 MB flash · 8 MB PSRAM · Wi-Fi · BLE</p>
+          </article>
+          <article class="tile reveal tilt" style="--d:.06s">
+            <p class="tile-k">Power</p>
+            <p class="tile-n"><span data-count="1000">0</span><small>mAh</small></p>
+            <p class="tile-d">USB-C or LiPo, wired or wireless</p>
+          </article>
+          <article class="tile tile--wide reveal tilt" style="--d:.12s">
+            <p class="tile-k">Made, not bought</p>
+            <p class="tile-n tile-n--sm">Printed on an A1 · assembled by JLCPCB</p>
+            <p class="tile-d">Black case, Jade White caps, gray mods and one Bambu Green talk bar. The PCB puts every SMD part on one side, so it gets assembled in one pass.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- KEYMAP -->
+    <section class="yours solid" id="yours">
+      <div class="wrap yours-grid">
+        <div class="section-head">
+          <p class="eyebrow reveal"><span class="dot"></span>Make it yours</p>
+          <h2 class="reveal" style="--d:.08s"><span class="label">map every key.</span></h2>
+          <p class="reveal" style="--d:.16s">Each key runs an action on your Mac: open an app, run a command in a terminal or a shell, open a URL, fire a Shortcut, send keystrokes, type text or control media. A local editor maps them, and the screen shows what you set.</p>
+          <div class="chips reveal" style="--d:.24s" id="chips"></div>
+        </div>
+        <div class="pad2d reveal" style="--d:.1s">
+          <canvas class="oled-canvas oled-canvas--pad" id="oled-pad" width="512" height="256" aria-label="OLED showing the selected key's action"></canvas>
+          <div class="pad2d-keys" id="pad2d" role="group" aria-label="Example keymap"></div>
+          <p class="pad2d-note">Example keymap. Hover or tap a key.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- BUILD LOG -->
+    <section class="build solid" id="build">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow reveal"><span class="dot"></span>Build log</p>
+          <h2 class="reveal" style="--d:.08s">Where it's at.</h2>
+          <p class="reveal" style="--d:.16s">keybordy started as eight switches jumper-wired to an ESP32 DevKit. MP is the real thing. Progress so far:</p>
+        </div>
+        <ol class="timeline">
+          <li class="done reveal"><span class="st">done</span><div><b>keybordy v0</b><p>8 keys on a DevKit as a Bluetooth keyboard, F13–F20 driving Mac actions through Hammerspoon, plus a local simulator.</p></div></li>
+          <li class="done reveal"><span class="st">done</span><div><b>Layout, pins and 3D concept</b><p>One layout file feeds the PCB, the CAD, the firmware pin header and the keymap editor.</p></div></li>
+          <li class="done reveal"><span class="st">done</span><div><b>Printed parts</b><p>Case, deck, plate, caps and knobs modelled in build123d, fit-checked and sliced for the A1.</p></div></li>
+          <li class="done reveal"><span class="st">done</span><div><b>PCB rev A</b><p>Placed, routed and exported with Gerbers, BOM and pick-and-place for JLCPCB assembly.</p></div></li>
+          <li class="now reveal"><span class="st">next</span><div><b>Bench prototype</b><p>Firmware bring-up on breakout boards: matrix, USB and BLE HID, encoders, OLED, audio.</p></div></li>
+          <li class="reveal"><span class="st">soon</span><div><b>Voice and keymap v2</b><p>Whisper on the Mac, intents, text-to-speech, and an editor that draws itself from the layout.</p></div></li>
+          <li class="reveal"><span class="st">then</span><div><b>First boards on the desk</b><p>Order, print, assemble, and film the real thing.</p></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta solid" id="updates">
+      <div class="marquee" aria-hidden="true"><div class="marquee-track" id="marquee"></div></div>
+      <div class="wrap cta-inner">
+        <span class="sticker sticker--lg reveal-slap"><svg viewBox="0 0 100 100"><use href="#logo"/></svg></span>
+        <h2 class="cta-title reveal">Follow the build.</h2>
+        <p class="reveal" style="--d:.1s">The full trailer, the first boards and every build video land on YouTube first. The Discord is where the work happens.</p>
+        <div class="cta-buttons reveal" style="--d:.2s">
+          <a class="btn btn--yt btn--lg magnetic" href="https://www.youtube.com/channel/UCp-6Cv5ksm2mY-xLJqvLVKw?sub_confirmation=1" target="_blank" rel="noopener">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-yt"/></svg><span>Subscribe on YouTube</span>
+          </a>
+          <a class="btn btn--discord btn--lg magnetic" href="https://discord.gg/zzMpwQnEm" target="_blank" rel="noopener">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-discord"/></svg><span>Join the Discord</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer solid">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <span class="sticker sticker--sm"><svg viewBox="0 0 100 100"><use href="#logo"/></svg></span>
+        <span>made by Davide + Claude Opus 5.5</span>
+      </div>
+      <nav class="footer-links" aria-label="Elsewhere">
+        <a href="https://www.youtube.com/channel/UCp-6Cv5ksm2mY-xLJqvLVKw" target="_blank" rel="noopener">YouTube</a>
+        <a href="https://discord.gg/zzMpwQnEm" target="_blank" rel="noopener">Discord</a>
+        <a href="https://github.com/davide97g/keybordy" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <p class="credits">Trailer music: “Total War” by AudioAtlant (Pixabay). Switch sounds: kbsim by Thomas Lai (MIT). Sound effects: VIRALAUDIO, OxidVideos (Pixabay), Kenney (CC0).</p>
+    </div>
+  </footer>
+
+  <!-- trailer player -->
+  <dialog class="player" id="player" aria-label="keybordy MP trailer">
+    <button class="player-close" id="player-close" aria-label="Close">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <video id="player-video" controls playsinline preload="none"></video>
+    <div class="player-bar">
+      <span>Full trailer on YouTube soon.</span>
+      <a class="btn btn--yt btn--sm" href="https://www.youtube.com/channel/UCp-6Cv5ksm2mY-xLJqvLVKw?sub_confirmation=1" target="_blank" rel="noopener">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-yt"/></svg><span>Subscribe</span>
+      </a>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <clipPath id="kbs-clip"><rect x="4" y="4" width="92" height="92" rx="22"/></clipPath>
+      <mask id="kbs-mask"><rect width="100" height="100" fill="#fff"/><polygon points="100,72 72,100 100,100" fill="#000"/></mask>
+      <linearGradient id="kbs-flap" x1="86" y1="86" x2="76" y2="76" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9d95ab"/><stop offset="1" stop-color="#f4f1f8"/></linearGradient>
+      <symbol id="logo" viewBox="0 0 100 100">
+        <g mask="url(#kbs-mask)">
+          <rect fill="#f4f1f8" x="4" y="4" width="92" height="92" rx="22"/>
+          <rect fill="#8fb300" x="13" y="15" width="74" height="72" rx="15"/>
+          <rect fill="#d6ff1f" x="13" y="13" width="74" height="64" rx="15"/>
+          <path d="M22 27q0-8 8-8h20" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="3.5" stroke-linecap="round"/>
+          <g fill="#0c0b0e" transform="translate(50 45) scale(2.25) translate(-16.75 -16)">
+            <rect x="8.5" y="7.5" width="4.5" height="17" rx="1"/>
+            <polygon points="13,15.2 19.6,7.5 25,7.5 16.4,17.6"/>
+            <polygon points="15.2,15.6 25,24.5 19.6,24.5 13,18.6"/>
+          </g>
+        </g>
+        <polygon points="96,76 76,96 73,73" fill="#000" fill-opacity=".28"/>
+        <path d="M96 76L76 96V79q0-3 3-3z" fill="url(#kbs-flap)"/>
+      </symbol>
+      <symbol id="i-discord" viewBox="0 0 24 24"><path fill="currentColor" d="M19.3 5.3A16.6 16.6 0 0 0 15.2 4l-.5 1a15.4 15.4 0 0 0-5.4 0L8.8 4a16.5 16.5 0 0 0-4.1 1.3C2.1 9.2 1.4 13 1.8 16.7a16.7 16.7 0 0 0 5 2.5l1.1-1.7a10.8 10.8 0 0 1-1.7-.8l.4-.3a11.9 11.9 0 0 0 10.8 0l.4.3a10.8 10.8 0 0 1-1.7.8l1.1 1.7a16.6 16.6 0 0 0 5-2.5c.5-4.3-.8-8-2.9-11.4zM8.7 14.5c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm6.6 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z"/></symbol>
+      <symbol id="i-yt" viewBox="0 0 24 24"><path fill="currentColor" d="M22.5 7.2a2.8 2.8 0 0 0-2-2C18.8 4.7 12 4.7 12 4.7s-6.8 0-8.5.5a2.8 2.8 0 0 0-2 2A29 29 0 0 0 1 12a29 29 0 0 0 .5 4.8 2.8 2.8 0 0 0 2 2c1.7.5 8.5.5 8.5.5s6.8 0 8.5-.5a2.8 2.8 0 0 0 2-2A29 29 0 0 0 23 12a29 29 0 0 0-.5-4.8zM9.8 15.1V8.9l5.6 3.1z"/></symbol>
+    </defs>
+  </svg>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

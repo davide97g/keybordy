@@ -93,6 +93,12 @@ async function loadSTL(name: string) {
   return toCreasedNormals(g, THREE.MathUtils.degToRad(32));
 }
 
+/** Where build() gets the printed parts and the frame: the landing page (site/) swaps in its compact meshes. */
+export const meshSource = {
+  load: loadSTL,
+  frame: async () => (await fetch('models/frame.json')).json(),
+};
+
 export class Macropad {
   /** On the table: y up, x right, z toward the default camera. */
   root = new THREE.Group();
@@ -110,8 +116,8 @@ export class Macropad {
 
   async build() {
     const M = (this.M = makeMaterials());
-    const frame = await (await fetch('models/frame.json')).json() as { tilt_deg: number; pcb_top: number; bore_depth: number; cap_up: number; cap_h: number };
-    const [tray, deck, plate, cap1, cap15, cap2, knob] = await Promise.all(['tray', 'deck', 'plate', 'cap1', 'cap15', 'cap2_talk', 'knob'].map(loadSTL));
+    const frame = await meshSource.frame() as { tilt_deg: number; pcb_top: number; bore_depth: number; cap_up: number; cap_h: number };
+    const [tray, deck, plate, cap1, cap15, cap2, knob] = await Promise.all(['tray', 'deck', 'plate', 'cap1', 'cap15', 'cap2_talk', 'knob'].map((n) => meshSource.load(n)));
     this.root.add(this.asm);
     this.asm.rotation.x = -Math.PI / 2;
     this.asm.add(this.tilt);

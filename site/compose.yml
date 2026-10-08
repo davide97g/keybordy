@@ -1,0 +1,19 @@
+# The landing page, keybordy.davideghiotto.it, on the homelab's Dokploy. Dokploy adds the Traefik labels
+# from its domain record; the Cloudflare tunnel publishes the hostname.
+services:
+  keybordy-site:
+    build:
+      context: ..
+      dockerfile: site/Dockerfile
+    restart: unless-stopped
+    networks: [dokploy-network]
+    healthcheck:
+      # 127.0.0.1, not localhost: busybox wget tries ::1 first.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+networks:
+  dokploy-network:
+    external: true

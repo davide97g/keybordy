@@ -1,0 +1,9 @@
+# The build context is the repo root: send only what the page needs.
+*
+!layout/macropad.json
+!video/app/src/model
+!video/app/src/engine/util.ts
+!sim/velxio/frontend/public/fonts
+!site
+site/node_modules
+site/dist
