@@ -116,6 +116,17 @@ Rev A carrier board: DevKit, OLED (1x4) and KY-040 (1x5 right angle) on female h
 - DevKit orientation follows the Wokwi DOIT V1 part: USB toward you, the VIN side is on the left. The top row in `build.py` is the VIN side, rows 25.4 mm apart.
 - The hotswap footprint is marbastlib's (CERN-OHL-P), drawn from the back and flipped onto B.Cu. Hole-to-hole minimum is 0.45 mm because that footprint has 0.46 mm between a pin hole and the 5-pin peg hole.
 
+## keybordy MP PCB (`pcb/macropad/`)
+
+`pcb/macropad/build.py` generates the MP board from `layout/macropad.json` and `layout/pins.json`; the netlist is `parts()` in that file. `just mp-pcb` places, routes with Freerouting 1.9.0 (`~/.local/share/freerouting/`; 2.x leaves ~30 connections unrouted). 1.9 is not deterministic, so `route` retries up to 4 times, about 5 min each, and writes DRC, Gerbers, JLC BOM and CPL into `pcb/macropad/fab/` (gitignored). Shared helpers are in `pcb/kb.py`. `pcb/macropad/README.md` covers ordering and hand-soldered parts.
+
+- All SMD parts are on B.Cu, so JLCPCB assembles one side. Encoders, OLED wires and speaker wires are hand-soldered on top.
+- pcbnew SWIG gotchas, each of which caused a crash:
+  - `ZONE.SetOutline` takes ownership of the polygon, so set `poly.thisown = False`.
+  - Netclasses set through the API get freed under KiCad. Write them into the `.kicad_pro` instead (`kb.write_netclasses`).
+  - After `ImportSpecctraSES`, item lists come back untyped. Pour in a fresh process (`build.py pour`).
+- After changing the layout or pins, rerun `just mp-pcb` too.
+
 ## keybordy MP (`layout/`)
 
 This is the next device: an ESP32-S3-WROOM-1-N16R8 macropad with 22 MX keys (1u/1.5u/2u), 3 encoders, a white 2.42" SSD1309 OLED, an ICS-43434 mic, a MAX98357A speaker amp and a LiPo, on a JLCPCB-assembled PCB in a printed case. `docs/macropad.md` has the spec, parts, pin table and phase plan.

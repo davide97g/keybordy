@@ -192,6 +192,19 @@ pcb-fab:
 pcb-open:
     open -a "{{kicad_app}}" pcb/keybordy.kicad_pro
 
+# keybordy MP board from the layout: place, Freerouting (5-20 min, retries), DRC, Gerbers + JLC BOM/CPL into pcb/macropad/fab/
+mp-pcb:
+    {{kicad_py}} pcb/macropad/build.py place
+    {{kicad_py}} pcb/macropad/build.py route
+    {{kicad_py}} pcb/macropad/build.py fab
+
+# DRC + fab files only (after editing the MP board by hand in KiCad)
+mp-pcb-fab:
+    {{kicad_py}} pcb/macropad/build.py fab
+
+mp-pcb-open:
+    open -a "{{kicad_app}}" pcb/macropad/keybordy-mp.kicad_pro
+
 # ── Wiring guide ────────────────────────────────────────────────────────────
 
 [working-directory: 'guide']

@@ -63,7 +63,7 @@
   "mcu":     { "part": "ESP32-S3-WROOM-1-N16R8", "lcsc": "C2913202", "at": [22.0, 7.0], "side": "bottom", "antenna": "rear edge, keep-out" },
   "battery": { "part": "LiPo 603450 1000 mAh", "at": [78.0, 64.0], "box_mm": [50.0, 34.0, 6.0], "why": "a 10 mm cell does not fit under the PCB at the front height" },
   "switches": [
-    { "id": "PWR", "at": [30.0, -6.0], "edge": "rear" },
+    { "id": "PWR", "at": [68.0, -6.0], "edge": "rear", "why": "right of the USB-C: the ESP32 antenna keep-out covers x -2..46 along the rear edge" },
     { "id": "MIC", "at": [98.1, -6.0], "edge": "rear", "cuts": "mic VDD" }
   ],
 

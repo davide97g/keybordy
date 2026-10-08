@@ -29,3 +29,15 @@ video/public/vendor/
 video/build/
 video/out/
 video/audio/.venv/
+
+# keybordy MP PCB: fab output, Freerouting scratch, KiCad local state
+pcb/macropad/fab/
+pcb/macropad/route.dsn
+pcb/macropad/route.ses
+pcb/macropad/logs/
+pcb/macropad/*.kicad_prl
+pcb/macropad/*-backups/
+pcb/macropad/route-best.ses
+
+# Freerouting writes its log into the working directory
+/logs/
