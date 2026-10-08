@@ -5,14 +5,17 @@
     gen.py header    write firmware/macropad/main/board_pins.h
     gen.py check     lint, then fail if board_pins.h is stale
     gen.py preview   write layout/preview/keybordy-mp.html (3D concept render) from the template
+    gen.py stickers  write layout/stickers/keycap-decals.{html,pdf}: A4 waterslide decal sheet, 1:1
 
 Stdlib only. Exit code 0 only on PASS. `--json` prints {ok, problems, warnings, budget}.
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import math
+import subprocess
 import sys
 from pathlib import Path
 
@@ -23,6 +26,9 @@ PINS = HERE / "pins.json"
 HEADER = REPO / "firmware" / "macropad" / "main" / "board_pins.h"
 PREVIEW_IN = HERE / "preview" / "template.html"
 PREVIEW_OUT = HERE / "preview" / "keybordy-mp.html"
+STICKERS = HERE / "stickers" / "keycap-decals"
+FONT = REPO / "sim" / "velxio" / "frontend" / "public" / "fonts" / "MartianMono.var.woff2"
+CHROME = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 
 # ESP32-S3-WROOM-1-N16R8: GPIOs bonded out to pads, and the ones that are spoken for.
 MODULE = set(range(0, 22)) | set(range(35, 49))
@@ -294,6 +300,89 @@ def render_header(L: dict, P: dict) -> str:
 
 # ── commands ──────────────────────────────────────────────────────────────────
 
+# ── keycap decal sheet ────────────────────────────────────────────────────────
+# Flat cap top = base (w*U - 1.05 by 18) - 4 mm lean - 2 x 0.4 mm edge chamfer, as in cap() in
+# cad/macropad.py: 13.2 mm square on 1u. Change both together.
+CAP_TOP_INSET, CAP_DEPTH_BASE = 1.05 + 4.0 + 0.8, 18.0 - 4.0 - 0.8
+DECAL_MARGIN = 0.4      # per side, so a hand cut never folds over the chamfer
+LEGEND_MM = 3.2         # font size of the K number
+GUTTER = 3.0            # between decals; cut ticks live here
+SHEET_W, SHEET_H, SHEET_M = 210.0, 297.0, 12.0
+
+
+def decal_size(k: dict, u: float) -> tuple[float, float]:
+    return (k["w"] * u - CAP_TOP_INSET - 2 * DECAL_MARGIN, CAP_DEPTH_BASE - 2 * DECAL_MARGIN)
+
+
+def render_stickers(L: dict, sets: int) -> str:
+    """One A4 SVG page in mm. Black legends on clear film; the talk bar keeps its engraved mic."""
+    u = L["u_mm"]
+    keys = [k for k in L["keys"] if k.get("role") != "ptt"]
+    keys.sort(key=lambda k: (k["w"], int(k["id"][1:])))   # 1u first, then the 1.5u mods
+    font = base64.b64encode(FONT.read_bytes()).decode()
+    out: list[str] = []
+    tick = lambda x1, y1, x2, y2: out.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" class="cut"/>')
+
+    def text(x, y, s, size, anchor="start", weight=500):
+        out.append(f'<text x="{x:.2f}" y="{y:.2f}" font-size="{size}" font-weight="{weight}" text-anchor="{anchor}">{s}</text>')
+
+    x0, y = SHEET_M, SHEET_M
+    text(x0, y + 4, "keybordy MP · keycap decals", 4.2, weight=700)
+    text(x0, y + 9, "Print at 100% / actual size, no fit-to-page. Laser, on clear waterslide decal paper.", 2.6)
+    text(x0, y + 12.5, "Cut on the ticks. Each decal is its cap's flat top minus 0.4 mm a side.", 2.6)
+    # scale check: a 50 mm ruler and a 20 mm square
+    ry = y + 18
+    out.append(f'<line x1="{x0}" y1="{ry}" x2="{x0 + 50}" y2="{ry}" class="ink"/>')
+    for i in range(51):
+        h = 2.4 if i % 10 == 0 else 1.6 if i % 5 == 0 else 1.0
+        out.append(f'<line x1="{x0 + i}" y1="{ry}" x2="{x0 + i}" y2="{ry + h}" class="ink"/>')
+    for i in range(0, 51, 10):
+        text(x0 + i, ry + 5, str(i), 1.8, "middle")
+    text(x0 + 53, ry + 2.2, "must measure 50 mm", 2.2)
+    out.append(f'<rect x="{SHEET_W - SHEET_M - 20}" y="{y}" width="20" height="20" class="ink" fill="none"/>')
+    text(SHEET_W - SHEET_M - 10, y + 11, "20 mm", 2.2, "middle")
+    y += 30
+
+    width = SHEET_W - 2 * SHEET_M
+    for n in range(1, sets + 1):
+        text(x0, y + 2, f"SET {n}", 2.4, weight=700)
+        y += 6
+        x, row_h = x0, 0.0
+        for k in keys:
+            w, h = decal_size(k, u)
+            if x + w > x0 + width + 1e-6:
+                x, y = x0, y + row_h + GUTTER
+                row_h = 0.0
+            # corner ticks, pointing out of the decal into the gutter
+            g, t = 0.4, 1.0
+            for cx, sx in ((x, -1), (x + w, 1)):
+                for cy, sy in ((y, -1), (y + h, 1)):
+                    tick(cx + sx * g, cy, cx + sx * (g + t), cy)
+                    tick(cx, cy + sy * g, cx, cy + sy * (g + t))
+            text(x + w / 2, y + h / 2 + LEGEND_MM * 0.36, k["id"], LEGEND_MM, "middle", 600)
+            x += w + GUTTER
+            row_h = max(row_h, h)
+        y += row_h + 7
+    if y > SHEET_H - SHEET_M:
+        raise SystemExit(f"{sets} sets do not fit on one A4 sheet")
+
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>keybordy MP keycap decals</title>
+<style>
+@font-face {{ font-family: "Martian Mono"; src: url(data:font/woff2;base64,{font}) format("woff2"); font-weight: 100 800; }}
+@page {{ size: {SHEET_W:g}mm {SHEET_H:g}mm; margin: 0; }}
+html, body {{ margin: 0; background: #fff; }}
+svg {{ display: block; width: {SHEET_W:g}mm; height: {SHEET_H:g}mm; }}
+text {{ font-family: "Martian Mono", monospace; fill: #000; }}
+.ink {{ stroke: #000; stroke-width: 0.15; }}
+.cut {{ stroke: #000; stroke-width: 0.12; }}
+</style></head><body>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SHEET_W:g} {SHEET_H:g}">
+{chr(10).join(out)}
+</svg></body></html>
+"""
+
+
 def run_lint(as_json: bool, extra: Report | None = None) -> int:
     L, P = load()
     rep = extra or Report()
@@ -315,8 +404,9 @@ def run_lint(as_json: bool, extra: Report | None = None) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["lint", "header", "check", "preview"])
+    ap.add_argument("cmd", choices=["lint", "header", "check", "preview", "stickers"])
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--sets", type=int, default=5, help="stickers: full decal sets on the sheet")
     a = ap.parse_args()
 
     if a.cmd == "lint":
@@ -337,6 +427,20 @@ def main() -> int:
         L, _ = load()
         PREVIEW_OUT.write_text(PREVIEW_IN.read_text().replace("__LAYOUT__", json.dumps(L)))
         print(f"wrote {PREVIEW_OUT.relative_to(REPO)}")
+        return 0
+    if a.cmd == "stickers":
+        L, _ = load()
+        html, pdf = STICKERS.with_suffix(".html"), STICKERS.with_suffix(".pdf")
+        html.parent.mkdir(parents=True, exist_ok=True)
+        html.write_text(render_stickers(L, a.sets))
+        print(f"wrote {html.relative_to(REPO)}")
+        if not CHROME.exists():
+            print("no Chrome: print the .html at 100% from a browser instead")
+            return 0
+        subprocess.run([str(CHROME), "--headless", "--disable-gpu", "--no-pdf-header-footer",
+                        "--virtual-time-budget=3000", f"--print-to-pdf={pdf}", html.as_uri()],
+                       check=True, capture_output=True)
+        print(f"wrote {pdf.relative_to(REPO)}")
         return 0
     return 2
 

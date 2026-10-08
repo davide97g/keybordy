@@ -10,7 +10,7 @@ The next keybordy: an ESP32-S3 macropad on a custom PCB that JLCPCB fabs and ass
 - **Top zone:** the OLED on the left, three knobs at 17.4 mm pitch on the right.
 - **Case:** 133.3 × 138.1 mm, 19 mm high at the front and 29 mm at the rear (4.1° typing angle). It fits the A1 bed in one piece.
 - **Top deck:** prints face down on Textured PEI, so the top gets the plate texture.
-- **Keycaps:** float 3 mm above the deck.
+- **Keycaps:** float 3 mm above the deck. Legends are the key number only (K1..K22, knobs E1..E3), so any keymap fits without reprinting; the OLED names a key's action on each press. The talk bar keeps its engraved mic glyph. Legends are clear laser waterslide decals (`just mp-stickers`, printed at a copy shop), set with Micro Set/Sol over a gloss base coat and sealed with a water-based matte top coat. Parts are in `docs/macropad-shopping.md`.
 - **Colours:** Bambu PLA Basic. Black case and knobs, Jade White caps, Gray 1.5u mods, Bambu Green talk bar.
 
 ## Parts

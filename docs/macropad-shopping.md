@@ -25,6 +25,17 @@ These parts are for the bench prototype (phase 1) and the printed build. The fin
 
 Total: about €181 without the sockets, about €195 with them.
 
+## Keycap decals
+
+Checked 2026-10-08 on amazon.it. Decals are printed at a copy shop from `just mp-stickers`. There is no printer at home, so the paper must be laser paper.
+
+| Item | Link | € | Rating | Notes |
+|---|---|---|---|---|
+| Mondo Decal clear laser waterslide, no cover coat, 3 × A4 | https://www.amazon.it/dp/B074ZN5VJ6 | 16.00 | 4.0 (85) | Take one sheet to the copy shop; it holds five full sets. |
+| Microscale Micro Set + Micro Sol | https://www.amazon.it/dp/B01LXZ03W9 | 12.50 | 4.7 (2,922) | Set under the decal, Sol on top so the film settles into the plate texture. |
+| Vallejo Gloss Varnish 18 ml, water-based | https://www.amazon.it/dp/B001JJZDSK | 9.01 | 4.6 (27,747) | Base coat on the textured cap top, against silvering. |
+| Mr. Hobby Top Coat Flat spray 90 ml, water-based | https://www.amazon.it/dp/B0000WS12C | 14.44 | 4.5 (1,503) | 2–3 light coats: hides the film edge, takes the finger wear. Solvent sprays can craze PLA. |
+
 ## Don't buy
 
 - **ECSiNG stabilizers B0C61DXN18:** plate-mount; the design uses PCB-mount.

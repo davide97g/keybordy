@@ -126,6 +126,7 @@ This is the next device: an ESP32-S3-WROOM-1-N16R8 macropad with 22 MX keys (1u/
   - `just mp-lint` runs `check`: layout overlaps, matrix slots, stabilizers on 2u+, knob gaps, mounting holes near switches, battery/speaker fit, pin rules, and whether `board_pins.h` is stale. It has been checked against deliberate faults.
   - `just mp-gen` writes `firmware/macropad/main/board_pins.h`. Do not edit that file by hand.
   - `just mp-preview` writes the three.js concept render, `layout/preview/keybordy-mp.html` (gitignored), from `layout/preview/template.html`. The published copy is https://claude.ai/artifact/JGeDgLbdqCekFHqC4e5jJk; republish it after layout changes.
+  - `just mp-stickers` writes the keycap decal sheet, `layout/stickers/keycap-decals.pdf` (gitignored): A4 at 1:1, five sets of black K-number legends for clear laser waterslide paper, printed with headless Chrome. Decal size comes from the cap top in `cad/macropad.py` `cap()`; `gen.py` restates those numbers (`CAP_TOP_INSET`), so change both together. The talk bar keeps its engraved mic and has no decal.
 - After any change to the layout or pins, run `just mp-gen` and `just mp-lint`, and report the result.
 - `cad/` (uv project, build123d) holds the printed parts, all built from the layout.
   - `macropad.py` builds the parts and `just cad-build` exports them: tray (case bottom, printed floor down), deck (4 mm top, printed face down so it gets the plate texture), plate (1.5 mm, 14.1 mm holes, standoffs), caps 1u/1.5u/2u, knobs (D-bore 6.1/4.6), and fit tests.

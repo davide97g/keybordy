@@ -101,6 +101,7 @@ td.m { font: 500 12px var(--mono); color: var(--muted); white-space: nowrap; }
       <h2>Shape</h2>
       <dl id="dims"></dl>
       <p class="note">The top deck prints face down on the Textured PEI plate, so the top surface gets the plate's fine texture with no sanding. The caps float 3 mm above the deck, showing the switches.</p>
+      <p class="note">Caps carry only their number, K1 to K22, so any keymap fits without reprinting. The OLED names a key's action on each press, and LAYER (K19) swaps the whole map.</p>
     </section>
     <section>
       <h2>Printed parts</h2>
@@ -137,7 +138,8 @@ THREE.ColorManagement.legacyMode = false;
 const L = __LAYOUT__;
 
 // Example keymap for the preview only (the real one lives in ~/.config/keybordy/keymap.json).
-const KEYMAP = {
+// Caps only carry their K number, so the map can change freely; LAYER (K19) cycles these.
+const KEYMAPS = [{
   K1: ["CLAUDE", "terminal", "claude"], K2: ["NOTES", "app", "Notes"], K3: ["TERM", "terminal", "~"],
   K4: ["CODE", "app", "VS Code"], K5: ["WEB", "url", "localhost:3080"], K6: ["MAIL", "app", "Mail"],
   K7: ["SLACK", "app", "Slack"], K8: ["MEET", "url", "meet.new"], K9: ["MUSIC", "media", "play/pause"],
@@ -145,7 +147,16 @@ const KEYMAP = {
   K13: ["◀ DESK", "keys", "⌃←"], K14: ["DESK ▶", "keys", "⌃→"], K15: ["MUTE", "media", "mute"],
   K16: ["DND", "shortcut", "Focus"], K17: ["TIMER", "shortcut", "25 min"], K18: ["SLEEP", "shell", "pmset displaysleepnow"],
   K19: ["LAYER", "layer", "next"], K20: ["FN", "layer", "hold"], K21: ["TALK", "voice", "push to talk"], K22: ["ENTER", "keys", "↩"],
-};
+}, {
+  K1: ["JOIN", "url", "meet.new"], K2: ["NOTES", "app", "Notes"], K3: ["MUTE", "keys", "⌘D"],
+  K4: ["CAM", "keys", "⌘E"], K5: ["HAND", "keys", "⌃⌘H"], K6: ["LEAVE", "keys", "⌘W"],
+  K7: ["◀◀", "media", "previous"], K8: ["PLAY", "media", "play/pause"], K9: ["▶▶", "media", "next"],
+  K10: ["SHOT", "keys", "⇧⌘4"], K11: ["REC", "shortcut", "Screen rec"], K12: ["LOCK", "keys", "⌃⌘Q"],
+  K13: ["CAL", "app", "Calendar"], K14: ["CHAT", "app", "Slack"], K15: ["MAIL", "app", "Mail"],
+  K16: ["DND", "shortcut", "Focus"], K17: ["TIMER", "shortcut", "25 min"], K18: ["SLEEP", "shell", "pmset displaysleepnow"],
+  K19: ["LAYER", "layer", "next"], K20: ["FN", "layer", "hold"], K21: ["TALK", "voice", "push to talk"], K22: ["ENTER", "keys", "↩"],
+}];
+const action = (id) => KEYMAPS[S.layer][id] || [id, "", ""];
 const ENC = { E1: { name: "VOLUME", short: "VOL", v: 42, step: 2 }, E2: { name: "SCROLL", short: "SCRL", v: 50, step: 5 }, E3: { name: "LIGHT", short: "LIGHT", v: 70, step: 5 } };
 const PAL = L.finish.palette;
 const U = L.u_mm, C = L.case;
@@ -343,10 +354,10 @@ for (const k of L.keys) {
   const grp = new THREE.Group(); grp.position.set(cx, CAP_Y, cz); G.caps.add(grp);
   const cap = mesh(taperBox(W, H, D, 1.3, inX, inZ), mat, grp);
   cap.userData.key = k.id; keyHits.push(cap);
-  const label = (KEYMAP[k.id] || [k.id])[0];
-  const lines = k.role === "ptt" ? ["● TALK"] : [label];
+  // legends are the key number only (the talk bar keeps its mic role); actions live in the keymap
+  const lines = k.role === "ptt" ? ["● TALK"] : [k.id];
   const dw = W - 2 * inX - 1.4, dd = D - 2 * inZ - 1.4;
-  const lg = decal(lines, dw, dd, ink, { size: label.length > 5 ? 2.0 : 2.4 });
+  const lg = decal(lines, dw, dd, ink, { size: 2.4 });
   lg.position.y = H + 0.03; grp.add(lg);
   caps[k.id] = { grp, base: CAP_Y, target: CAP_Y };
   // switch: housing on the plate, stem on top
@@ -445,7 +456,7 @@ let micLed;
   const wm = decal(["keybordy"], 40, 7, "rgba(70,66,78,0.9)", { size: 4.5, family: '"Anybody", sans-serif', weight: 900, align: "left" });
   wm.position.set(X(2) + 20, DECK_TOP + 0.02, Z(-2.0)); G.deck.add(wm);
   for (const e of L.encoders) {
-    const t = decal([ENC[e.id].short], 16, 4, "rgba(80,76,88,0.95)", { size: 2.4 });
+    const t = decal([e.id], 16, 4, "rgba(80,76,88,0.95)", { size: 2.4 });
     t.position.set(X(e.at[0]), DECK_TOP + 0.02, Z(e.at[1] + L.encoder_part.knob_d_mm / 2 + 4.6)); G.deck.add(t);
   }
   const port = mesh(new THREE.CircleGeometry(0.75, 20), M.hole, G.deck, false);
@@ -493,6 +504,7 @@ function statusBar() {
   px('600 8px "Martian Mono", monospace');
   og.textAlign = "left"; og.fillText("L" + S.layer, 1, 0);
   og.fillText(S.listening ? "● MIC" : "BLE", 20, 0);
+  if (S.mode === "key" && S.key) { og.textAlign = "center"; og.fillText(S.key, 72, 0); }
   og.textAlign = "right"; og.fillText(S.battery + "%", 110, 0);
   og.strokeRect(112.5, 1.5, 13, 6); og.fillRect(126, 3, 1.5, 3); og.fillRect(114, 3, Math.round(10 * S.battery / 100), 3);
   og.fillRect(0, 10, 128, 1);
@@ -515,7 +527,7 @@ function drawOled(t) {
       return;
     }
     if (S.mode === "key" && S.key) {
-      const [label, type, arg] = KEYMAP[S.key] || [S.key, "", ""];
+      const [label, type, arg] = action(S.key);
       centered(label, 15, '900 22px "Anybody", sans-serif');
       centered(type + " › " + arg, 44, '400 8px "Martian Mono", monospace');
       return;
@@ -566,8 +578,13 @@ function turn(id, dir) {
   say(`<b>${id} ${e.name}</b> ${dir > 0 ? "clockwise" : "counter-clockwise"}: ${e.v}. Modes are set per knob in the keymap editor.`);
 }
 function fireKey(id) {
-  const [label, type, arg] = KEYMAP[id] || [id, "", ""];
+  const [label, type, arg] = action(id);
   S.mode = "key"; S.key = id; S.until = performance.now() + 1800;
+  if (type === "layer" && arg === "next") {
+    S.layer = (S.layer + 1) % KEYMAPS.length;
+    say(`<b>${id} ${label}</b>: layer ${S.layer}. Same caps, new actions; press any key to see what it does now.`);
+    return;
+  }
   say(`<b>${id} ${label}</b>: ${type} › ${arg}`);
 }
 const cvs = renderer.domElement;
@@ -650,9 +667,9 @@ camera.position.set(...VIEWS.hero.pos); controls.target.set(...VIEWS.hero.at);
     ["Case tray", sw(L.finish.case), "upright, floor on the plate"],
     ["Top deck", sw(L.finish.case), "face down: textured top"],
     ["Switch plate, 1.5 mm", sw("Gray"), "flat"],
-    [`Keycaps 1u ×${n1}`, sw(L.finish.keycaps), "upside down, engraved legends"],
-    ["Keycaps 1.5u ×2", sw(L.finish.mods), "upside down"],
-    ["Talk bar 2u", sw(L.finish.ptt), "upside down, stab stems"],
+    [`Keycaps 1u ×${n1}`, sw(L.finish.keycaps), "upside down, K-number legends"],
+    ["Keycaps 1.5u ×2", sw(L.finish.mods), "upside down, K-number legends"],
+    ["Talk bar 2u", sw(L.finish.ptt), "upside down, mic glyph, stab stems"],
     ["Knobs ×3", sw(L.finish.knobs), "knurled, D-bore 6.1 / 4.6 mm"],
   ];
   document.getElementById("prints").innerHTML = prints.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="m">${r[2]}</td></tr>`).join("");

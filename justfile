@@ -46,6 +46,11 @@ mp-preview:
     @python3 layout/gen.py preview
     open layout/preview/keybordy-mp.html
 
+# A4 keycap decal sheet (PDF, 1:1) for laser waterslide paper; take it to a copy shop
+mp-stickers *args:
+    @python3 layout/gen.py stickers {{args}}
+    open layout/stickers/keycap-decals.pdf
+
 # Printed parts from the layout (build123d): STL + STEP into cad/out/ (e.g. `just cad-build knob cap1`)
 [working-directory: 'cad']
 cad-build *parts:

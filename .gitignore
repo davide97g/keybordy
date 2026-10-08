@@ -19,6 +19,7 @@ pcb/fp-info-cache
 pcb/*-backups/
 
 layout/preview/keybordy-mp.html
+layout/stickers/
 
 cad/out/
 cad/.venv/
