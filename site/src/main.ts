@@ -6,7 +6,7 @@ import { MAP, ACTIONS, TYPES, KEYBOARD } from './keymap';
 import { clickSound, setSound, soundOn } from './sound';
 
 /** Set once the trailer is on YouTube: the trailer buttons then link to it instead of the channel. */
-const YT_TRAILER = '';
+const YT_TRAILER = 'https://youtu.be/kGj5I7xX7cw';
 const CHANNEL_SUB = 'https://www.youtube.com/channel/UCp-6Cv5ksm2mY-xLJqvLVKw?sub_confirmation=1';
 
 const $ = <T extends Element = HTMLElement>(s: string, r: ParentNode = document) => r.querySelector(s) as T;
