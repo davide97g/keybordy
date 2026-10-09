@@ -56,7 +56,7 @@ That uses 30 of the 31 usable GPIOs, leaving GPIO3 free.
 ## Plan
 
 0. **Layout, pins, lint and preview.** Done.
-1. **Bench prototype from breakout modules.** ESP-IDF firmware bring-up in this order: matrix, HID over USB and BLE, encoders, OLED, I2S loopback, Wi-Fi streaming, wake word, USB audio.
+1. **Bench prototype from breakout modules.** Wiring in `docs/macropad-bench.md`, test sketch `firmware/mp_bench`. ESP-IDF firmware bring-up in this order: matrix, HID over USB and BLE, encoders, OLED, I2S loopback, Wi-Fi streaming, wake word, USB audio.
 2. **Host.** keymap v2 (mod+F13..F20 gives 40 action codes), an editor driven by the layout, the `host/voice/` service (Whisper, intent, TTS, `/notify`).
 3. **PCB.** Rev A generated: `pcb/macropad/build.py` (helpers in `pcb/kb.py`) places, routes with Freerouting and writes Gerbers plus a JLC BOM and CPL. `just mp-pcb`; see `pcb/macropad/README.md` for ordering, hand-soldered parts and the case changes it needs.
 4. **CAD.** `cad/` in build123d (plate, case, deck, knobs, keycaps), fit tests first.

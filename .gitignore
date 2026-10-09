@@ -41,3 +41,9 @@ pcb/macropad/route-best.ses
 
 # Freerouting writes its log into the working directory
 /logs/
+
+# Wi-Fi/OTA secrets generated from .env by `just mp-secrets`
+firmware/libraries/KeybordyBench/src/bench_secrets.h
+# bench audio runs
+firmware/mp_speaker_stream/tune-last.json
+build/ota/
