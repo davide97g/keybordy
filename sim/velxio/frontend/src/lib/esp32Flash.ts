@@ -1,7 +1,8 @@
 /**
  * Flash a simulator-compiled ESP32 image to a real board over Web Serial.
  *
- * The simulator's compile returns one merged image (bootloader at 0x1000,
+ * The simulator's compile returns one merged image (bootloader at 0x1000 on a
+ * classic ESP32, 0x0 on an ESP32-S3,
  * partition table at 0x8000, app at 0x10000, trailing 0xFF trimmed). The
  * same image boots on the bench board, so the browser can flash it with
  * esptool-js and no host tooling.
@@ -92,6 +93,9 @@ export function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
+/** esptool-js CHIP_NAME of the boards the browser flashes. */
+export type FlashChip = 'ESP32' | 'ESP32-S3';
+
 export type FlashPhase = 'connect' | 'write' | 'verify' | 'reset';
 
 export interface FlashCallbacks {
@@ -118,6 +122,7 @@ const HIDDEN_LINE = /^\s*MAC:/i;
 export async function flashEsp32(
   port: SerialPort,
   image: Uint8Array,
+  expectChip: FlashChip,
   cb: FlashCallbacks,
 ): Promise<FlashResult> {
   const t0 = performance.now();
@@ -147,8 +152,8 @@ export async function flashEsp32(
   try {
     cb.onPhase('connect');
     const chip = await loader.main();
-    if (loader.chip.CHIP_NAME !== 'ESP32') {
-      throw new Error(`Found ${chip}, but this image is built for a classic ESP32.`);
+    if (loader.chip.CHIP_NAME !== expectChip) {
+      throw new Error(`Found ${chip}, but this image is built for ${expectChip === 'ESP32' ? 'a classic ESP32' : `an ${expectChip}`}.`);
     }
 
     cb.onPhase('write');

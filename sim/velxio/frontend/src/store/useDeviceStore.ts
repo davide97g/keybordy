@@ -16,7 +16,8 @@
 
 import { create } from 'zustand';
 
-import { base64ToBytes, flashEsp32, type FlashPhase } from '../lib/esp32Flash';
+import { base64ToBytes, flashEsp32, type FlashChip, type FlashPhase } from '../lib/esp32Flash';
+import { fqbnForLanguage } from '../types/board';
 import { compileBoardForFlash, isCompiledProgramStale } from '../utils/boardCompile';
 import { useSimulatorStore } from './useSimulatorStore';
 
@@ -34,6 +35,7 @@ const BRIDGES: { vid: number; pid?: number; label: string }[] = [
   { vid: 0x10c4, pid: 0xea60, label: 'CP2102' },
   { vid: 0x1a86, pid: 0x7523, label: 'CH340' },
   { vid: 0x1a86, pid: 0x55d4, label: 'CH9102' },
+  { vid: 0x1a86, pid: 0x55d3, label: 'CH343' },
   { vid: 0x0403, pid: 0x6001, label: 'FT232' },
   { vid: 0x0403, pid: 0x6015, label: 'FT231X' },
   { vid: 0x303a, label: 'ESP32 USB' },
@@ -126,6 +128,17 @@ export function isClassicEsp32Fqbn(fqbn: string | null | undefined): boolean {
   if (!fqbn?.startsWith('esp32:esp32:')) return false;
   const board = fqbn.split(':')[2] ?? '';
   return !/(s2|s3|c2|c3|c5|c6|h2|p4)/i.test(board);
+}
+
+/**
+ * The chip a simulator image for this FQBN is built for, as esptool-js names
+ * it, or null when the browser cannot flash it. Classic ESP32 and ESP32-S3
+ * (the keybordy MP bench DevKitC-1) are covered.
+ */
+export function flashChipForFqbn(fqbn: string | null | undefined): FlashChip | null {
+  if (isClassicEsp32Fqbn(fqbn)) return 'ESP32';
+  if (fqbn?.startsWith('esp32:esp32:') && /esp32s3/i.test(fqbn.split(':')[2] ?? '')) return 'ESP32-S3';
+  return null;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -371,7 +384,8 @@ export const useDeviceStore = create<DeviceState>((set, get) => {
 
       let result;
       try {
-        result = await flashEsp32(port, base64ToBytes(program), {
+        const expectChip = flashChipForFqbn(fqbnForLanguage(board.boardKind, board.languageMode)) ?? 'ESP32';
+        result = await flashEsp32(port, base64ToBytes(program), expectChip, {
           onPhase: (phase) =>
             patchFlash({
               stage: phase,

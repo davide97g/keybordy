@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { isClassicEsp32Fqbn, useDeviceStore } from '../../store/useDeviceStore';
+import { flashChipForFqbn, useDeviceStore } from '../../store/useDeviceStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { fqbnForLanguage } from '../../types/board';
 
@@ -36,7 +36,7 @@ export function DeviceDock() {
     (s) => s.boards.find((b) => b.id === s.activeBoardId) ?? s.boards[0],
   );
   const fqbn = board ? fqbnForLanguage(board.boardKind, board.languageMode) : null;
-  const flashable = !!board && board.languageMode !== 'micropython' && isClassicEsp32Fqbn(fqbn);
+  const flashable = !!board && board.languageMode !== 'micropython' && flashChipForFqbn(fqbn) !== null;
 
   useEffect(() => {
     useDeviceStore.getState().init();
@@ -138,7 +138,7 @@ export function DeviceDock() {
     : !board
       ? 'Add a board first'
       : !flashable
-        ? 'Flashing from the browser supports the classic ESP32 only'
+        ? 'Flashing from the browser supports the classic ESP32 and ESP32-S3 only'
         : mode === 'flashing'
           ? 'Flashing...'
           : port
