@@ -1,24 +1,24 @@
-// keybordy MP bench: push-to-talk voice loop with the Mac. K1 starts recording, K2 stops it;
-// `voice_loop.py` (next to this sketch) transcribes the take with davide2 and sends back speech in
-// Davide's voice, which plays on the speaker. Mic and amp run full duplex on one I2S port at
-// 16 kHz; everything goes over UART0 (the COM port) at 2 Mbaud. No Wi-Fi: its current bursts make
-// the bench supply (and so the amp) worse.
+// keybordy MP bench: push-to-talk voice loop with the Mac over Wi-Fi. K1 starts recording, K2
+// stops it. The take (16 kHz mono int16, kept in PSRAM) goes in one HTTP POST to `voice_loop.py`
+// on the Mac, found over mDNS as _keybordy-voice._tcp. The Mac transcribes it with davide2 and
+// answers in Davide's voice; the reply streams back in the same response and plays on the speaker.
+// Mic and amp run full duplex on one I2S port at 16 kHz. USB is only power and logs.
 //
-// Board -> Mac
-//   text lines                            `mp_voice ready`, `key N down/up (Rr Cc)`, `rec start`,
-//                                         `rec stop 3.2 s`
-//   "MIC" + seq + FRAMES int16 LE         mono mic samples while recording
-//   "END!"                                after the last MIC packet
-//   0x06                                  one per SPK packet taken into the playback buffer
-// Mac -> board
-//   "SPK" + seq + FRAMES int16 LE         mono speaker samples
-//   "STA" + len + "BIG|small text"        OLED status
+// POST /take  X-Keybordy-Token: <BENCH_OTA_PASS>  body: int16 LE samples
+// Response body, line by line until the Mac closes:
+//   "S BIG|small\n"    OLED status
+//   "P <bytes>\n"      then that many bytes of 16 kHz mono int16 LE to play
 //
+// Logs go to both UART0 (COM) and the native USB port: `wifi ...`, `key N down/up`, `rec ...`.
 // Wiring: docs/macropad-bench.md (OLED CS on GPIO3, DC on GPIO1; K1 = R0 C0, K2 = R0 C1).
 
 #include <SPI.h>
 #include <U8g2lib.h>
 #include "driver/i2s_std.h"
+#include <WiFi.h>
+#include <ESPmDNS.h>
+#include <KeybordyBench.h>
+#include "bench_secrets.h"  // BENCH_OTA_PASS doubles as the token voice_loop.py checks
 #include "board_pins.h"
 
 static const uint8_t OLED_DC = 1, OLED_CS = 3;  // bench pins, see mp_oled_test
@@ -26,10 +26,12 @@ U8G2_SSD1309_128X64_NONAME2_F_4W_HW_SPI oled(U8G2_R0, OLED_CS, OLED_DC, U8X8_PIN
 static const int INSET = 2;
 // The panel is write-only and its RES is on EN, so a reset of the ESP32 alone (RST on USB, a
 // panic, the COM port's auto-reset) can leave it off or with garbled settings while the firmware
-// believes it is fine. Every frame re-sends the whole NONAME2 setup plus display on, without the
-// init's display off, so the screen heals within one frame. About 30 bytes, 0.3 ms at 1 MHz.
+// believes it is fine. Every frame re-sends the unlock, the whole NONAME2 setup and display on,
+// without the init's display off, so the screen heals within one frame. About 30 bytes, 0.3 ms at
+// 1 MHz. Tested by locking the panel on purpose at boot: the first frame brought it back.
 static const uint8_t OLED_REASSERT[] = {
   U8X8_START_TRANSFER(),
+  U8X8_CA(0x0fd, 0x012),   // unlock: noise can send the lock (FD 16), after which only this or RES works
   U8X8_CA(0x0d5, 0x0a0),   // clock divide, oscillator
   U8X8_CA(0x0a8, 0x03f),   // multiplex 64
   U8X8_CA(0x0d3, 0x000),   // display offset 0
@@ -47,11 +49,11 @@ static const uint8_t OLED_REASSERT[] = {
 };
 static const int X0 = INSET, Y0 = INSET, W = 128 - 2 * INSET, H = 64 - 2 * INSET;
 
-static const uint32_t BAUD = 2000000;
+static const uint32_t BAUD = 115200;
 static const uint32_t FS = 16000;
-static const int FRAMES = 256;                 // 16 ms per block and per packet
+static const int FRAMES = 256;                 // 16 ms per I2S block
 static const uint32_t REC_MAX_MS = 30000;
-static const uint8_t ACK = 0x06;
+static const int TAKE_MAX = FS * REC_MAX_MS / 1000;
 static const int RING = FS;                    // 1 s of playback buffer (int16 mono)
 static const uint32_t SETTLE_US = 30, DEBOUNCE_MS = 15;
 
@@ -63,12 +65,34 @@ static int ringCount() { return (ringHead - ringTail + RING) % RING; }
 
 static bool recording;
 static uint32_t recStart, lastSound, lastDraw;
-static uint32_t sentAt;                        // a take went to the Mac; 0 once the Mac answers
-static const uint32_t MAC_TIMEOUT_MS = 45000;
-static uint8_t seq;
+static int16_t *take;                          // PSRAM, TAKE_MAX samples
+static int takeLen;
+static volatile bool busy;                     // the take is out to the Mac or its reply is coming in
 static bool ampOn;
 static int32_t meter;                          // mic peak, 24-bit, decays
 static char big[16] = "TALK", small[40] = "K1 record  K2 stop";
+
+// Serial0 is UART0 (COM); usb is the native USB port.
+#if ARDUINO_USB_CDC_ON_BOOT
+static HWCDC &usb = HWCDCSerial;
+#else
+static HWCDC usb;  // the core only creates HWCDCSerial when CDCOnBoot is on
+#endif
+
+static void outf(const char *fmt, ...) {
+  char t[96];
+  va_list ap;
+  va_start(ap, fmt);
+  int n = min(vsnprintf(t, sizeof t, fmt, ap), (int)sizeof t - 1);
+  va_end(ap);
+  Serial0.write((const uint8_t *)t, n);
+  usb.write((const uint8_t *)t, n);  // tx timeout 0: dropped if nobody reads the USB port
+}
+
+static void setStatus(const char *b, const char *s) {
+  snprintf(big, sizeof big, "%s", b);
+  snprintf(small, sizeof small, "%s", s);
+}
 
 static bool stable[MATRIX_ROWS][MATRIX_COLS], raw[MATRIX_ROWS][MATRIX_COLS];
 static uint32_t changedAt[MATRIX_ROWS][MATRIX_COLS];
@@ -77,7 +101,7 @@ static void draw(uint32_t now) {
   oled.clearBuffer();
   oled.setFont(u8g2_font_5x8_tr);
   oled.drawStr(X0, Y0 + 7, "keybordy MP");
-  const char *tag = recording ? "mic" : (ringCount() ? "spk" : "voice");
+  const char *tag = recording ? "mic" : ringCount() ? "spk" : busy ? "mac" : benchNetConnected() ? "wifi" : "no wifi";
   oled.drawStr(X0 + W - oled.getStrWidth(tag), Y0 + 7, tag);
   oled.drawHLine(X0, Y0 + 10, W);
   char b[16];
@@ -118,23 +142,140 @@ static bool audioInit() {
   return i2s_channel_enable(txh) == ESP_OK && i2s_channel_enable(rxh) == ESP_OK;
 }
 
+// --- the Mac side, on core 0 ---
+
+static IPAddress macIp;
+static uint16_t macPort;
+
+static bool findMac() {
+  int n = MDNS.queryService("keybordy-voice", "tcp");
+  for (int i = 0; i < n; i++) {
+    if (MDNS.address(i) == IPAddress()) continue;
+    macIp = MDNS.address(i);
+    macPort = MDNS.port(i);
+    outf("voice_loop at %s:%u\n", macIp.toString().c_str(), macPort);
+    return true;
+  }
+  return false;
+}
+
+// One '\n'-terminated line, without the line end. False on close or after ms of silence.
+static bool readLine(WiFiClient &c, char *buf, int cap, uint32_t ms) {
+  int n = 0;
+  uint32_t t = millis();
+  while (millis() - t < ms) {
+    if (!c.available()) {
+      if (!c.connected()) break;
+      vTaskDelay(2);
+      continue;
+    }
+    int ch = c.read();
+    t = millis();
+    if (ch == '\n') {
+      if (n && buf[n - 1] == '\r') n--;
+      buf[n] = 0;
+      return true;
+    }
+    if (n < cap - 1) buf[n++] = ch;
+  }
+  buf[n] = 0;
+  return false;
+}
+
+// Streams `bytes` of int16 LE into the playback ring, as fast as the loop plays it.
+static bool playStream(WiFiClient &c, int bytes) {
+  static uint8_t buf[512];
+  static uint8_t lo;
+  bool odd = false;
+  uint32_t t = millis();
+  while (bytes > 0) {
+    if (ringCount() > RING - 1 - (int)sizeof buf / 2) { vTaskDelay(5); t = millis(); continue; }
+    int n = c.read(buf, min(bytes, (int)sizeof buf));
+    if (n <= 0) {
+      if ((!c.connected() && !c.available()) || millis() - t > 10000) return false;
+      vTaskDelay(2);
+      continue;
+    }
+    t = millis();
+    bytes -= n;
+    for (int i = 0; i < n; i++) {
+      if (!odd) { lo = buf[i]; odd = true; continue; }
+      ring[ringHead] = (int16_t)(lo | buf[i] << 8);
+      ringHead = (ringHead + 1) % RING;
+      odd = false;
+    }
+  }
+  while (ringCount() % FRAMES) {  // the loop plays whole frames: pad the tail with silence
+    ring[ringHead] = 0;
+    ringHead = (ringHead + 1) % RING;
+  }
+  return true;
+}
+
+// Sends the take and plays the reply. Returns null, or what went wrong for the OLED.
+static const char *exchange() {
+  if (!benchNetConnected()) return "no wifi";
+  WiFiClient c;
+  if (!(macPort && c.connect(macIp, macPort, 3000)) && !(findMac() && c.connect(macIp, macPort, 3000)))
+    return "voice_loop not found";
+  c.setNoDelay(true);
+  c.printf("POST /take HTTP/1.0\r\nX-Keybordy-Token: %s\r\nContent-Type: application/octet-stream\r\n"
+           "Content-Length: %d\r\n\r\n", BENCH_OTA_PASS, takeLen * 2);
+  const uint8_t *p = (const uint8_t *)take;
+  size_t left = takeLen * 2;
+  uint32_t t = millis();
+  while (left) {
+    size_t w = c.write(p, min(left, (size_t)4096));
+    if (w) { p += w; left -= w; t = millis(); continue; }
+    if (!c.connected() || millis() - t > 5000) return "upload failed";
+    vTaskDelay(2);
+  }
+  outf("take sent (%d bytes)\n", takeLen * 2);
+  char line[96];
+  if (!readLine(c, line, sizeof line, 120000)) return "no answer";
+  if (!strstr(line, " 200")) return strstr(line, " 403") ? "bad token" : "mac error";
+  while (readLine(c, line, sizeof line, 10000) && line[0]) {}  // headers
+  while (readLine(c, line, sizeof line, 120000)) {
+    if (!strncmp(line, "S ", 2)) {
+      char *bar = strchr(line + 2, '|');
+      if (bar) *bar = 0;
+      setStatus(line + 2, bar ? bar + 1 : "");
+    } else if (!strncmp(line, "P ", 2)) {
+      if (!playStream(c, atoi(line + 2))) return "reply cut off";
+    }
+  }
+  return nullptr;
+}
+
+static void talkTask(void *) {
+  const char *err = exchange();
+  if (err) {
+    outf("talk failed: %s\n", err);
+    setStatus("ERROR", err);
+  }
+  busy = false;
+  vTaskDelete(nullptr);
+}
+
+// --- keys and recording, on core 1 ---
+
 static void startRec(uint32_t now) {
-  if (recording) return;
-  ringHead = ringTail = 0;  // talking over playback cuts it
+  if (recording || busy || !take) return;
+  ringHead = ringTail = 0;
+  takeLen = 0;
   recording = true;
   recStart = now;
-  seq = 0;
-  Serial.println("rec start");
+  outf("rec start\n");
 }
 
 static void stopRec(uint32_t now) {
   if (!recording) return;
   recording = false;
-  Serial.write((const uint8_t *)"END!", 4);
-  Serial.printf("\nrec stop %.1f s\n", (now - recStart) / 1000.0f);
-  snprintf(big, sizeof big, "SENT");
-  snprintf(small, sizeof small, "to davide2...");
-  sentAt = now ? now : 1;
+  outf("rec stop %.1f s\n", takeLen / (float)FS);
+  if (takeLen < (int)FS / 4) { setStatus("TALK", "too short, K1 again"); return; }
+  setStatus("SENT", "to davide2...");
+  busy = true;
+  xTaskCreatePinnedToCore(talkTask, "talk", 8192, nullptr, 1, nullptr, 0);
 }
 
 static void scanKeys(uint32_t now) {
@@ -149,7 +290,7 @@ static void scanKeys(uint32_t now) {
         stable[r][c] = down;
         int slot = MATRIX_SLOT[r][c];
         if (slot < 0 || slot >= KEY_COUNT) continue;
-        if (!recording) Serial.printf("key %d %s (R%d C%d)\n", slot + 1, down ? "down" : "up", r, c);
+        if (!recording) outf("key %d %s (R%d C%d)\n", slot + 1, down ? "down" : "up", r, c);
         if (down && slot == 0) startRec(now);
         if (down && slot == 1) stopRec(now);
       }
@@ -159,51 +300,13 @@ static void scanKeys(uint32_t now) {
   }
 }
 
-// Non-blocking parser for SPK / STA packets from the Mac.
-static void pollSerial() {
-  static uint8_t hdr[4];
-  static int hdrLen = 0, need = 0, got = 0;
-  static uint8_t payload[FRAMES * 2];
-  static enum { HDR, SPK, STA } st = HDR;
-  while (Serial.available()) {
-    if (st == HDR) {
-      if (st == HDR && ringCount() > RING - FRAMES - 1) return;  // no room: let the Mac wait
-      hdr[hdrLen++] = Serial.read();
-      // resync: the tag must start with S
-      if (hdrLen == 1 && hdr[0] != 'S') { hdrLen = 0; continue; }
-      if (hdrLen < 4) continue;
-      hdrLen = 0;
-      if (!memcmp(hdr, "SPK", 3)) { st = SPK; need = FRAMES * 2; got = 0; }
-      else if (!memcmp(hdr, "STA", 3)) { st = STA; need = hdr[3]; got = 0; if (!need) st = HDR; }
-      continue;
-    }
-    int n = min(Serial.available(), need - got);
-    got += Serial.readBytes(payload + got, n);
-    if (got < need) return;
-    if (st == SPK) {
-      const int16_t *s = (const int16_t *)payload;
-      for (int i = 0; i < FRAMES; i++) { ring[ringHead] = s[i]; ringHead = (ringHead + 1) % RING; }
-      Serial.write(ACK);
-    } else {
-      char t[64];
-      int len = min(need, (int)sizeof t - 1);
-      memcpy(t, payload, len);
-      t[len] = 0;
-      char *bar = strchr(t, '|');
-      if (bar) { *bar = 0; snprintf(small, sizeof small, "%s", bar + 1); } else small[0] = 0;
-      sentAt = 0;  // the Mac is alive
-      snprintf(big, sizeof big, "%s", t);
-    }
-    st = HDR;
-  }
-}
-
 void setup() {
   pinMode(OLED_CS, OUTPUT);  // GPIO3 floats through boot: deselect the panel before anything else
   digitalWrite(OLED_CS, HIGH);
-  Serial.setTxBufferSize(16384);
-  Serial.setRxBufferSize(16384);
-  Serial.begin(BAUD);
+  Serial0.begin(BAUD);
+  usb.setTxTimeoutMs(0);
+  usb.begin();
+  take = (int16_t *)ps_malloc(TAKE_MAX * sizeof(int16_t));
   rgbLedWrite(48, 6, 6, 6);
   for (int r = 0; r < MATRIX_ROWS; r++) pinMode(MATRIX_ROW_PINS[r], INPUT);
   for (int c = 0; c < MATRIX_COLS; c++) pinMode(MATRIX_COL_PINS[c], INPUT_PULLUP);
@@ -215,7 +318,8 @@ void setup() {
   bool ok = audioInit();
   draw(millis());
   delay(300);
-  Serial.printf("mp_voice ready (i2s %s, %lu Hz)\n", ok ? "on" : "FAILED", (unsigned long)FS);
+  benchNetBegin("keybordy-mp", true);
+  outf("mp_voice ready (i2s %s, %lu Hz, take buffer %s)\n", ok ? "on" : "FAILED", (unsigned long)FS, take ? "ok" : "FAILED");
 }
 
 void loop() {
@@ -228,15 +332,10 @@ void loop() {
   meter = max(pk, (int32_t)(meter * 0.85f));
 
   if (recording) {
-    static uint8_t pkt[4 + FRAMES * 2];
-    pkt[0] = 'M'; pkt[1] = 'I'; pkt[2] = 'C'; pkt[3] = seq++;
-    int16_t *o = (int16_t *)(pkt + 4);
-    for (int i = 0; i < frames; i++) o[i] = inBuf[2 * i] >> 16;
-    Serial.write(pkt, 4 + frames * 2);
-    if (now - recStart > REC_MAX_MS) stopRec(now);
+    for (int i = 0; i < frames && takeLen < TAKE_MAX; i++) take[takeLen++] = inBuf[2 * i] >> 16;
+    if (takeLen >= TAKE_MAX) stopRec(now);
   }
 
-  pollSerial();
   if (ringCount() >= FRAMES) {
     if (!ampOn) { digitalWrite(PIN_AMP_SD, HIGH); ampOn = true; }
     for (int i = 0; i < FRAMES; i++) {
@@ -251,12 +350,6 @@ void loop() {
     ampOn = false;
   }
 
-  // No word from the Mac: the USB link dropped (a supply sag resets the CH343) or the loop is down.
-  if (sentAt && now - sentAt > MAC_TIMEOUT_MS) {
-    sentAt = 0;
-    snprintf(big, sizeof big, "NO MAC");
-    snprintf(small, sizeof small, "check USB, then K1");
-  }
   scanKeys(now);
   if (now - lastDraw >= 100) { lastDraw = now; draw(now); }
 }

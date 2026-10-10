@@ -77,7 +77,7 @@ Two bench gotchas, both found the hard way:
 
 - **CS needs its own GPIO.** The first bench wiring tied CS to GND, so the panel counted every clock edge. One stray edge, from a pin test or a reset, shifted its byte framing until the next power cycle, and every later command arrived garbled: a black screen with correct wiring. With CS on GPIO3, the panel resyncs on every transfer.
 - **SPI runs at 1 MHz** over the jumpers. A full frame then takes about 8 ms.
-- **A reset can leave the panel dark.** RES is on EN and the panel is write-only, so a reset that doesn't go through EN (USB RST, a panic) or a stray edge during boot can leave it off or garbled. `mp_voice` drives CS high first thing in `setup()` and re-sends the whole controller setup, display on included, before every frame (`OLED_REASSERT`), so the screen comes back within 100 ms. Holding BOOT while tapping RST starts the ROM downloader instead of the firmware, so the screen stays dark until a plain RST.
+- **A reset can leave the panel dark.** RES is on EN and the panel is write-only. A reset that skips EN (the USB port's RTS, a panic) lets noise reach the panel during boot, and it can land on the SSD1309's command lock (`FD 16`). After that the panel ignores everything except unlock (`FD 12`) or RES, so the screen stays black until RST is pressed. `mp_voice` drives CS high first thing in `setup()` and sends unlock, the whole controller setup and display on before every frame (`OLED_REASSERT`), so the screen comes back within 100 ms. This was checked by locking the panel on purpose at boot. Holding BOOT while tapping RST starts the ROM downloader instead of the firmware, so the screen stays dark until a plain RST.
 
 The panel crops a few edge pixels, so the UI keeps a 2 px margin (`INSET`). `mp_oled_diag` cycles four controller drivers if the screen is ever black again. All four light this module, and the firmware uses SSD1309 NONAME2.
 
@@ -126,4 +126,15 @@ Measured on the bench, not guessed. To redo them: `python3 firmware/mp_audio_tun
 - **Louder on the bench:** add 100–470 µF across the amp's VIN and GND, right at the module (rows 56 and 55, + to VIN), use short power wires, then tune again.
 - **Live monitoring through the Mac speakers feeds back.** The first live take howled at +12 dB. `record.py --live` now plays at 0 dB with a guard that mutes for 1 s and halves the gain after about 0.2 s of sustained loud output. Headphones avoid the loop entirely.
 - **PCB note (not changed):** the amp on rev A has 10 µF + 100 nF on VSYS (C11, C12). That is better than the breadboard but thin for 3 W bursts. Consider 47–100 µF there.
-- **Average power resets USB, too.** In the voice loop (`firmware/mp_voice`), compressed speech (drive 1.5, peak −18 dBFS) drew enough steady amp current to sag USB 5 V until the CH343 reset. The Mac lost the COM port mid-reply while the board stayed powered, and the OLED sat on "SENT". The defaults are now peak −19 dBFS and drive 1.0. The firmware shows NO MAC after 45 s without an answer, and `voice_loop.py` waits for the port and reconnects.
+- **Average power resets USB, too.** In the first, serial version of the voice loop, compressed speech (drive 1.5, peak −18 dBFS) drew enough steady amp current to sag USB 5 V until the CH343 reset. The Mac lost the COM port mid-reply while the board stayed powered, and the OLED sat on "SENT". The defaults are now peak −19 dBFS and drive 1.0.
+
+## Voice loop over Wi-Fi (`firmware/mp_voice`)
+
+K1 records into PSRAM (up to 30 s) and K2 sends the take in one HTTP POST to `voice_loop.py` on the Mac. The board finds it over mDNS (`_keybordy-voice._tcp`), so the USB cable is only power and logs. The Mac transcribes the take with davide2, which stays on localhost, and streams the reply back in the same response, with OLED status lines in between. The request carries `ESP32_OTA_PASS` as `X-Keybordy-Token`.
+
+```sh
+cd ~/personal/projects/davide2 && OPEN=0 .venv/bin/voice-engine serve   # if it isn't running
+/usr/bin/python3 firmware/mp_voice/voice_loop.py [--chat]
+```
+
+Run it with `/usr/bin/python3`: the macOS firewall blocks incoming connections for Homebrew's Python, while Apple-signed binaries are allowed. The OLED shows `ERROR` and the reason (`voice_loop not found`, `bad token`, `no wifi`) when a take can't go through.

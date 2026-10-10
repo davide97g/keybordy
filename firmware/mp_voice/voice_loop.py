@@ -1,21 +1,19 @@
-"""Push-to-talk voice loop: keybordy MP mic -> davide2 (local) -> keybordy MP speaker.
+"""Push-to-talk voice loop over Wi-Fi: keybordy MP mic -> davide2 (local) -> keybordy MP speaker.
 
-    voice_loop.py PORT [--chat] [--llm claude-haiku] [--url http://127.0.0.1:8777] [--voice me] [--peak DB] [--drive K] [--lang it]
+    voice_loop.py [--port 8778] [--chat] [--llm claude-haiku] [--url http://127.0.0.1:8777] [--voice me] [--peak DB] [--drive K] [--lang it]
 
-With firmware/mp_voice on the board: K1 starts recording, K2 stops. The take goes to davide2's
-local Whisper (/v1/audio/transcriptions). By default the transcript is spoken back in Davide's
-cloned voice (/v1/speech, voice "me"); with --chat, an LLM answers as Davide instead (/v1/chat,
-speak=true), with SYSTEM below as the prompt (davide2's own persona.md is still a stub) and the
-last few turns as context. --llm picks davide2's LLM backend (claude-haiku is the quick one). The reply is resampled to 16 kHz with ffmpeg, scaled to the bench
-speaker's tuned peak (firmware/mp_speaker_stream/tuned.json, else -20 dBFS) and streamed back.
-Speech is soft-compressed first (tanh, --drive: 1.0 lifts quiet and average parts ~1.2 dB,
-1.5 ~4.4 dB; peaks unchanged), then peaked at --peak (default -19 dBFS). On the bench, more
-average power is the limit, not peaks: drive 1.5 at -18 dBFS sagged USB 5 V enough to reset the
-CH343, and the Mac lost the board mid-reply (2026-10-09). More volume needs the bulk cap at the
-amp or its own 5 V supply (docs/macropad-bench.md).
-The OLED shows each stage. davide2 must be running: `cd ~/personal/projects/davide2 &&
-OPEN=0 .venv/bin/voice-engine serve`.
-Needs pyserial: run it with /opt/homebrew/opt/esptool/libexec/bin/python3 on this Mac.
+With firmware/mp_voice on the board: K1 starts recording, K2 stops. The board POSTs the take
+(16 kHz mono int16) to this script, which it finds over mDNS (_keybordy-voice._tcp, announced with
+macOS's dns-sd). The take goes to davide2's local Whisper (/v1/audio/transcriptions). By default
+the transcript is spoken back in Davide's cloned voice (/v1/speech, voice "me"); with --chat, an
+LLM answers as Davide instead (/v1/chat, speak=true), with SYSTEM below as the prompt and the last
+few turns as context. --llm picks davide2's LLM backend (claude-haiku is the quick one).
+The reply is resampled to 16 kHz with ffmpeg, soft-compressed (tanh, --drive), peaked at --peak
+(default -19 dBFS; louder sagged the bench's USB 5 V, see docs/macropad-bench.md) and streamed
+back in the same HTTP response, with OLED status lines in between (protocol: mp_voice.ino).
+The endpoint listens on the LAN; requests must carry ESP32_OTA_PASS from .env as
+X-Keybordy-Token (the board gets it from bench_secrets.h). davide2 stays on localhost.
+davide2 must be running: `cd ~/personal/projects/davide2 && OPEN=0 .venv/bin/voice-engine serve`.
 """
 
 import array
@@ -31,13 +29,13 @@ import urllib.request
 import uuid
 import wave
 
-import serial
+import atexit
+import threading
+import unicodedata
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 FS = 16000
 FRAMES = 256
-MIC_PKT = 4 + FRAMES * 2
-WINDOW = 12
-ACK = 0x06
 HERE = os.path.dirname(os.path.abspath(__file__))
 HISTORY_TURNS = 6
 SYSTEM = (
@@ -100,129 +98,28 @@ def to_board_pcm(audio, peak_db, drive=1.0):
     return array.array("h", (int(v / pk * out_peak) for v in a))
 
 
-class Board:
-    """Parses the board's mixed stream: text lines, MIC packets, END!, ACK bytes."""
-
-    def __init__(self, port):
-        self.s = serial.Serial()
-        self.s.port, self.s.baudrate, self.s.timeout = port, 2_000_000, 0.02
-        self.s.dtr = self.s.rts = False
-        self.s.open()
-        self.buf = b""
-        self.acks = 0
-
-    def reset(self):
-        self.s.rts = True
-        time.sleep(0.2)
-        self.s.rts = False
-
-    def events(self):
-        """Yield ('line', str) / ('mic', bytes) / ('end', None) from what has arrived so far."""
-        self.buf += self.s.read(max(1, self.s.in_waiting))
-        while self.buf:
-            if self.buf.startswith(b"MIC"):
-                if len(self.buf) < MIC_PKT:
-                    return
-                yield "mic", self.buf[4:MIC_PKT]
-                self.buf = self.buf[MIC_PKT:]
-            elif self.buf.startswith(b"END!"):
-                self.buf = self.buf[4:]
-                yield "end", None
-            elif self.buf[0] == 0:
-                self.buf = self.buf.lstrip(b"\x00")
-            elif self.buf[0] == ACK:
-                self.acks += 1
-                self.buf = self.buf[1:]
-            elif b"MIC".startswith(self.buf[:3]) and len(self.buf) < 3 or b"END!".startswith(self.buf[:4]) and len(self.buf) < 4:
-                return  # a tag still arriving
-            else:
-                nl = self.buf.find(b"\n")
-                if nl == -1:
-                    if len(self.buf) > 300:
-                        self.buf = self.buf[1:]  # boot noise: resync
-                        continue
-                    return
-                line, self.buf = self.buf[:nl], self.buf[nl + 1:]
-                # boot chatter at 115200 reads as NULs at 2 Mbaud: keep only printable text
-                text = "".join(ch for ch in line.decode(errors="replace") if ch.isprintable()).strip()
-                if text:
-                    yield "line", text
-
-    def status(self, big, small=""):
-        t = f"{big}|{small}".encode("ascii", "replace")[:60]
-        self.s.write(b"STA" + bytes([len(t)]) + t)
-
-    def play(self, samples):
-        total = (len(samples) + FRAMES - 1) // FRAMES
-        self.acks = sent = 0
-        t0 = time.time()
-        while self.acks < total:
-            while sent < total and sent - self.acks < WINDOW:
-                block = samples[sent * FRAMES:(sent + 1) * FRAMES]
-                if len(block) < FRAMES:
-                    block.extend([0] * (FRAMES - len(block)))
-                self.s.write(b"SPK" + bytes([sent % 256]) + block.tobytes())
-                sent += 1
-            for kind, val in self.events():
-                if kind == "line" and val == "rec start":
-                    log("talk over playback: stopped")
-                    return "interrupted"
-            if time.time() - t0 > total * FRAMES / FS + 10:
-                return f"stalled at {self.acks}/{total}"
-        return "ok"
+def ascii_fold(text, n):
+    """The OLED font is ASCII: "perché" -> "perche". No '|' or line breaks (protocol)."""
+    t = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return " ".join(t.replace("|", "/").split())[:n]
 
 
-def main() -> int:
-    port = sys.argv[1]
-    base = arg("--url", "http://127.0.0.1:8777").rstrip("/")
-    voice = arg("--voice", "me")
-    chat = "--chat" in sys.argv
-    llm = arg("--llm", "claude-haiku")
-    lang = arg("--lang", "it")  # "auto" lets Whisper guess
-    tuned = os.path.join(HERE, "..", "mp_speaker_stream", "tuned.json")
-    peak = float(arg("--peak", -19))  # tuned.json says -20 for test tones; see the docstring
-    drive = float(arg("--drive", 1.0))
-
-    health, _ = http(f"{base}/v1/health", timeout=5)
-    log(f"davide2 {json.loads(health).get('status')} at {base}, voice {voice}, mode {'chat (' + llm + ')' if chat else 'echo'}, language {lang}, speaker peak {peak:.0f} dBFS, drive {drive}")
-
-    b = Board(port)
-    b.reset()
-    t0 = time.time()
-    ready = False
-    while not ready and time.time() - t0 < 10:
-        for kind, val in b.events():
-            if kind == "line" and val.startswith("mp_voice ready"):
-                log(val)
-                ready = True
-    if not ready:
-        log("no `mp_voice ready` from the board")
-        return 1
-    b.status("TALK", "K1 record  K2 stop")
-    log("ready: K1 to record, K2 to stop")
-
-    take = bytearray()
-    history = []  # [{"role": ..., "content": ...}] of the last turns, for --chat
-    while True:
-        for kind, val in b.events():
-            if kind == "line":
-                if val == "rec start":
-                    take = bytearray()
-                    log("recording")
-                elif val.startswith(("rec stop", "key ")):
-                    log(val)
-            elif kind == "mic":
-                take += val
-            elif kind == "end":
-                handle(b, base, voice, chat, llm, lang, peak, drive, take, history)
-                take = bytearray()
+def token():
+    if os.environ.get("ESP32_OTA_PASS"):
+        return os.environ["ESP32_OTA_PASS"]
+    with open(os.path.join(HERE, "..", "..", ".env")) as f:
+        for line in f:
+            k, _, v = line.strip().partition("=")
+            if k == "ESP32_OTA_PASS":
+                return v.strip().strip("'\"")
+    sys.exit("ESP32_OTA_PASS missing (env or .env)")
 
 
-def handle(b, base, voice, chat, llm, lang, peak, drive, take, history):
+def handle(status, play, base, voice, chat, llm, lang, peak, drive, take, history):
     a = array.array("h")
-    a.frombytes(bytes(take))
+    a.frombytes(take[: len(take) // 2 * 2])
     if len(a) < FS // 4:
-        b.status("TALK", "too short, K1 again")
+        status("TALK", "too short, K1 again")
         return
     mean = sum(a) / len(a)
     pk = max(1, max(abs(v - mean) for v in a))
@@ -231,14 +128,14 @@ def handle(b, base, voice, chat, llm, lang, peak, drive, take, history):
     log(f"take {len(a) / FS:.1f} s, mic peak {20 * math.log10(pk / 32768):.0f} dBFS")
 
     try:
-        b.status("LISTEN", "transcribing")
+        status("LISTEN", "transcribing")
         t = time.time()
         text = transcribe(base, wav_bytes(clean, FS), None if lang == "auto" else lang)
         log(f"heard ({time.time() - t:.1f} s): {text!r}")
         if not text:
-            b.status("?", "did not catch that")
+            status("?", "did not catch that")
             return
-        b.status("THINK", text[:24])
+        status("THINK", text)
         t = time.time()
         if chat:
             msgs = history[-2 * HISTORY_TURNS:] + [{"role": "user", "content": text}]
@@ -254,40 +151,73 @@ def handle(b, base, voice, chat, llm, lang, peak, drive, take, history):
                             {"content-type": "application/json"})
         log(f"davide says ({time.time() - t:.1f} s): {say!r}")
         pcm = to_board_pcm(audio, peak, drive)
-        b.status("SPEAK", say[:24])
-        result = b.play(pcm)
-        log(f"played {len(pcm) / FS:.1f} s: {result}")
+        status("SPEAK", say)
+        play(pcm)
+        log(f"played {len(pcm) / FS:.1f} s")
+    except (BrokenPipeError, ConnectionResetError):
+        raise
     except Exception as e:  # keep the loop alive: show it and wait for the next take
         log(f"error: {e}")
-        b.status("ERROR", str(e)[:24])
+        status("ERROR", str(e))
         return
-    b.status("TALK", "K1 record  K2 stop")
+    status("TALK", "K1 record  K2 stop")
 
 
-def find_port(hint):
-    """The board's port: the given one if it exists, else the first usbmodem (it can renumber)."""
-    import glob
-    if os.path.exists(hint):
-        return hint
-    ports = sorted(glob.glob("/dev/cu.usbmodem*"))
-    return ports[0] if ports else None
+def main() -> int:
+    port = int(arg("--port", 8778))
+    base = arg("--url", "http://127.0.0.1:8777").rstrip("/")
+    voice = arg("--voice", "me")
+    chat = "--chat" in sys.argv
+    llm = arg("--llm", "claude-haiku")
+    lang = arg("--lang", "it")  # "auto" lets Whisper guess
+    peak = float(arg("--peak", -19))  # mp_speaker_stream/tuned.json says -20 for test tones; see the docstring
+    drive = float(arg("--drive", 1.0))
+    key = token()
+    history = []  # [{"role": ..., "content": ...}] of the last turns, for --chat
+    one_at_a_time = threading.Lock()
+
+    health, _ = http(f"{base}/v1/health", timeout=5)
+    log(f"davide2 {json.loads(health).get('status')} at {base}, voice {voice}, mode {'chat (' + llm + ')' if chat else 'echo'}, language {lang}, speaker peak {peak:.0f} dBFS, drive {drive}")
+
+    class Take(BaseHTTPRequestHandler):
+        def do_POST(self):
+            if self.path != "/take" or self.headers.get("X-Keybordy-Token") != key:
+                log(f"refused {self.path} from {self.client_address[0]}")
+                self.send_error(403)
+                return
+            take = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+
+            def status(big, small=""):
+                self.wfile.write(f"S {ascii_fold(big, 15)}|{ascii_fold(small, 25)}\n".encode())
+                self.wfile.flush()
+
+            def play(pcm):
+                self.wfile.write(f"P {len(pcm) * 2}\n".encode() + pcm.tobytes())
+                self.wfile.flush()
+
+            with one_at_a_time:
+                try:
+                    handle(status, play, base, voice, chat, llm, lang, peak, drive, take, history)
+                except (BrokenPipeError, ConnectionResetError):
+                    log("board hung up")
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("0.0.0.0", port), Take)
+    mdns = subprocess.Popen(["dns-sd", "-R", "keybordy-voice", "_keybordy-voice._tcp", "local", str(port)],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    atexit.register(mdns.terminate)
+    log(f"listening on :{port} as _keybordy-voice._tcp: K1 to record, K2 to stop")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    return 0
 
 
 if __name__ == "__main__":
-    # Survive the board dropping off USB (unplugged, brown-out, reset): wait for it and reconnect.
-    hint = sys.argv[1]
-    while True:
-        port = find_port(hint)
-        if not port:
-            log("board not on USB: waiting for it")
-            while not (port := find_port(hint)):
-                time.sleep(1)
-            time.sleep(1.5)  # let the USB bridge settle
-        sys.argv[1] = port
-        try:
-            sys.exit(main())
-        except KeyboardInterrupt:
-            break
-        except (serial.SerialException, OSError) as e:
-            log(f"lost the board ({e}); reconnecting")
-            time.sleep(1)
+    sys.exit(main())
