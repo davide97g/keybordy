@@ -77,6 +77,7 @@ Two bench gotchas, both found the hard way:
 
 - **CS needs its own GPIO.** The first bench wiring tied CS to GND, so the panel counted every clock edge. One stray edge, from a pin test or a reset, shifted its byte framing until the next power cycle, and every later command arrived garbled: a black screen with correct wiring. With CS on GPIO3, the panel resyncs on every transfer.
 - **SPI runs at 1 MHz** over the jumpers. A full frame then takes about 8 ms.
+- **A reset can leave the panel dark.** RES is on EN and the panel is write-only, so a reset that doesn't go through EN (USB RST, a panic) or a stray edge during boot can leave it off or garbled. `mp_voice` drives CS high first thing in `setup()` and re-sends the whole controller setup, display on included, before every frame (`OLED_REASSERT`), so the screen comes back within 100 ms. Holding BOOT while tapping RST starts the ROM downloader instead of the firmware, so the screen stays dark until a plain RST.
 
 The panel crops a few edge pixels, so the UI keeps a 2 px margin (`INSET`). `mp_oled_diag` cycles four controller drivers if the screen is ever black again. All four light this module, and the firmware uses SSD1309 NONAME2.
 

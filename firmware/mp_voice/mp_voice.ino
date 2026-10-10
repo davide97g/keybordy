@@ -24,6 +24,27 @@
 static const uint8_t OLED_DC = 1, OLED_CS = 3;  // bench pins, see mp_oled_test
 U8G2_SSD1309_128X64_NONAME2_F_4W_HW_SPI oled(U8G2_R0, OLED_CS, OLED_DC, U8X8_PIN_NONE);
 static const int INSET = 2;
+// The panel is write-only and its RES is on EN, so a reset of the ESP32 alone (RST on USB, a
+// panic, the COM port's auto-reset) can leave it off or with garbled settings while the firmware
+// believes it is fine. Every frame re-sends the whole NONAME2 setup plus display on, without the
+// init's display off, so the screen heals within one frame. About 30 bytes, 0.3 ms at 1 MHz.
+static const uint8_t OLED_REASSERT[] = {
+  U8X8_START_TRANSFER(),
+  U8X8_CA(0x0d5, 0x0a0),   // clock divide, oscillator
+  U8X8_CA(0x0a8, 0x03f),   // multiplex 64
+  U8X8_CA(0x0d3, 0x000),   // display offset 0
+  U8X8_C(0x040),           // start line 0
+  U8X8_CA(0x020, 0x002),   // page addressing
+  U8X8_C(0x0a1), U8X8_C(0x0c8),  // segment remap, COM scan reversed
+  U8X8_CA(0x0da, 0x012),   // COM pins
+  U8X8_CA(0x081, 0x06f),   // contrast
+  U8X8_CA(0x0d9, 0x0d3),   // pre-charge
+  U8X8_CA(0x0db, 0x020),   // VCOMH
+  U8X8_C(0x02e), U8X8_C(0x0a4), U8X8_C(0x0a6),  // no scroll, RAM to display, not inverted
+  U8X8_C(0x0af),           // display on
+  U8X8_END_TRANSFER(),
+  U8X8_END()
+};
 static const int X0 = INSET, Y0 = INSET, W = 128 - 2 * INSET, H = 64 - 2 * INSET;
 
 static const uint32_t BAUD = 2000000;
@@ -71,6 +92,7 @@ static void draw(uint32_t now) {
   int fill = constrain((int)((db + 60) / 60 * (W - 4)), 0, W - 4);
   oled.drawFrame(X0, Y0 + H - 7, W, 7);
   if (fill > 0) oled.drawBox(X0 + 2, Y0 + H - 5, fill, 3);
+  u8x8_cad_SendSequence(oled.getU8x8(), OLED_REASSERT);
   oled.sendBuffer();
 }
 
@@ -177,6 +199,8 @@ static void pollSerial() {
 }
 
 void setup() {
+  pinMode(OLED_CS, OUTPUT);  // GPIO3 floats through boot: deselect the panel before anything else
+  digitalWrite(OLED_CS, HIGH);
   Serial.setTxBufferSize(16384);
   Serial.setRxBufferSize(16384);
   Serial.begin(BAUD);
