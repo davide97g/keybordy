@@ -22,3 +22,6 @@ String benchNetAddress();
 bool benchOtaActive();
 // 0..100 while an OTA upload runs.
 int benchOtaProgress();
+// Called on the net task when an OTA upload starts, before the first chunk is written. The upload
+// waits for it, so it can play a short sound without flash writes stalling the audio.
+void benchOnOtaStart(void (*fn)());

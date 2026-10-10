@@ -67,9 +67,10 @@ mp-flash name="mp_bench": mp-secrets
     arduino-cli compile --upload -p "${MP_PORT:-$(ls /dev/cu.usbmodem* | head -1)}" --fqbn {{mp_fqbn}} {{mp_libs}} firmware/{{name}}
 
 # Compile and flash a sketch over Wi-Fi (the board only needs power; MP_HOST overrides keybordy-mp.local)
+# Apple's /usr/bin/python3 runs espota: the firewall blocks the board connecting back to Homebrew Python.
 mp-ota name="mp_bench": mp-secrets
     arduino-cli compile --fqbn {{mp_fqbn}} {{mp_libs}} --output-dir build/ota/{{name}} firmware/{{name}}
-    python3 ~/Library/Arduino15/packages/esp32/hardware/esp32/*/tools/espota.py -r -i {{mp_host}} -p 3232 --auth="$ESP32_OTA_PASS" -f build/ota/{{name}}/{{name}}.ino.bin
+    /usr/bin/python3 ~/Library/Arduino15/packages/esp32/hardware/esp32/*/tools/espota.py -r -i {{mp_host}} -p 3232 --auth="$ESP32_OTA_PASS" -f build/ota/{{name}}/{{name}}.ino.bin
 
 # Serial monitor on the bench ESP32-S3 (COM port)
 mp-monitor:

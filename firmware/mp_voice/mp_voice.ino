@@ -9,6 +9,9 @@
 //   "S BIG|small\n"    OLED status
 //   "P <bytes>\n"      then that many bytes of 16 kHz mono int16 LE to play
 //
+// Chimes: a bell arpeggio at every boot, a falling one when an OTA upload starts, and a brighter
+// "ta-daa" on the first boot after an update (reset reason SW), with UPDATED on the OLED.
+//
 // Logs go to both UART0 (COM) and the native USB port: `wifi ...`, `key N down/up`, `rec ...`.
 // Wiring: docs/macropad-bench.md (OLED CS on GPIO3, DC on GPIO1; K1 = R0 C0, K2 = R0 C1).
 
@@ -48,6 +51,7 @@ static const uint8_t OLED_REASSERT[] = {
   U8X8_END()
 };
 static const int X0 = INSET, Y0 = INSET, W = 128 - 2 * INSET, H = 64 - 2 * INSET;
+struct Note { float hz; int startMs, lenMs; };  // a chime note; up here for the IDE's prototypes
 
 static const uint32_t BAUD = 115200;
 static const uint32_t FS = 16000;
@@ -140,6 +144,50 @@ static bool audioInit() {
   };
   if (i2s_channel_init_std_mode(txh, &cfg) != ESP_OK || i2s_channel_init_std_mode(rxh, &cfg) != ESP_OK) return false;
   return i2s_channel_enable(txh) == ESP_OK && i2s_channel_enable(rxh) == ESP_OK;
+}
+
+// --- chimes ---
+
+static const float C5 = 523.25f, E5 = 659.26f, G5 = 783.99f, C6 = 1046.5f, E6 = 1318.5f, G6 = 1568.0f, C7 = 2093.0f;
+static const Note BOOT_TUNE[] = {{C5, 0, 260}, {E5, 90, 260}, {G5, 180, 260}, {C6, 270, 600}};
+static const Note OTA_TUNE[] = {{C6, 0, 220}, {G5, 80, 220}, {E5, 160, 220}, {C5, 240, 450}};
+static const Note UPDATED_TUNE[] = {{G5, 0, 200}, {C6, 70, 200}, {E6, 140, 200}, {G6, 210, 200}, {C7, 300, 650}};
+static const float CHIME_PEAK = 3277;  // -20 dBFS: the bench speaker's tuned clean peak
+
+// Renders overlapping bell notes (sine plus a soft octave, 4 ms attack, exponential ring-out) and
+// queues them for the loop to play. The whole tune must fit in the 1 s ring.
+static void chime(const Note *notes, int count) {
+  static const int MIX = RING - FRAMES;
+  static float *mix = (float *)ps_malloc(MIX * sizeof(float));
+  if (!mix) return;
+  int total = 0;
+  for (int i = 0; i < count; i++) total = max(total, (notes[i].startMs + notes[i].lenMs) * (int)FS / 1000);
+  total = min(total, MIX);
+  memset(mix, 0, total * sizeof(float));
+  for (int i = 0; i < count; i++) {
+    int s0 = notes[i].startMs * FS / 1000, len = notes[i].lenMs * FS / 1000;
+    float w = 2 * PI * notes[i].hz / FS, tau = notes[i].lenMs * FS / 4000.0f;
+    for (int k = 0; k < len && s0 + k < total; k++) {
+      float env = min(1.0f, k / (0.004f * FS)) * expf(-k / tau);
+      mix[s0 + k] += env * (sinf(w * k) + 0.25f * sinf(2 * w * k));
+    }
+  }
+  float pk = 1e-6f;
+  for (int i = 0; i < total; i++) pk = max(pk, fabsf(mix[i]));
+  for (int i = 0; i < total && ringCount() < RING - 1; i++) {
+    ring[ringHead] = (int16_t)(mix[i] / pk * CHIME_PEAK);
+    ringHead = (ringHead + 1) % RING;
+  }
+  while (ringCount() % FRAMES && ringCount() < RING - 1) {  // whole frames, or the tail never plays
+    ring[ringHead] = 0;
+    ringHead = (ringHead + 1) % RING;
+  }
+}
+
+// OTA start, on the net task: play the falling chime and let it finish before flash writes begin.
+static void otaStarting() {
+  chime(OTA_TUNE, sizeof OTA_TUNE / sizeof OTA_TUNE[0]);
+  for (int i = 0; i < 150 && ringCount(); i++) vTaskDelay(pdMS_TO_TICKS(10));
 }
 
 // --- the Mac side, on core 0 ---
@@ -318,7 +366,14 @@ void setup() {
   bool ok = audioInit();
   draw(millis());
   delay(300);
+  benchOnOtaStart(otaStarting);
   benchNetBegin("keybordy-mp", true);
+  if (esp_reset_reason() == ESP_RST_SW) {  // ArduinoOTA restarts after a good upload
+    setStatus("UPDATED", "new firmware");
+    chime(UPDATED_TUNE, sizeof UPDATED_TUNE / sizeof UPDATED_TUNE[0]);
+  } else {
+    chime(BOOT_TUNE, sizeof BOOT_TUNE / sizeof BOOT_TUNE[0]);
+  }
   outf("mp_voice ready (i2s %s, %lu Hz, take buffer %s)\n", ok ? "on" : "FAILED", (unsigned long)FS, take ? "ok" : "FAILED");
 }
 
@@ -350,6 +405,13 @@ void loop() {
     ampOn = false;
   }
 
+  if (benchOtaActive()) {
+    char pct[8];
+    snprintf(pct, sizeof pct, "%d %%", benchOtaProgress());
+    setStatus("UPDATE", pct);
+  } else if (!strcmp(big, "UPDATED") && now > 4000) {
+    setStatus("TALK", "K1 record  K2 stop");
+  }
   scanKeys(now);
   if (now - lastDraw >= 100) { lastDraw = now; draw(now); }
 }

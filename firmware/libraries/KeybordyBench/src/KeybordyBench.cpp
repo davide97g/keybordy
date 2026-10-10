@@ -14,6 +14,7 @@ static bool s_log;
 static volatile bool s_connected, s_ota;
 static volatile int s_progress;
 static char s_addr[16];
+static void (*s_onOtaStart)();
 
 static void netTask(void *) {
   WiFi.mode(WIFI_STA);
@@ -28,6 +29,7 @@ static void netTask(void *) {
     s_ota = true;
     s_progress = 0;
     if (s_log) Serial.println("ota start");
+    if (s_onOtaStart) s_onOtaStart();
   });
   ArduinoOTA.onProgress([](unsigned int done, unsigned int total) { s_progress = total ? done * 100 / total : 0; });
   ArduinoOTA.onEnd([] {
@@ -77,3 +79,4 @@ bool benchNetConnected() { return s_connected; }
 String benchNetAddress() { return String(s_addr); }
 bool benchOtaActive() { return s_ota; }
 int benchOtaProgress() { return s_progress; }
+void benchOnOtaStart(void (*fn)()) { s_onOtaStart = fn; }

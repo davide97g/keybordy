@@ -138,3 +138,14 @@ cd ~/personal/projects/davide2 && OPEN=0 .venv/bin/voice-engine serve   # if it 
 ```
 
 Run it with `/usr/bin/python3`: the macOS firewall blocks incoming connections for Homebrew's Python, while Apple-signed binaries are allowed. The OLED shows `ERROR` and the reason (`voice_loop not found`, `bad token`, `no wifi`) when a take can't go through.
+
+Chimes, rendered on the board as bell notes at −20 dBFS: C–E–G–C at every boot, a falling C–G–E–C when an OTA upload starts, and G–C–E–G–C on the first boot after an update (reset reason SW), with UPDATED on the OLED. The OTA chime runs in the `benchOnOtaStart` hook, and the upload waits for it, so flash writes don't chop it.
+
+## Wi-Fi updates from this Mac
+
+`just mp-ota <sketch>` flashes over Wi-Fi when the board only has a charger. Two things on the Mac side block it, and each one fails differently:
+
+- **The firewall.** espota waits for the board to connect back over TCP, and the firewall drops that for Homebrew's Python ("No response from the ESP"). The recipe runs espota with Apple's `/usr/bin/python3`, which signed-software rules allow.
+- **Local Network privacy.** An app without the Local Network permission can't open connections to LAN devices. They fail at once with `No route to host`, even though the ARP entry is fine and the board's own connections to the Mac work. Orca, which hosts the Claude Code terminal, didn't have it. Turn it on in System Settings → Privacy & Security → Local Network, or run the recipe from Ghostty.
+
+`ping keybordy-mp.local` gets no answer even when the board is fine, and `dns-sd` keeps serving the cached address after the board goes off the network. To see whether the board is up, try a TCP connect: a refused connection means it's up, and `No route to host` means it's down or blocked as above.
