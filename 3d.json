@@ -1,0 +1,17 @@
+{
+  "title": "keybordy MP",
+  "summary": {
+    "en": "The printed shell of the ESP32-S3 macropad that listens: a black tray and deck, a gray switch plate, white and gray keycaps, and a green talk key. Generated in CadQuery, printed on a Bambu Lab A1.",
+    "it": "Il guscio stampato del macropad ESP32-S3 che ascolta: tray e deck neri, plate grigia, keycap bianche e grigie e un tasto talk verde. Generato in CadQuery, stampato su una Bambu Lab A1."
+  },
+  "paths": ["cad/out/stl"],
+  "models": {
+    "cad/out/stl/tray.stl": { "name": "Tray", "color": "#000000" },
+    "cad/out/stl/deck.stl": { "name": "Deck", "color": "#000000" },
+    "cad/out/stl/plate.stl": { "name": "Switch plate", "color": "#8E9089" },
+    "cad/out/stl/cap1.stl": { "name": "Keycap 1u", "color": "#FFFFFF" },
+    "cad/out/stl/cap15.stl": { "name": "Keycap 1.5u", "color": "#8E9089" },
+    "cad/out/stl/cap2_talk.stl": { "name": "Talk key", "color": "#00AE42" },
+    "cad/out/stl/knob.stl": { "name": "Knob", "color": "#000000" }
+  }
+}
