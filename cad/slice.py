@@ -39,7 +39,13 @@ PLATES = {
     "03-gray": (m.L["finish"]["mods"], [("cap15", count("cap15")), ("plate", 1)]),
     "04-green": (m.L["finish"]["ptt"], [("cap2_talk", count("cap2_talk"))]),
     "05-black-deck-knobs": (m.L["finish"]["case"], [("deck", 1), ("knob", count("knob"))]),
-    "06-black-tray": (m.L["finish"]["case"], [("tray", 1)]),
+    # v2 tray: bigger USB-C opening, outside pockets so PWR and MIC can be slid (06-black-tray.* is the v1 print)
+    "06-black-tray-v2": (m.L["finish"]["case"], [("tray", 1)]),
+    "07-fit-bores2": (m.L["finish"]["knobs"], [("fit_bores2", 1)]),
+    # knobs alone with the 6.3/4.8 bore; 05 keeps the deck and the first (6.1/4.6) knobs as printed
+    "08-knobs": (m.L["finish"]["knobs"], [("knob", count("knob"))]),
+    # v2 deck: window round the whole OLED glass, deeper pocket, one tight hole per encoder (05 holds the v1 deck)
+    "09-black-deck-v2": (m.L["finish"]["case"], [("deck", 1)]),
 }
 
 

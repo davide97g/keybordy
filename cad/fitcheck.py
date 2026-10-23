@@ -62,7 +62,7 @@ def parts() -> dict:
     mx, my = L["mcu"]["at"]
     p["esp32"] = block(mx, my + 2, 18.0, 25.5, m.PCB_BOT - 3.2, m.PCB_BOT)
     o = L["oled"]
-    p["oled"] = block(*o["at"], *o["module_mm"], 1.0 - OLED_DEPTH, 1.0)
+    p["oled"] = block(*o["at"], *o["module_mm"], m.OLED_POCKET - OLED_DEPTH, m.OLED_POCKET)
     return p
 
 

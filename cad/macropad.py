@@ -80,6 +80,21 @@ def key_center(k: dict) -> tuple[float, float]:
     return (k["x"] + k["w"] / 2) * U, (k["y"] + k["h"] / 2) * U
 
 
+PILOT_D, PILOT_LEAD = 2.1, 0.3     # M2 tapping into PLA (bambulab design rules, 2026-10-14)
+CHIMNEY_R = 1.5 + 0.9               # port radius plus two lines of wall
+OLED_GLASS_PLAY = 0.2               # a side, round the OLED glass in the deck window
+OLED_POCKET = 2.0                   # deck underside pocket depth: 1.6 mm module PCB plus tape
+ENC_HOLE_D = 8.0                    # EC11 M7 bushing + 0.5 mm a side (hand-soldered, so not perfectly square)
+
+
+def pilot(lx: float, ly: float, z: float, depth: float, up: bool) -> Part:
+    """An M2 pilot hole `depth` deep from the face at `z` (into +Z when `up`), with a lead-in chamfer at its mouth."""
+    r, s = PILOT_D / 2, 1 if up else -1
+    hole = at(lx, ly, z - s * 0.01) * Cylinder(r, depth + 0.01, align=(Align.CENTER, Align.CENTER, Align.MIN if up else Align.MAX))
+    mouth = loft([at(lx, ly, z - s * 0.01) * Circle(r + PILOT_LEAD), at(lx, ly, z + s * PILOT_LEAD) * Circle(r)], ruled=True)
+    return hole + mouth
+
+
 def biggest_face(part: Part, normal: Vector):
     n = Vector(normal).normalized()
     faces = [f for f in part.faces() if f.normal_at().normalized().dot(n) > 0.999]
@@ -141,13 +156,32 @@ def tray() -> Part:
         slot = Pos(sx + i * 3.0, Y_FRONT + WALL / 2, (zf + FLOOR + 3 + PCB_BOT - 2.5) / 2) * Box(1.5, WALL + 2, (PCB_BOT - 2.5) - (zf + FLOOR + 3))
         body -= slot
 
-    # rear wall: USB-C and the two slide switches (v0: positions follow the layout, heights assume
-    # bottom-side parts centred 1.7 mm under the PCB)
+    # rear wall (v2, 2026-10-23, after the rev A board was assembled): positions follow the layout,
+    # heights assume bottom-side parts centred 1.7 mm under the PCB.
+    # USB-C: v1's 10 x 4.2 cut-out let a plug in only ~3.5 mm. A plug's overmold is about 12.4 x 6.5,
+    # so the opening clears it with ~0.6 mm a side and the plug seats fully against the receptacle.
+    # PWR and MIC: their levers reach only ~0.35 mm into the 3 mm wall. A pocket from the outside
+    # leaves 0.8 mm of wall round each slot, so a fingernail or pen tip reaches the lever.
     zc = PCB_BOT - 1.7
     ux = L["usb_c"]["at"][0]
-    body -= Pos(ux, Y_REAR - WALL / 2, zc) * Rot(X=90) * extrude(RectangleRounded(10.0, 4.2, 1.6), WALL + 2, both=True)
+    usb_w = 13.2                                   # 12.4 overmold + 0.4 a side
+    body -= Pos(ux, Y_REAR - WALL / 2, zc) * Rot(X=90) * extrude(RectangleRounded(usb_w, 7.6, 3.0), WALL + 2, both=True)
+    # The pocket's roof slopes at 45 degrees out to the face: a flat roof left a 2.2 mm lip hanging over
+    # it with nothing below (Bambu Studio's "floating cantilever"), the wedge lets it print unsupported.
+    # PWR sits 10.85 mm from the USB-C, so its pocket stops 1.4 mm short of the USB opening (a rib of
+    # wall between them) and runs out to the right instead. The slot is 6 mm: the lever's travel plus play.
+    pocket, ph = WALL - 0.8, 8.0
+    zb = zc - ph / 2
+    zr = zc + ph / 2 - pocket                     # where the roof starts to slope
+    usb_right = ux + usb_w / 2
     for s in L["switches"]:
-        body -= Pos(s["at"][0], Y_REAR - WALL / 2, zc) * Rot(X=90) * extrude(RectangleRounded(9.5, 3.8, 1.0), WALL + 2, both=True)
+        x = s["at"][0]
+        x0 = max(x - 8.0, usb_right + 1.4) if x > ux else x - 8.0
+        x1 = x + 8.0
+        body -= Pos(x, Y_REAR - WALL / 2, zc) * Rot(X=90) * extrude(RectangleRounded(6.0, 3.8, 1.0), WALL + 2, both=True)
+        body -= Pos((x0 + x1) / 2, Y_REAR - pocket / 2 + 0.5, (zb + zr) / 2) * Box(x1 - x0, pocket + 1, zr - zb)
+        roof = Polygon((Y_REAR + 0.5, zr), (Y_REAR - pocket, zr), (Y_REAR + 0.5, zr + pocket + 0.5), align=None)
+        body -= extrude(Plane.YZ.offset(x0) * roof, x1 - x0, dir=(1, 0, 0))   # winding-proof: always +X
     return body
 
 
@@ -162,13 +196,15 @@ def deck() -> Part:
     cuts.append(rrect(-1.0, 2.25 * U - 1.0, 6 * U + 1.0, 6.25 * U + 1.0, 2.6))
     o = L["oled"]
     ox, oy = o["at"]
-    aw, ah = o["active_mm"][0] + 3, o["active_mm"][1] + 3
-    cuts.append(rrect(ox - aw / 2, oy - ah / 2, ox + aw / 2, oy + ah / 2, 1.6))
-    # one channel round all three knobs: separate holes would leave no wall between them
-    kr = EP["knob_d_mm"] / 2 + 1.2
-    ex = [e["at"][0] for e in L["encoders"]]
-    ey = L["encoders"][0]["at"][1]
-    cuts.append(at((min(ex) + max(ex)) / 2, ey) * SlotOverall(max(ex) - min(ex) + 2 * kr, 2 * kr))
+    # v2 (2026-10-23): the window shows the whole glass, black border too, and the glass in it is what
+    # places the module (v1 showed only the lit area, centred on the module, and the glass sat off it)
+    gx, gy = o["glass_at"]
+    gw, gh = o["glass_mm"][0] + 2 * OLED_GLASS_PLAY, o["glass_mm"][1] + 2 * OLED_GLASS_PLAY
+    cuts.append(rrect(gx - gw / 2, gy - gh / 2, gx + gw / 2, gy + gh / 2, 0.5))
+    # v2 (2026-10-23): a round hole per encoder that clears the EC11's M7 bushing with 0.5 mm a side.
+    # v1's channel round the 15 mm knobs left a wide gap; the knobs now go on after the deck.
+    for e in L["encoders"]:
+        cuts.append(at(*e["at"]) * Circle(ENC_HOLE_D / 2))
     for c in cuts:
         body -= prism(c, -1, DECK + 1)
     # 45-degree chamfer round the top of every opening
@@ -179,18 +215,22 @@ def deck() -> Part:
     body -= at(*L["mic"]["at"]) * Cylinder(0.65, 20)
     body -= at(*L["mic_led"]["at"]) * Cylinder(1.0, 20)
 
-    # underside: the OLED module sits in a 1 mm pocket, screws bite into blind pilot holes
-    mw, mh = o["module_mm"][0] + 0.4, o["module_mm"][1] + 0.4
-    body -= prism(rrect(ox - mw / 2, oy - mh / 2, ox + mw / 2, oy + mh / 2, 0.8), -1, 1.0)
+    # underside: the OLED module sits in a pocket deep enough for its whole PCB, so the board clears the
+    # plate's opening, and 1.5 mm wider a side than the module, so it lines up with the glass in the window
+    # whatever the glass's offset on it. Screws bite into blind pilot holes.
+    mw, mh = o["module_mm"][0] + 3.0, o["module_mm"][1] + 3.0
+    body -= prism(rrect(ox - mw / 2, oy - mh / 2, ox + mw / 2, oy + mh / 2, 0.8), -1, OLED_POCKET)
     for h in L["pcb"]["holes_mm"][:4]:
-        body -= at(*h) * Cylinder(0.85, 2 * (DECK - 0.6), align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        body -= pilot(*h, 0, DECK - 0.6, up=True)
 
     # relief over the encoder bodies, which stand 6.5 mm off the PCB (1.5 mm into the deck)
     for e in L["encoders"]:
         body -= prism(at(*e["at"]) * RectangleRounded(EP["body_mm"][0] + 1.0, EP["body_mm"][1] + 1.0, 1.0), -1, 2.0)
 
-    # wordmark cut 0.5 mm into the top, over the screen
-    word = at(2.0, -2.2) * Text("keybordy", font_size=6.0, font="Arial Black", align=(Align.MIN, Align.CENTER))
+    # wordmark cut 0.5 mm into the top, over the screen. Cut text on a top needs 4.5 mm letters, and this
+    # is all lowercase, so the size is set by the x-height: 8.8 gives 4.57 mm (6.0 gave 3.1)
+    # v2: centred between the edge fillet and the bigger window's chamfer (at -1.6 the "y" ran into it)
+    word = at(2.0, -3.0) * Text("keybordy", font_size=8.8, font="Arial Black", align=(Align.MIN, Align.CENTER))
     body -= prism(word, DECK - 0.5, DECK + 1)
     return body
 
@@ -221,7 +261,13 @@ def plate() -> Part:
         if i < 4:
             body -= at(*h) * Cylinder(1.2, 40)
         else:
-            body -= at(*h, PCB_TOP - 1) * Cylinder(0.85, (-0.5 - PCB_TOP) + 1, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            body -= pilot(*h, PCB_TOP, -0.5 - PCB_TOP, up=True)
+    # the bottom-port mic and its LED sit under ports in the deck; a tube from the plate down to the PCB
+    # seals each one, so the mic hears the room and not the speaker inside the case, and the LED
+    # lights its window instead of the gaps round the caps
+    for name in ("mic", "mic_led"):
+        tube = at(*L[name]["at"], PCB_TOP) * Cylinder(CHIMNEY_R, PCB_TOP * -1 - PLATE + 0.01, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        body += tube - at(*L[name]["at"]) * Cylinder(1.5, 40)
     return body
 
 
@@ -280,7 +326,8 @@ def mic_glyph():
 
 # ── knob ──────────────────────────────────────────────────────────────────────
 
-BORE_D, BORE_FLAT, BORE_DEPTH = 6.1, 4.6, 12.0
+# 6.1/4.6 printed too tight on the EC11s; the fit_bores2 ladder (6.3-6.6) picked 6.3/4.8 (2026-10-23)
+BORE_D, BORE_FLAT, BORE_DEPTH = 6.3, 4.8, 12.0
 
 
 def d_profile(d: float, flat: float):
@@ -314,10 +361,10 @@ def fit_plate() -> Part:
     return body
 
 
-def fit_bores() -> Part:
-    """Three short knobs, D-bores 6.0/4.5, 6.1/4.6, 6.2/4.7, marked by 1-3 notches on the rim."""
+def fit_bores(sizes=((6.0, 4.5), (6.1, 4.6), (6.2, 4.7))) -> Part:
+    """Short knobs with D-bores of the given (diameter, flat), marked by 1-n notches on the rim."""
     parts = None
-    for i, (d, f) in enumerate(((6.0, 4.5), (6.1, 4.6), (6.2, 4.7))):
+    for i, (d, f) in enumerate(sizes):
         k = knob(d, f, height=10)
         for j in range(i + 1):
             a = math.radians(180 + (j - i / 2) * 20)
@@ -348,6 +395,8 @@ PARTS = {
     # name: (builder, print orientation, filament, count)
     "fit_plate": (fit_plate, on_bed, "Gray", 1),
     "fit_bores": (fit_bores, upside_down, "Gray", 1),
+    # The 6.1/4.6 knobs printed too tight on the bench EC11s (2026-10-22): a second ladder, 0.1 mm steps up.
+    "fit_bores2": (lambda: fit_bores(((6.3, 4.8), (6.4, 4.9), (6.5, 5.0), (6.6, 5.1))), upside_down, L["finish"]["knobs"], 1),
     "cap1": (lambda: cap(1.0), upside_down, L["finish"]["keycaps"], sum(1 for k in L["keys"] if k["w"] == 1)),
     "cap15": (lambda: cap(1.5), upside_down, L["finish"]["mods"], sum(1 for k in L["keys"] if k["w"] == 1.5)),
     "cap2_talk": (lambda: cap(2.0, glyph="mic"), upside_down, L["finish"]["ptt"], sum(1 for k in L["keys"] if k["w"] == 2)),
