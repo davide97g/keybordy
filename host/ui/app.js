@@ -1,8 +1,16 @@
 // keybordy keymap editor. Talks to host/hammerspoon/keybordy_web.lua: loads
 // the keymap, saves it whole, simulates presses and polls the activity log.
+// A slot is anything with an action: "K1".."K22" and "E2.ccw"/"E2.cw"/"E2.push"
+// (E3 too). K21, the talk bar, has the voice settings instead; K20 replays the
+// last answer on the board and has nothing to set.
 
 const TOKEN = document.querySelector('meta[name="keybordy-token"]').content;
-const KEY_COUNT = 8;
+const TURNS = [
+  { turn: 'ccw', glyph: '↺', name: 'Turn left' },
+  { turn: 'push', glyph: '●', name: 'Push' },
+  { turn: 'cw', glyph: '↻', name: 'Turn right' },
+];
+const TURN = Object.fromEntries(TURNS.map((t) => [t.turn, t]));
 
 // Stroke icons (lucide shapes), one per action type.
 const ICONS = {
@@ -15,6 +23,8 @@ const ICONS = {
   keys: '<path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>',
   text: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
   media: '<path d="M6 3 20 12 6 21z"/>',
+  voice: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v5"/>',
+  replay: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
 };
 
 function icon(type) {
@@ -68,8 +78,13 @@ const MOD_KEYS = [
 const state = {
   saved: null,  // keymap as on disk
   draft: null,  // keymap being edited
-  colors: [],
-  selected: 0,
+  layout: null,   // MP keys and encoders from layout/macropad.json
+  combos: {},     // slot id -> {mods, key} the board taps
+  talkKey: 'K21',
+  replayKey: 'K20',
+  confirmKeys: { yes: 'K22', no: 'K19' },
+  voice: { state: '', log: [] },
+  selected: 'K1',
   apps: null,
   shortcuts: null,
   appQuery: '',
@@ -119,8 +134,42 @@ function h(tag, attrs = {}, ...children) {
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const keyDirty = (i) => !same(state.draft.keys[i], state.saved.keys[i]);
 const anyDirty = () => state.draft && !same(state.draft, state.saved);
+
+// The keymap entry ({label, action}) for a slot id.
+function entry(km, id) {
+  const k = id.match(/^K(\d+)$/);
+  if (k) return km.keys[k[1] - 1];
+  const [enc, turn] = id.split('.');
+  return km.knobs[enc][turn];
+}
+
+const isTalk = (id) => id === state.talkKey;
+const isReplay = (id) => id === state.replayKey;
+const isFixed = (id) => isTalk(id) || isReplay(id);   // the board handles these, no action
+// K22/K19 answer Claude's yes/no questions on the board, and run their action the rest of the time.
+const confirmOf = (id) => id === state.confirmKeys.yes ? 'yes' : id === state.confirmKeys.no ? 'no' : null;
+const keyDirty = (id) => isTalk(id) ? !same(state.draft.voice, state.saved.voice)
+  : isReplay(id) ? false : !same(entry(state.draft, id), entry(state.saved, id));
+
+function colorOf(id) {
+  const enc = state.layout?.encoders.find((e) => id.startsWith(e.id + '.'));
+  if (enc) return enc.color;
+  return state.layout?.keys.find((k) => k.id === id)?.color || '#d6ff1f';
+}
+
+// "⇧F13" for the combo the board taps for a slot.
+function comboOf(id) {
+  const c = state.combos[id];
+  if (!c) return '';
+  const glyph = { shift: '⇧', ctrl: '⌃', alt: '⌥', cmd: '⌘' };
+  return c.mods.map((m) => glyph[m]).join('') + c.key.toUpperCase();
+}
+
+function slotName(id) {
+  const [enc, turn] = id.split('.');
+  return turn ? `${enc} ${TURN[turn].glyph} ${TURN[turn].name.toLowerCase()}` : id;
+}
 
 function describe(action) {
   switch (action.type) {
@@ -161,44 +210,88 @@ function renderStatus() {
   );
 }
 
-// ── Caps ─────────────────────────────────────────────────────────────────
+// ── Board ────────────────────────────────────────────────────────────────
 
 let capsPainted = false;
+
+// The talk bar and the replay key are drawn the same way: the board handles them.
+const FIXED = {
+  talk: { type: 'voice', name: 'Voice', label: 'Talk to Claude', tag: 'hold', title: 'hold to talk to Claude' },
+  replay: { type: 'replay', name: 'Voice', label: 'Replay answer', tag: 'tap', title: 'says the last answer again' },
+};
+
+function capButton(id, k, extra = {}) {
+  const fixed = isTalk(id) ? FIXED.talk : isReplay(id) ? FIXED.replay : null;
+  const t = fixed || TYPE[k.action.type];
+  const free = !fixed && k.action.type === 'none';
+  return h('button', {
+    className: 'cap' + (id === state.selected ? ' cap--selected' : '') + (free ? ' cap--free' : '') + (extra.wide ? ' cap--wide' : ''),
+    id: `cap-${id}`,
+    title: fixed ? `${id}: ${fixed.title}` : `${slotName(id)}: ${describe(k.action)}`,
+    onclick: () => select(id),
+  },
+    h('div', { className: 'cap__row' },
+      h('span', { className: 'cap__id' }, extra.short || id),
+      h('span', { className: 'cap__fkey' }, fixed ? fixed.tag : comboOf(id))),
+    h('div', { className: 'cap__body' },
+      h('span', { className: 'cap__glyph' }, icon(t.type)),
+      h('span', { className: 'cap__label' }, fixed ? fixed.label : k.label || (free ? 'free' : describe(k.action)))),
+    h('span', { className: 'cap__type' }, t.name),
+    confirmOf(id) && h('span', { className: 'cap__confirm', title: `answers ${confirmOf(id)} when Claude asks` }, confirmOf(id)),
+    keyDirty(id) && h('span', { className: 'cap__dirty', title: 'unsaved' }));
+}
+
+function pressButton(id) {
+  return h('button', {
+    className: 'cap__press',
+    title: `Simulate ${slotName(id)}` + (keyDirty(id) ? ' (runs the unsaved version)' : ''),
+    'aria-label': `Press ${slotName(id)}`,
+    onclick: () => press(id),
+  }, '▶');
+}
+
+// A knob: its id on a round cap, then one small cap per turn and the push.
+function knob(enc, i) {
+  if (enc.id === 'E1') {
+    return h('div', { className: 'knob knob--fixed', style: `--i:${i};--c:var(--wb-9)` },
+      h('div', { className: 'knob__dial' }, 'E1'),
+      h('ul', { className: 'knob__fixed' },
+        h('li', {}, '↺ ↻ speaker volume'),
+        h('li', {}, '● tap: new Claude session'),
+        h('li', {}, '● hold 2 s: power off')));
+  }
+  return h('div', { className: 'knob', style: `--i:${i};--c:${enc.color}` },
+    h('div', { className: 'knob__dial' }, enc.id),
+    h('div', { className: 'knob__turns' }, TURNS.map((t) => {
+      const id = `${enc.id}.${t.turn}`;
+      return h('div', { className: 'cap-slot', style: `--c:${enc.color}` },
+        capButton(id, entry(state.draft, id), { short: `${enc.id} ${t.glyph}` }), pressButton(id));
+    })));
+}
 
 function renderCaps() {
   const el = document.getElementById('caps');
   el.classList.toggle('caps--enter', !capsPainted);
   capsPainted = true;
-  el.replaceChildren(...state.draft.keys.map((k, i) => {
-    const t = TYPE[k.action.type];
-    const free = k.action.type === 'none';
-    return h('div', { className: 'cap-slot', style: `--i:${i};--c:${state.colors[i]}` },
-      h('button', {
-        className: 'cap' + (i === state.selected ? ' cap--selected' : '') + (free ? ' cap--free' : ''),
-        id: `cap-${i}`,
-        title: `K${i + 1}: ${describe(k.action)}`,
-        onclick: () => select(i),
-      },
-        h('div', { className: 'cap__row' },
-          h('span', { className: 'cap__id' }, `K${i + 1}`),
-          h('span', { className: 'cap__fkey' }, `F${13 + i}`)),
-        h('div', { className: 'cap__body' },
-          h('span', { className: 'cap__glyph' }, icon(t.type)),
-          h('span', { className: 'cap__label' }, k.label || (free ? 'free' : describe(k.action)))),
-        h('span', { className: 'cap__type' }, t.name),
-        keyDirty(i) && h('span', { className: 'cap__dirty', title: 'unsaved' })),
-      h('button', {
-        className: 'cap__press',
-        title: `Simulate a press of K${i + 1}` + (keyDirty(i) ? ' (runs the unsaved version)' : ''),
-        'aria-label': `Press K${i + 1}`,
-        onclick: () => press(i),
-      }, '▶'));
-  }));
+  const top = Math.min(...state.layout.keys.map((k) => k.y));
+  el.replaceChildren(
+    h('div', { className: 'mp__top' },
+      h('div', { className: 'mp__oled' },
+        h('span', {}, 'keybordy MP'),
+        h('span', { className: 'mp__oled-sub' }, state.voice.state === 'running' ? 'voice ready' : `voice ${state.voice.state || '…'}`)),
+      state.layout.encoders.map(knob)),
+    h('div', { className: 'mp__keys' }, state.layout.keys.map((k, i) => {
+      const id = k.id;
+      return h('div', {
+        className: 'cap-slot',
+        style: `--i:${i};--c:${k.color};grid-column:${k.x * 2 + 1} / span ${k.w * 2};grid-row:${k.y - top + 1}`,
+      }, capButton(id, entry(state.draft, id), { wide: k.w > 1 }), !isFixed(id) && pressButton(id));
+    })));
 }
 
 // Lights a cap the way the key HUD does: pressed into its skirt, then back.
-function hitCap(i, failed) {
-  const cap = document.getElementById(`cap-${i}`);
+function hitCap(id, failed) {
+  const cap = document.getElementById(`cap-${id}`);
   if (!cap) return;
   cap.classList.remove('cap--down', 'cap--failed');
   void cap.offsetWidth;
@@ -215,20 +308,28 @@ function hitCap(i, failed) {
 
 // ── Editor ───────────────────────────────────────────────────────────────
 
-function select(i) {
-  state.selected = i;
+function select(id) {
+  state.selected = id;
   state.recording = false;
   renderCaps();
   renderEditor();
 }
 
 function update(fn, { rerender = false } = {}) {
-  const k = state.draft.keys[state.selected];
+  const k = entry(state.draft, state.selected);
   fn(k);
+  scheduleSave();
   renderCaps();
   renderFoot();
   if (rerender) renderEditor();
   else document.getElementById('editor-hint').textContent = `${TYPE[k.action.type].name} · ${describe(k.action)}`;
+}
+
+function setVoice(patch) {
+  Object.assign(state.draft.voice, patch);
+  scheduleSave();
+  renderCaps();
+  renderFoot();
 }
 
 function setAction(patch, opts) {
@@ -362,11 +463,13 @@ const fieldsFor = {
 };
 
 function renderEditor() {
-  const i = state.selected;
-  const k = state.draft.keys[i];
-  const t = TYPE[k.action.type];
+  const id = state.selected;
   const el = document.getElementById('editor');
-  el.style.setProperty('--c', state.colors[i]);
+  el.style.setProperty('--c', colorOf(id));
+  if (isTalk(id)) return renderVoice(el);
+  if (isReplay(id)) return renderReplay(el);
+  const k = entry(state.draft, id);
+  const t = TYPE[k.action.type];
 
   const types = h('div', { className: 'types' }, TYPES.map((x) => h('button', {
     className: 'type' + (x.type === k.action.type ? ' type--on' : ''),
@@ -382,9 +485,12 @@ function renderEditor() {
   el.replaceChildren(
     h('div', { className: 'panel__head editor__head' },
       h('span', { className: 'dot' }),
-      h('span', {}, `K${i + 1} · F${13 + i}`),
+      h('span', {}, `${slotName(id)} · ${comboOf(id)}`),
       h('span', { className: 'panel__hint', id: 'editor-hint' }, `${t.name} · ${describe(k.action)}`)),
     h('div', { className: 'editor__body' },
+      confirmOf(id) && h('p', { className: 'field__note note--confirm' },
+        `When Claude asks a yes or no question (the pad shows YES/NO?), this key answers “${confirmOf(id)}” on the board. `,
+        'The rest of the time it runs the action below.'),
       field('Label', textInput(k.label, (v) => update((key) => { key.label = v; }), { placeholder: 'Shown on the cap and in the alert' })),
       field('Action', types, t.access && !state.accessibility
         ? 'Hammerspoon needs Accessibility for this one: use “accessibility off · allow” at the top.'
@@ -395,44 +501,113 @@ function renderEditor() {
   renderFoot();
 }
 
+// K21: the talk bar's settings, read by host/voice.py on every take.
+function renderVoice(el) {
+  const v = state.draft.voice;
+  const running = state.voice.state === 'running';
+  el.replaceChildren(
+    h('div', { className: 'panel__head editor__head' },
+      h('span', { className: 'dot' }),
+      h('span', {}, `${state.talkKey} · talk to Claude`),
+      h('span', { className: 'panel__hint' }, 'hold the bar, talk, let go')),
+    h('div', { className: 'editor__body' },
+      h('p', { className: 'field__note' },
+        'The take goes over Wi-Fi to host/voice.py: Echo transcribes it, claude -p answers in the folder below, ',
+        'and Echo speaks the answer in the chosen voice on the pad. One session carries on between takes; ',
+        'tap E1 for a new one. Holding the bar again stops an answer. The answer scrolls on the display while it is spoken; ',
+        'when Claude needs a yes or no, K22 answers yes and K19 no.'),
+      field('Service', h('div', { className: 'row' },
+        h('span', { className: 'chip ' + (running ? 'chip--ok' : 'chip--warn') }, `voice.py ${state.voice.state || '…'}`),
+        h('button', { className: 'btn', onclick: restartVoice }, 'Restart'))),
+      field('Folder', textInput(v.dir, (x) => setVoice({ dir: x }), { mono: true, placeholder: '~' }),
+        'Where claude -p runs: its CLAUDE.md and files are what it sees. A new folder starts a new session.'),
+      field('Tools', textInput(v.tools, (x) => setVoice({ tools: x }), { mono: true, placeholder: 'Read,Glob,Grep,WebSearch,WebFetch' }),
+        'Allowed without asking, comma separated. Bash, Edit, Write and NotebookEdit stay blocked unless listed here (Bash(git log:*) works too).'),
+      field('Model', textInput(v.model, (x) => setVoice({ model: x }), { mono: true, placeholder: 'your default (sonnet, haiku, opus…)' }),
+        'Empty uses your Claude Code default. A smaller model answers sooner.'),
+      h('div', { className: 'row row--fields' },
+        field('Voice', textInput(v.voice, (x) => setVoice({ voice: x }), { mono: true, placeholder: 'me' }), 'An Echo voice id.'),
+        field('Language', textInput(v.language, (x) => setVoice({ language: x }), { mono: true, placeholder: 'it' }), 'What you speak: it, en, auto.')),
+      field('Instructions', h('textarea', {
+        className: 'textarea', value: v.prompt, spellcheck: false,
+        placeholder: 'Extra system prompt, e.g. “Call me Davide. Keep it under 20 words.”',
+        oninput: (e) => setVoice({ prompt: e.target.value }),
+      }), 'Added to the spoken-answer prompt (short sentences, no markdown).'),
+      field('Log', h('pre', { className: 'voice-log', id: 'voice-log' }, state.voice.log.slice(-14).join('\n') || 'nothing yet'))),
+    h('div', { className: 'editor__foot', id: 'foot' }),
+  );
+  renderFoot();
+}
+
+// K20: nothing to set, only what it does.
+function renderReplay(el) {
+  el.replaceChildren(
+    h('div', { className: 'panel__head editor__head' },
+      h('span', { className: 'dot' }),
+      h('span', {}, `${state.replayKey} · replay answer`),
+      h('span', { className: 'panel__hint' }, 'tap')),
+    h('div', { className: 'editor__body' },
+      h('p', { className: 'field__note' },
+        'Says Claude’s last spoken answer again on the pad, straight from its memory, with the text scrolling. After a restart, when the pad has none, ',
+        'it asks voice.py, which keeps the last answer on disk. Tap it while it talks to stop.'),
+      h('p', { className: 'field__note' }, 'It is handled on the board, so it sends nothing to the Mac and has no action to set.')),
+    h('div', { className: 'editor__foot', id: 'foot' }),
+  );
+  renderFoot();
+}
+
+async function restartVoice() {
+  try {
+    await api('/api/voice/restart', { method: 'POST' });
+    flash('restarting voice.py');
+  } catch (err) {
+    flash('restart failed: ' + err.message);
+  }
+}
+
+// Edits save themselves: the foot only tests the slot and says where saving is.
 function renderFoot() {
   const foot = document.getElementById('foot');
   if (!foot) return;
-  const i = state.selected;
-  const dirty = anyDirty();
-  foot.replaceChildren(
-    h('button', { className: 'btn', onclick: () => press(i), title: 'Runs this key’s action as shown here, saved or not' }, `▶ Test K${i + 1}`),
-    h('span', { className: 'msg' }, state.message || (keyDirty(i) ? 'unsaved: the board still runs the saved version' : '')),
+  const id = state.selected;
+  const saving = anyDirty();
+  foot.replaceChildren(...[
+    !isFixed(id) && h('button', { className: 'btn', onclick: () => press(id), title: 'Runs this action now (↵)' }, `▶ Test ${id}`),
     h('span', { className: 'spacer' }),
-    h('button', {
-      className: 'btn', disabled: !dirty,
-      onclick: () => { state.draft = clone(state.saved); state.message = ''; renderCaps(); renderEditor(); },
-    }, 'Revert'),
-    h('button', { className: 'btn btn--primary', disabled: !dirty, onclick: save }, 'Save ', h('kbd', {}, '⌘S')),
-  );
+    h('span', { className: 'msg' + (state.message ? '' : saving ? ' msg--saving' : ' msg--saved') },
+      state.message || (saving ? 'saving…' : '✓ saved')),
+  ].filter(Boolean));
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────
 
+// The editor is not re-rendered after a save, so a field being typed in keeps its focus.
+let saveTimer;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 500);
+}
+
 async function save() {
+  clearTimeout(saveTimer);
   if (!anyDirty()) return;
+  const sent = clone(state.draft);
   try {
-    const { keymap } = await api('/api/keymap', { method: 'PUT', body: JSON.stringify(state.draft) });
+    const { keymap } = await api('/api/keymap', { method: 'PUT', body: JSON.stringify(sent) });
     state.saved = keymap;
-    state.draft = clone(keymap);
-    flash('saved to ' + state.keymapPath);
+    if (same(state.draft, sent)) state.draft = clone(keymap);  // nothing typed meanwhile
   } catch (err) {
     flash('save failed: ' + err.message);
   }
   renderCaps();
-  renderEditor();
+  renderFoot();
 }
 
 // A simulated press goes through the same path as the board's F-key, with
 // the draft action so unsaved edits can be tried.
-async function press(i) {
+async function press(id) {
   try {
-    await api(`/api/press/${i + 1}`, { method: 'POST', body: JSON.stringify(state.draft.keys[i]) });
+    await api(`/api/press/${id}`, { method: 'POST', body: JSON.stringify(entry(state.draft, id)) });
     poll();
   } catch (err) {
     flash('press failed: ' + err.message);
@@ -459,12 +634,12 @@ function renderLog() {
   }
   el.replaceChildren(...[...state.events].reverse().map((ev) => {
     const status = ev.pending ? ['run', 'running'] : ev.ok ? ['ok', 'ok'] : ['fail', 'failed'];
-    return h('li', { className: 'ev', style: `--c:${state.colors[ev.key - 1]}` },
+    return h('li', { className: 'ev', style: `--c:${colorOf(String(ev.key))}` },
       h('span', { className: 'ev__t' }, timeFmt.format(ev.t)),
-      h('span', { className: 'ev__k' }, `K${ev.key}`),
+      h('span', { className: 'ev__k' }, String(ev.key).replace('.', ' ')),
       h('span', { className: 'ev__what' },
         h('span', { className: 'ev__src' + (ev.source === 'board' ? ' ev__src--board' : '') }, ev.source === 'board' ? 'board ' : 'sim '),
-        [ev.label, TYPE[ev.type]?.name].filter(Boolean).join(' · ')),
+        [ev.label, ev.type === 'voice' ? 'Voice' : TYPE[ev.type]?.name].filter(Boolean).join(' · ')),
       h('span', { className: `ev__st--${status[0]}` }, status[1]),
       ev.error && h('pre', { className: 'ev__detail ev__detail--error' }, ev.error),
       ev.output && h('pre', { className: 'ev__detail' }, ev.output.trimEnd()));
@@ -480,6 +655,18 @@ async function poll() {
       renderStatus();
       renderEditor();
     }
+    if (data.voice && !same(data.voice, state.voice)) {
+      const changedState = data.voice.state !== state.voice.state;
+      state.voice = data.voice;
+      if (changedState) renderCaps();
+      if (isTalk(state.selected)) {
+        if (changedState) renderEditor();
+        else {
+          const log = document.getElementById('voice-log');
+          if (log) log.textContent = state.voice.log.slice(-14).join('\n') || 'nothing yet';
+        }
+      }
+    }
     if (data.keymapRev !== state.keymapRev) {
       state.keymapRev = data.keymapRev;
       await reloadKeymap();
@@ -489,7 +676,7 @@ async function poll() {
     // Hammerspoon restarts its ids when it reloads.
     if (newest < state.lastEventId) state.lastEventId = 0;
     for (const ev of data.events) {
-      if (ev.id > state.lastEventId) hitCap(ev.key - 1, ev.ok === false);
+      if (ev.id > state.lastEventId) hitCap(String(ev.key), ev.ok === false);
     }
     state.lastEventId = newest;
     state.rev = data.rev;
@@ -543,20 +730,54 @@ document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 's') {
     e.preventDefault();
     save();
+    return;
+  }
+  // ← → walk the slots in board order, ↵ tests the selected one, unless a field has focus.
+  const tag = document.activeElement?.tagName;
+  if (e.metaKey || e.ctrlKey || e.altKey || ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+  const order = slotOrder();
+  const at = order.indexOf(state.selected);
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    e.preventDefault();
+    select(order[(at + (e.key === 'ArrowRight' ? 1 : order.length - 1)) % order.length]);
+    document.getElementById(`cap-${state.selected}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  } else if (e.key === 'Enter' && tag !== 'BUTTON' && !isFixed(state.selected)) {
+    e.preventDefault();
+    press(state.selected);
   }
 });
 
+// Knob slots first (they sit on top of the board), then the keys row by row.
+function slotOrder() {
+  const knobs = state.layout.encoders.filter((e) => e.id !== 'E1').flatMap((e) => TURNS.map((t) => `${e.id}.${t.turn}`));
+  return [...knobs, ...state.layout.keys.map((k) => k.id)];
+}
+
 window.addEventListener('beforeunload', (e) => {
-  if (anyDirty()) e.preventDefault();
+  if (anyDirty()) { save(); e.preventDefault(); }
 });
+// The Mac app (host/app) saves what is pending before it quits.
+window.keybordyDirty = () => { if (anyDirty()) save(); return !!anyDirty(); };
 
 // ── Boot ─────────────────────────────────────────────────────────────────
+
+// Inside the Mac app (host/app loads /?app=1) the window's title bar is the header, so the status
+// chips move to a status bar at the bottom.
+if (new URLSearchParams(location.search).has('app')) {
+  document.documentElement.dataset.app = '';
+  document.getElementById('statusbar').append(document.getElementById('status'));
+}
 
 async function boot() {
   const s = await api('/api/state');
   state.saved = s.keymap;
   state.draft = clone(s.keymap);
-  state.colors = s.colors;
+  state.layout = s.layout;
+  state.combos = s.combos;
+  state.talkKey = s.talkKey;
+  state.replayKey = s.replayKey || state.replayKey;
+  state.confirmKeys = s.confirmKeys || state.confirmKeys;
+  state.voice = s.voice || state.voice;
   state.accessibility = s.accessibility;
   state.keymapPath = s.keymapPath;
   state.mediaKeys = s.mediaKeys;

@@ -21,25 +21,26 @@
     </header>
 
     <main class="main">
-      <section class="panel board" aria-label="Keys">
-        <div class="panel__head">
-          <span>Board</span>
-          <span class="panel__hint">K1–K8 send F13–F20 over Bluetooth · click a cap to edit it · ▶ presses it</span>
-        </div>
-        <div class="caps" id="caps"></div>
-      </section>
-
-      <div class="split">
-        <section class="panel editor" id="editor" aria-label="Key editor"></section>
+      <div class="main__left">
+        <section class="panel board" aria-label="Keys">
+          <div class="panel__head">
+            <span>keybordy MP</span>
+            <span class="panel__hint">click a cap to edit it · ← → to move · ↵ or ▶ to test · edits save themselves</span>
+          </div>
+          <div class="caps" id="caps"></div>
+        </section>
 
         <section class="panel activity" aria-label="Activity">
           <div class="panel__head">
             <span>Activity</span>
-            <span class="panel__hint">board presses and simulated ones</span>
+            <span class="panel__hint">board presses, tests and voice</span>
           </div>
           <ol class="log" id="log"></ol>
         </section>
       </div>
+
+      <section class="panel editor" id="editor" aria-label="Key editor"></section>
     </main>
+    <footer class="statusbar" id="statusbar"></footer>
   </body>
 </html>

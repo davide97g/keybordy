@@ -1,11 +1,14 @@
 -- keybordy actions for Hammerspoon.
 --
--- Over Bluetooth the board is a keyboard: K1..K8 press F13..F20. This module
--- binds each of those keys to the action in ~/.config/keybordy/keymap.json
--- (seeded from host/keymap.default.json) and serves the keymap editor on
--- http://localhost:7373 (keybordy_web.lua). `just host-install` links this
--- file into ~/.hammerspoon and adds `require("keybordy")` to init.lua.
--- Edits to host/hammerspoon/*.lua reload Hammerspoon on save.
+-- Over Bluetooth the board is a keyboard that taps one F13..F20 combo per key
+-- or knob event (COMBOS below; keys8's K1..K8 send plain F13..F20, so it works
+-- too). This module binds each combo to the action in
+-- ~/.config/keybordy/keymap.json (seeded from host/keymap.default.json) and
+-- serves the keymap editor on http://localhost:7373 (keybordy_web.lua). It
+-- also runs host/voice.py, the talk bar's Mac side, and restarts it if it
+-- exits. `just host-install` links this file into ~/.hammerspoon and adds
+-- `require("keybordy")` to init.lua. Edits to host/hammerspoon/*.lua reload
+-- Hammerspoon on save.
 
 require("hs.ipc")  -- lets `hs -c` from a terminal talk to this instance
 
@@ -18,7 +21,12 @@ local CONFIG_DIR = HOME .. "/.config/keybordy"
 package.path = LUA_DIR .. "/?.lua;" .. package.path
 
 local M = {
-  KEY_COUNT = 8,
+  KEY_COUNT = 22,
+  TALK_KEY = 21,             -- the talk bar: it records for host/voice.py, never sends a key
+  REPLAY_KEY = 20,           -- says the last answer again, on the board: never sends a key
+  YES_KEY = 22, NO_KEY = 19, -- answer Claude's yes/no questions on the board, normal keys otherwise
+  KNOBS = { "E2", "E3" },    -- E1 stays on the board (volume, new session, power)
+  TURNS = { "ccw", "cw", "push" },
   HOST_DIR = HOST_DIR,
   REPO_DIR = HOST_DIR:match("^(.*)/host$"),
   CONFIG_DIR = CONFIG_DIR,
@@ -191,17 +199,74 @@ local function cleanAction(a)
 end
 M.cleanAction = cleanAction
 
+local function cleanEntry(k)
+  if type(k) ~= "table" then k = {} end
+  return { label = type(k.label) == "string" and k.label or "", action = cleanAction(k.action) }
+end
+
+-- host/voice.py reads these from keymap.json on every take, with the same defaults.
+local VOICE_FIELDS = {
+  dir = "~", tools = "Read,Glob,Grep,WebSearch,WebFetch", model = "",
+  voice = "me", language = "it", prompt = "",
+}
+M.VOICE_FIELDS = VOICE_FIELDS
+
+-- Version 1 had keys only (K1..K8); they carry over as they are.
 local function cleanKeymap(km)
+  km = type(km) == "table" and km or {}
   local keys = {}
   for i = 1, M.KEY_COUNT do
-    local k = type(km) == "table" and type(km.keys) == "table" and km.keys[i] or {}
-    if type(k) ~= "table" then k = {} end
-    keys[i] = {
-      label = type(k.label) == "string" and k.label or "",
-      action = cleanAction(k.action),
-    }
+    keys[i] = cleanEntry(type(km.keys) == "table" and km.keys[i])
   end
-  return { version = 1, keys = keys }
+  keys[M.TALK_KEY] = { label = "Talk to Claude", action = { type = "none" } }
+  keys[M.REPLAY_KEY] = { label = "Replay answer", action = { type = "none" } }
+  local knobs = {}
+  for _, e in ipairs(M.KNOBS) do
+    local src = type(km.knobs) == "table" and type(km.knobs[e]) == "table" and km.knobs[e] or {}
+    knobs[e] = {}
+    for _, t in ipairs(M.TURNS) do knobs[e][t] = cleanEntry(src[t]) end
+  end
+  local voice = {}
+  local src = type(km.voice) == "table" and km.voice or {}
+  for field, default in pairs(VOICE_FIELDS) do
+    voice[field] = type(src[field]) == "string" and src[field] or default
+  end
+  return { version = 2, keys = keys, knobs = knobs, voice = voice }
+end
+
+-- ── Slots ────────────────────────────────────────────────────────────────
+--
+-- A slot is anything with an action: "K1".."K22" (not K20/K21) and "E2.ccw",
+-- "E2.cw", "E2.push", "E3...". COMBOS mirrors bleKey/bleKnob in
+-- firmware/mp_pcb/mp_pcb.ino: change both together.
+
+local function combo(id)
+  local n = tonumber(id:match("^K(%d+)$"))
+  if n then
+    local group = (n - 1) // 8
+    return ({ {}, { "shift" }, { "ctrl" } })[group + 1], "f" .. (13 + (n - 1) % 8)
+  end
+  local e, turn = id:match("^E(%d)%.(%a+)$")
+  local t = ({ ccw = 0, cw = 1, push = 2 })[turn]
+  return { "alt" }, "f" .. (13 + (tonumber(e) - 2) * 3 + t)
+end
+M.combo = combo
+
+M.SLOTS = {}
+for i = 1, M.KEY_COUNT do
+  if i ~= M.TALK_KEY and i ~= M.REPLAY_KEY then table.insert(M.SLOTS, "K" .. i) end
+end
+for _, e in ipairs(M.KNOBS) do
+  for _, t in ipairs(M.TURNS) do table.insert(M.SLOTS, e .. "." .. t) end
+end
+
+-- The keymap entry for a slot id, or nil.
+function M.entry(id, km)
+  km = km or M.keymap
+  local n = tonumber(tostring(id):match("^K(%d+)$"))
+  if n then return n ~= M.TALK_KEY and n ~= M.REPLAY_KEY and km.keys[n] or nil end
+  local e, t = tostring(id):match("^(E%d)%.(%a+)$")
+  return e and km.knobs[e] and km.knobs[e][t] or nil
 end
 
 -- ── Keymap ───────────────────────────────────────────────────────────────
@@ -217,6 +282,11 @@ function M.load()
   if not ok or not km then
     hs.alert.show("keybordy: keymap.json is not valid JSON, using defaults")
     km = hs.json.decode(M.readFile(HOST_DIR .. "/keymap.default.json"))
+  end
+  -- A keymap from before the knobs (version 1) gets the default knob actions.
+  if type(km.knobs) ~= "table" then
+    local ok2, def = pcall(hs.json.decode, M.readFile(HOST_DIR .. "/keymap.default.json") or "")
+    if ok2 and def then km.knobs = def.knobs end
   end
   M.keymap = cleanKeymap(km)
   M.keymapRev = M.keymapRev + 1
@@ -240,19 +310,25 @@ end
 
 local seq = 0
 
--- Runs key i's action, or `draft` (an unsaved action from the editor, with
--- its label). source: "board" for a real press, "ui" for a simulated one.
-function M.fire(i, source, draft, draftLabel)
-  local entry = M.keymap.keys[i]
-  local action = draft and cleanAction(draft) or entry.action
-  local label = type(draftLabel) == "string" and draftLabel or entry.label
+local function addEvent(ev)
   seq = seq + 1
-  local ev = {
-    id = seq, key = i, source = source, type = action.type,
-    label = label, t = math.floor(hs.timer.secondsSinceEpoch() * 1000),
-  }
+  ev.id = seq
+  ev.t = math.floor(hs.timer.secondsSinceEpoch() * 1000)
   table.insert(M.events, ev)
   if #M.events > MAX_EVENTS then table.remove(M.events, 1) end
+  M.rev = M.rev + 1
+  return ev
+end
+
+-- Runs slot id's action ("K3", "E2.cw"), or `draft` (an unsaved action from
+-- the editor, with its label). source: "board" for a real press, "ui" for a
+-- simulated one.
+function M.fire(id, source, draft, draftLabel)
+  local entry = M.entry(id)
+  if not entry then return nil end
+  local action = draft and cleanAction(draft) or entry.action
+  local label = type(draftLabel) == "string" and draftLabel or entry.label
+  local ev = addEvent({ key = id, source = source, type = action.type, label = label })
 
   local ok, res, err = pcall(runners[action.type], action, ev)
   if not ok then
@@ -265,38 +341,122 @@ function M.fire(i, source, draft, draftLabel)
 
   local name = label ~= "" and label or action.type
   if action.type == "none" then
-    hs.alert.show("K" .. i .. " is free: set it on localhost:7373", 1.2)
+    hs.alert.show(id .. " is free: set it on localhost:7373", 1.2)
   elseif ev.ok == false then
-    hs.alert.show("K" .. i .. " · " .. name .. " failed\n" .. (ev.error or ""), 2)
+    hs.alert.show(id .. " · " .. name .. " failed\n" .. (ev.error or ""), 2)
   else
-    hs.alert.show("K" .. i .. " · " .. name, 0.6)
+    hs.alert.show(id .. " · " .. name, 0.6)
   end
   return ev
 end
 
--- Button colors from the Wokwi diagram (parts labeled K1..K8), so the editor
--- paints the same caps as the simulator.
-function M.colors()
-  local colors = {}
-  local raw = M.readFile(M.REPO_DIR .. "/firmware/keys8/diagram.json")
-  local ok, d = pcall(hs.json.decode, raw or "")
-  if ok and d and d.parts then
-    for _, p in ipairs(d.parts) do
-      local n = p.attrs and p.attrs.label and tonumber(p.attrs.label:match("^K(%d+)$"))
-      if n and p.attrs.color then colors[n] = p.attrs.color end
-    end
+-- ── Voice (host/voice.py) ────────────────────────────────────────────────
+--
+-- Started here and restarted 5 s after it exits. Its "EV {json}" lines
+-- become K21 events in the activity log; other lines are kept for the editor.
+
+M.voice = { state = "stopped", log = {} }
+local VOICE_LOG_LINES = 60
+local voiceBuf, voiceEv = "", nil
+
+local function voiceLine(line)
+  local json = line:match("^EV (.*)$")
+  if not json then
+    table.insert(M.voice.log, line)
+    if #M.voice.log > VOICE_LOG_LINES then table.remove(M.voice.log, 1) end
+    M.rev = M.rev + 1
+    return
   end
-  for i = 1, M.KEY_COUNT do colors[i] = colors[i] or "#d6ff1f" end
-  return colors
+  local ok, e = pcall(hs.json.decode, json)
+  if not ok or type(e) ~= "table" then return end
+  if e.kind == "ready" then
+    M.voice.state = "running"
+  elseif e.kind == "take" then
+    voiceEv = addEvent({ key = "K" .. M.TALK_KEY, source = "board", type = "voice", label = "listening…", pending = true })
+  elseif e.kind == "heard" and voiceEv then
+    voiceEv.label = e.text ~= "" and ("“" .. e.text .. "”") or "nothing heard"
+    if e.text == "" then M.settle(voiceEv, false, "nothing heard") voiceEv = nil end
+  elseif e.kind == "reply" and voiceEv then
+    M.settle(voiceEv, true, nil, e.text)
+    voiceEv = nil
+  elseif e.kind == "error" then
+    local ev = voiceEv or addEvent({ key = "K" .. M.TALK_KEY, source = "board", type = "voice", label = "voice" })
+    M.settle(ev, false, e.text)
+    voiceEv = nil
+  elseif e.kind == "replay" then
+    M.settle(addEvent({ key = "K" .. M.REPLAY_KEY, source = "board", type = "voice", label = "replay (from the Mac)" }), true, nil, e.text)
+  elseif e.kind == "new" then
+    M.settle(addEvent({ key = "K" .. M.TALK_KEY, source = "board", type = "voice", label = "new Claude session" }), true)
+  end
+  M.rev = M.rev + 1
+end
+
+function M.startVoice()
+  if M.voice.task and M.voice.task:isRunning() then return end
+  M.voice.state = "starting"
+  M.voice.task = hs.task.new("/usr/bin/python3", function(code)
+    M.voice.state = "stopped (exit " .. tostring(code) .. "), restarting"
+    M.rev = M.rev + 1
+    M.voice.timer = hs.timer.doAfter(5, M.startVoice)
+  end, function(_, out, err)
+    voiceBuf = voiceBuf .. (out or "") .. (err or "")
+    for line in voiceBuf:gmatch("([^\n]*)\n") do voiceLine(line) end
+    voiceBuf = voiceBuf:match("[^\n]*$")
+    return true
+  end, { "-u", HOST_DIR .. "/voice.py" })
+  if not M.voice.task:start() then M.voice.state = "could not start /usr/bin/python3" end
+end
+
+function M.restartVoice()
+  if M.voice.timer then M.voice.timer:stop() end
+  local task = M.voice.task
+  M.voice.task = nil
+  if task and task:isRunning() then
+    task:setCallback(nil)
+    task:terminate()
+  end
+  hs.timer.doAfter(0.5, M.startVoice)
+end
+
+-- The MP's own layout and cap colors from layout/macropad.json: caps, mods
+-- and the talk bar in their filament colors, knobs in the brand lime (the
+-- printed ones are black, which would vanish on the dark page).
+function M.layout()
+  local raw = M.readFile(M.REPO_DIR .. "/layout/macropad.json")
+  local ok, d = pcall(hs.json.decode, raw or "")
+  if not ok or not d then return nil end
+  local pal = d.finish and d.finish.palette or {}
+  local function color(name, fallback) return pal[name] or fallback end
+  local keys = {}
+  for _, k in ipairs(d.keys or {}) do
+    local finish = k.role == "ptt" and d.finish.ptt or k.role == "mod" and d.finish.mods or d.finish.keycaps
+    table.insert(keys, { id = k.id, x = k.x, y = k.y, w = k.w, h = k.h, role = k.role, color = color(finish, "#f4f4f0") })
+  end
+  local encoders = {}
+  for _, e in ipairs(d.encoders or {}) do table.insert(encoders, { id = e.id, color = "#d6ff1f" }) end
+  return { keys = keys, encoders = encoders }
+end
+
+-- The F-key combo each slot taps, for the editor ("⇧F13").
+function M.combos()
+  local out = {}
+  for _, id in ipairs(M.SLOTS) do
+    local mods, key = combo(id)
+    out[id] = { mods = mods, key = key }
+  end
+  return out
 end
 
 -- ── Start ────────────────────────────────────────────────────────────────
 
 M.load()
 
-for i = 1, M.KEY_COUNT do
-  M.hotkeys[i] = hs.hotkey.bind({}, "f" .. (12 + i), function() M.fire(i, "board") end)
+for _, id in ipairs(M.SLOTS) do
+  local mods, key = combo(id)
+  M.hotkeys[id] = hs.hotkey.bind(mods, key, function() M.fire(id, "board") end)
 end
+
+M.startVoice()
 
 M.web = require("keybordy_web")(M)
 
@@ -306,8 +466,13 @@ if M.menubar then
   M.menubar:setTooltip("keybordy")
   M.menubar:setMenu(function()
     return {
-      { title = "Open keymap editor", fn = function() hs.urlevent.openURL(M.web.url) end },
+      { title = "Open keymap editor", fn = function()
+        -- The keybordy app (`just host-app`) if it is installed, else the browser.
+        if not hs.application.launchOrFocus("keybordy") then hs.urlevent.openURL(M.web.url) end
+      end },
       { title = "Reveal keymap.json", fn = function() hs.execute("open -R " .. string.format("%q", M.KEYMAP_PATH)) end },
+      { title = "Voice: " .. M.voice.state, disabled = true },
+      { title = "Restart voice service", fn = M.restartVoice },
       { title = "-" },
       { title = "Reload", fn = hs.reload },
     }

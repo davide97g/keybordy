@@ -78,7 +78,9 @@ mp-monitor:
 
 # Compile and flash a sketch to the keybordy MP PCB (default firmware/mp_pcb). Its only port is the
 # native USB, and GPIO43 (UART0 TX) is the OLED's DC, so Serial must be USB CDC. Monitor: `just mp-monitor`.
-mp_pcb_fqbn := mp_fqbn + ",CDCOnBoot=cdc"
+# Wi-Fi + BLE outgrow the default 1.25 MB app slot: 3 MB slots, still two for OTA. A new partition
+# table only goes on over USB, so the first flash after changing it must be `mp-pcb-flash`.
+mp_pcb_fqbn := mp_fqbn + ",CDCOnBoot=cdc,PartitionScheme=app3M_fat9M_16MB"
 mp-pcb-flash name="mp_pcb": mp-secrets
     arduino-cli compile --upload -p "${MP_PORT:-$(ls /dev/cu.usbmodem* | head -1)}" --fqbn {{mp_pcb_fqbn}} {{mp_libs}} firmware/{{name}}
 
@@ -123,9 +125,13 @@ host-install:
     grep -qs 'require("keybordy")' ~/.hammerspoon/init.lua || echo 'require("keybordy")' >> ~/.hammerspoon/init.lua
     open -a Hammerspoon 2>/dev/null || open "$HOME/Applications/Hammerspoon.app"
 
-# Keymap editor, served by Hammerspoon (also in its ⌨︎ menu-bar menu)
+# Keymap editor: the keybordy app if installed (`just host-app`), else the page Hammerspoon serves
 keymap:
-    open http://localhost:7373/
+    open -a keybordy 2>/dev/null || open http://localhost:7373/
+
+# Build the keymap editor as a Mac app (Swift, wraps localhost:7373) into ~/Applications, for the Dock
+host-app:
+    host/app/build.sh
 
 # ── Simulator ───────────────────────────────────────────────────────────────
 

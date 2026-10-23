@@ -6,10 +6,11 @@
 -- (no CORS), so they cannot get the token. The token lives in
 -- ~/.config/keybordy/token so an open tab survives a reload.
 --
---   GET  /api/state             keymap, colors, events, accessibility
---   GET  /api/events            events, rev, keymapRev: polled by the page
+--   GET  /api/state             keymap, layout, combos, events, voice, accessibility
+--   GET  /api/events            events, rev, keymapRev, voice: polled by the page
 --   PUT  /api/keymap            save a whole keymap
---   POST /api/press/<n>         simulate a press: body {label?, action?} tests a draft
+--   POST /api/press/<slot>      simulate a press of K3, E2.cw...: body {label?, action?} tests a draft
+--   POST /api/voice/restart     restart host/voice.py
 --   GET  /api/apps              installed apps
 --   GET  /api/shortcuts         macOS Shortcuts by name
 --   POST /api/accessibility     show the macOS Accessibility prompt
@@ -146,13 +147,20 @@ return function(kb)
   end
 
   local function events()
-    return { rev = kb.rev, events = kb.events, keymapRev = kb.keymapRev, accessibility = hs.accessibilityState() }
+    return {
+      rev = kb.rev, events = kb.events, keymapRev = kb.keymapRev, accessibility = hs.accessibilityState(),
+      voice = { state = kb.voice.state, log = kb.voice.log },
+    }
   end
 
   local function state()
     local s = events()
     s.keymap = kb.keymap
-    s.colors = kb.colors()
+    s.layout = kb.layout()
+    s.combos = kb.combos()
+    s.talkKey = "K" .. kb.TALK_KEY
+    s.replayKey = "K" .. kb.REPLAY_KEY
+    s.confirmKeys = { yes = "K" .. kb.YES_KEY, no = "K" .. kb.NO_KEY }
     s.keymapPath = kb.KEYMAP_PATH:gsub("^" .. os.getenv("HOME"), "~")
     s.mediaKeys = {}
     for k in pairs(kb.MEDIA_KEYS) do table.insert(s.mediaKeys, k) end
@@ -201,13 +209,17 @@ return function(kb)
       kb.save(km)
       return json({ keymap = kb.keymap })
     end
-    local n = tonumber(bare:match("^/api/press/(%d+)$"))
-    if n and method == "POST" then
-      if n < 1 or n > kb.KEY_COUNT then return fail(404, "no key " .. n) end
+    if bare == "/api/voice/restart" and method == "POST" then
+      kb.restartVoice()
+      return json({ ok = true })
+    end
+    local id = bare:match("^/api/press/([%w.]+)$")
+    if id and method == "POST" then
+      if not kb.entry(id) then return fail(404, "no slot " .. id) end
       local data = decode(body) or {}
       -- Let the response go out first: an action that opens an app would
       -- otherwise stall the reply behind it.
-      hs.timer.doAfter(0, function() kb.fire(n, "ui", data.action, data.label) end)
+      hs.timer.doAfter(0, function() kb.fire(id, "ui", data.action, data.label) end)
       return json({ ok = true })
     end
     return fail(404, "not found")

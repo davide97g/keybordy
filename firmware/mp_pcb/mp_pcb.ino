@@ -12,12 +12,28 @@
 //   boot down|up                        the BOOT button (GPIO0)
 //   mic L -68 R -120 dBFS               peak of both I2S slots every 2 s (MIC switch on: L moves)
 //   bat 3.92 V charging|not charging    every 10 s: VBAT through the 100k/100k divider, CHG on GPIO44
-//   rec start / rec 2.4 s / play        hold K21 (the talk bar) to record up to 4 s, release to play
+//   rec start / rec 2.4 s               hold K21 (the talk bar) to record up to 30 s, release to send
+//   talk sent / talk done / talk failed: ...   the take's trip to the Mac (local echo if no Mac)
 //   power off (E1 held 2 s)             soft off: deep sleep until E1 is pressed again (or send `off`)
+//   ble advertising|connected|disconnected   the Bluetooth keyboard
 //   wifi ... / ota ...                  Wi-Fi from .env (`just mp-secrets`), OTA as keybordy-mp-pcb.local
 // Flash over Wi-Fi with `just mp-pcb-ota` once this sketch is on the board (the first time needs USB).
 // Every key beeps its own note; the boot chime is two rising notes. The audio and matrix code is
 // mp_proto's, which ran on the bench.
+//
+// Mac side (host/): it is a BLE keyboard named "keybordy MP". Every key except the talk bar, and
+// E2/E3, taps one F13..F20 combo that host/hammerspoon/keybordy.lua maps to the action set in the
+// keymap editor. The talk bar records a take and POSTs it over Wi-Fi to host/voice.py (found over
+// mDNS as _keybordy-pad._tcp), which transcribes it with Echo, asks `claude -p` and streams the
+// answer back in Davide's voice, with OLED status lines in between:
+//   POST /take  X-Keybordy-Token: <BENCH_OTA_PASS>  body: 16 kHz mono int16 LE
+//   POST /new                                       E1 tap: start a new Claude session
+//   POST /replay                                    K20 after a reboot: the last answer again
+//   POST /yes, /no                                  K22/K19 while Claude waits for a yes or no
+//   response, line by line: "S BIG|small\n" (OLED status), "T text\n" (scrolls while spoken),
+//   "C question\n" (scrolls, and K22/K19 answer it), "P <bytes>\n" + int16 LE to play
+// E1 stays on the board: volume, tap for a new session, hold for soft off. K20 replays the last
+// answer from PSRAM (from the Mac after a reboot); pressed while it plays, it stops it.
 
 #include <SPI.h>
 #include <U8g2lib.h>
@@ -26,6 +42,13 @@
 #include "esp_sleep.h"
 #include "board_pins.h"
 #include <KeybordyBench.h>  // Wi-Fi + ArduinoOTA, credentials from the gitignored bench_secrets.h
+#include "bench_secrets.h"  // BENCH_OTA_PASS doubles as the token host/voice.py checks
+#include <WiFi.h>
+#include <ESPmDNS.h>
+#include <BLEDevice.h>
+#include <BLEHIDDevice.h>
+#include <BLESecurity.h>
+#include <BLEServer.h>
 
 // Its own mDNS name, so it never answers for the bench DevKit (keybordy-mp.local) by mistake.
 static const char *HOSTNAME = "keybordy-mp-pcb";
@@ -34,8 +57,13 @@ static const uint32_t SETTLE_US = 30;
 static const uint32_t DEBOUNCE_MS = 15;
 static const uint32_t FS = 16000;           // I2S sample rate, mic and amp share BCLK/WS
 static const int FRAMES = 256;              // 16 ms per I2S block
-static const uint32_t REC_MAX = FS * 4;     // 4 s of 16-bit mono
+static const uint32_t REC_MAX = FS * 30;    // 30 s of 16-bit mono, in PSRAM
+static const uint32_t REPLY_MAX = FS * 120; // the spoken answer, 2 min
 static const int TALK_SLOT = 20;            // K21, the 2u talk bar
+static const int REPLAY_SLOT = 19;          // K20: says the last answer again
+// While Claude waits for a yes or no (a "C" line), K22 answers yes and K19 no instead of their combos.
+static const int YES_SLOT = 21, NO_SLOT = 18;
+static const uint32_t CONFIRM_MS = 120000;  // a question nobody answers stops waiting
 // Flip one encoder's direction here if it turns the wrong way (EC11 and PEC11R pin orders differ).
 static const int8_t ENC_DIR[ENCODER_COUNT] = {1, 1, 1};
 // Soft power: hold E1's push this long to switch off. E1's push joins column C0 (GPIO16) to row R4
@@ -143,6 +171,10 @@ static i2s_chan_handle_t txh, rxh;
 static int16_t *rec;
 static volatile uint32_t recLen, playPos;
 static volatile bool recording, playing;
+// The Mac's spoken answer: the talk task appends chunks while the audio task plays behind it.
+static int16_t *reply;
+static volatile uint32_t replyLen, replyPos;
+static volatile bool replying, replyOpen;   // playing it; more chunks may still come
 // powerOff() parks the audio task between blocks: i2s_channel_disable() waits for the channel's
 // semaphore, which this higher-priority task holds inside every read and write, so disabling under
 // a running task never returns.
@@ -208,7 +240,11 @@ static void audioTask(void *) {
     bool sounding = false;
     for (int i = 0; i < n; i++) {
       float v = 0;
-      if (playing) {
+      if (replying) {
+        if (replyPos < replyLen) v = reply[replyPos++] / 32768.0f;
+        else if (!replyOpen) replying = false;
+        sounding = true;                     // between chunks too, so the amp stays on
+      } else if (playing) {
         if (playPos < recLen) { v = rec[playPos++] / 32768.0f; sounding = true; }
         else playing = false;
       } else if (toneLeft) {
@@ -275,6 +311,11 @@ static bool usbPowered() {
 // ── UI ─────────────────────────────────────────────────────────────────────────────────────
 static char bigText[12] = "ready";
 static char subText[28] = "keys, knobs, talk bar";
+// The answer (or Claude's question) scrolling in place of the small line while it is spoken.
+static char ticker[200], lastTicker[200];
+static uint32_t tickerAt;
+static volatile bool confirmPending;
+static uint32_t confirmAt;
 static int encCount[ENCODER_COUNT];
 static bool dirty = true;
 
@@ -286,6 +327,10 @@ static const int X0 = INSET, Y0 = INSET, W = 128 - 2 * INSET, H = 64 - 2 * INSET
 // 7 px icons left of the percentage: a bolt while charging, a plug on USB with the cell full.
 static const uint8_t ICON_BOLT[] = {0x18, 0x0c, 0x06, 0x1f, 0x0c, 0x06, 0x03};   // 5x7
 static const uint8_t ICON_PLUG[] = {0x22, 0x22, 0x7f, 0x3e, 0x1c, 0x08, 0x08};   // 7x7
+// Left of the header, after the volume: Bluetooth while a Mac is connected, Wi-Fi while joined.
+static const uint8_t ICON_BT[] = {0x0c, 0x15, 0x0e, 0x04, 0x0e, 0x15, 0x0c};     // 5x7
+static const uint8_t ICON_WIFI[] = {0x3e, 0x41, 0x1c, 0x22, 0x00, 0x08, 0x00};   // 7x7
+static volatile bool bleConnected;
 
 // Top right: [bolt|plug] 87% [battery]. Below 3 V there is no cell in J2: the outline stays empty.
 static void drawBattery() {
@@ -304,18 +349,42 @@ static void drawBattery() {
   else if (usbPowered()) oled.drawXBM(tx - 9, by, 7, 7, ICON_PLUG);
 }
 
+// 40 px/s after a 1.2 s hold on the start; text that fits stays still and centered.
+static void drawTicker(int y) {
+  static const char GAP[] = "   -   ";
+  static const int TX = X0 + 4, TW = W - 8, CW = 5;   // u8g2_font_5x8 is fixed width
+  int len = strlen(ticker), loop = len + sizeof GAP - 1;
+  if (len * CW <= TW) { oled.drawStr(X0 + (W - len * CW) / 2, y, ticker); return; }
+  uint32_t t = millis() - tickerAt;
+  uint32_t px = t < 1200 ? 0 : (t - 1200) * 40 / 1000 % (loop * CW);
+  char buf[TW / CW + 3];
+  int n = TW / CW + 2, first = px / CW;
+  for (int i = 0; i < n; i++) {
+    int k = (first + i) % loop;
+    buf[i] = k < len ? ticker[k] : GAP[k - len];
+  }
+  buf[n] = 0;
+  oled.setClipWindow(TX, y - 8, TX + TW, y + 1);
+  oled.drawStr(TX - px % CW, y, buf);
+  oled.setMaxClipWindow();
+}
+
 static void drawOled() {
   oled.clearBuffer();
   oled.setFont(u8g2_font_5x8_tr);
   char buf[24];
   snprintf(buf, sizeof buf, "vol %d", volume);
   oled.drawStr(X0, Y0 + 7, buf);
+  int ix = X0 + oled.getStrWidth(buf) + 5;
+  if (bleConnected) { oled.drawXBM(ix, Y0 + 1, 5, 7, ICON_BT); ix += 8; }
+  if (benchNetConnected()) oled.drawXBM(ix, Y0 + 1, 7, 7, ICON_WIFI);
   drawBattery();
   oled.drawHLine(X0, Y0 + 10, W);
   oled.setFont(u8g2_font_logisoso22_tr);
   oled.drawStr(X0 + (W - oled.getStrWidth(bigText)) / 2, Y0 + 37, bigText);
   oled.setFont(u8g2_font_5x8_tr);
-  oled.drawStr(X0 + (W - oled.getStrWidth(subText)) / 2, Y0 + 48, subText);
+  if (ticker[0]) drawTicker(Y0 + 48);
+  else oled.drawStr(X0 + (W - oled.getStrWidth(subText)) / 2, Y0 + 48, subText);
   // mic meter: -60..0 dBFS
   float db = dbfs(meter);
   int fill = constrain((int)((db + 60) / 60 * (W - 4)), 0, W - 4);
@@ -360,6 +429,296 @@ static void probeWiring() {
     Serial.printf("probe GPIO%-2d %-3s pd=%d pu=%d: %s\n", l.pin, l.name, pd, pu, verdict);
   }
   Serial.println("probe done");
+}
+
+// ── Bluetooth keyboard ─────────────────────────────────────────────────────────────────────
+// Each key taps one combo on press (press report, then an empty one), so two keys from different
+// groups can never mix their modifiers. macOS has no key codes for F21..F24, hence the modifiers:
+//   K1..K8 F13..F20, K9..K16 shift+F13..F20, K17..K22 ctrl+F13..F18 (K20 replay and K21 talk never send)
+//   E2 ccw/cw/push alt+F13..F15, E3 ccw/cw/push alt+F16..F18; E1 stays on the board
+// host/hammerspoon/keybordy.lua binds the same table: change both together.
+static const uint8_t MOD_CTRL = 0x01, MOD_SHIFT = 0x02, MOD_ALT = 0x04, USAGE_F13 = 0x68;
+
+// Boot keyboard layout with report ID 1, as keys8. The usage range goes to 0xE7 rather than the
+// usual 0x65, or F13..F20 would be out of range.
+static const uint8_t REPORT_MAP[] = {
+  0x05, 0x01, 0x09, 0x06, 0xA1, 0x01, 0x85, 0x01,  // Generic Desktop, Keyboard, Application, ID 1
+  0x05, 0x07, 0x19, 0xE0, 0x29, 0xE7, 0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x08,
+  0x81, 0x02,                                      //   modifiers
+  0x95, 0x01, 0x75, 0x08, 0x81, 0x01,              //   reserved
+  0x95, 0x06, 0x75, 0x08, 0x15, 0x00, 0x25, 0xE7, 0x05, 0x07, 0x19, 0x00, 0x29, 0xE7,
+  0x81, 0x00,                                      //   up to 6 keys
+  0xC0,
+};
+
+static BLEHIDDevice *hid;
+static BLECharacteristic *hidInput;
+
+class BleCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer *) override { bleConnected = true; Serial.println("ble connected"); }
+  void onDisconnect(BLEServer *) override {
+    bleConnected = false;
+    Serial.println("ble disconnected");
+    BLEDevice::startAdvertising();
+  }
+};
+
+static void bleBegin() {
+  BLEDevice::init("keybordy MP");
+  // "Just Works" pairing with bonding: no PIN, the Mac reconnects on its own.
+  BLESecurity *security = new BLESecurity();
+  security->setCapability(ESP_IO_CAP_NONE);
+  security->setAuthenticationMode(true, false, true);
+  BLEServer *server = BLEDevice::createServer();
+  server->setCallbacks(new BleCallbacks());
+  hid = new BLEHIDDevice(server);
+  hid->manufacturer()->setValue("keybordy");
+  hid->pnp(0x02, 0xE502, 0xA112, 0x0210);
+  hid->hidInfo(0x00, 0x01);
+  hid->reportMap((uint8_t *)REPORT_MAP, sizeof(REPORT_MAP));
+  hidInput = hid->inputReport(1);
+  hid->setBatteryLevel(batPercent(batSmooth));
+  hid->startServices();
+  BLEAdvertising *adv = BLEDevice::getAdvertising();
+  adv->setAppearance(HID_KEYBOARD);
+  adv->addServiceUUID(hid->hidService()->getUUID());
+  adv->setScanResponse(true);
+  BLEDevice::startAdvertising();
+  Serial.println("ble advertising");
+}
+
+static void bleTap(uint8_t mods, uint8_t usage) {
+  if (!bleConnected) return;
+  uint8_t r[8] = {mods, 0, usage};
+  hidInput->setValue(r, sizeof r);
+  hidInput->notify();
+  memset(r, 0, sizeof r);
+  hidInput->setValue(r, sizeof r);
+  hidInput->notify();
+}
+
+static void bleKey(int slot) {
+  static const uint8_t GROUP_MODS[] = {0, MOD_SHIFT, MOD_CTRL};
+  bleTap(GROUP_MODS[slot / 8], USAGE_F13 + slot % 8);
+}
+
+// enc 1 or 2 (E2, E3); what 0 ccw, 1 cw, 2 push.
+static void bleKnob(int enc, int what) { bleTap(MOD_ALT, USAGE_F13 + (enc - 1) * 3 + what); }
+
+// ── Talk bar: the take to host/voice.py and its answer back ────────────────────────────────
+static volatile bool talkBusy, talkCancel;
+static IPAddress macIp;
+static uint16_t macPort;
+
+static void setStatus(const char *big, const char *small) {
+  snprintf(bigText, sizeof bigText, "%s", big);
+  snprintf(subText, sizeof subText, "%s", small);
+  dirty = true;
+}
+
+static void setTicker(const char *text) {
+  snprintf(ticker, sizeof ticker, "%s", text);
+  tickerAt = millis();
+  dirty = true;
+}
+
+static bool findMac() {
+  int n = MDNS.queryService("keybordy-pad", "tcp");
+  for (int i = 0; i < n; i++) {
+    if (MDNS.address(i) == IPAddress()) continue;
+    macIp = MDNS.address(i);
+    macPort = MDNS.port(i);
+    Serial.printf("voice service at %s:%u\n", macIp.toString().c_str(), macPort);
+    return true;
+  }
+  return false;
+}
+
+// One '\n'-terminated line, without the line end. False on close, cancel or after ms of silence.
+static bool readLine(WiFiClient &c, char *buf, int cap, uint32_t ms) {
+  int n = 0;
+  uint32_t t = millis();
+  while (millis() - t < ms && !talkCancel) {
+    if (!c.available()) {
+      if (!c.connected()) break;
+      vTaskDelay(2);
+      continue;
+    }
+    int ch = c.read();
+    t = millis();
+    if (ch == '\n') {
+      if (n && buf[n - 1] == '\r') n--;
+      buf[n] = 0;
+      return true;
+    }
+    if (n < cap - 1) buf[n++] = ch;
+  }
+  buf[n] = 0;
+  return false;
+}
+
+// Appends `bytes` of int16 LE to the reply; playback starts with the first chunk.
+static bool readChunk(WiFiClient &c, int bytes) {
+  static uint8_t buf[1024];
+  static uint8_t lo;
+  bool odd = false;
+  uint32_t t = millis();
+  replying = true;
+  while (bytes > 0 && !talkCancel) {
+    int n = c.read(buf, min(bytes, (int)sizeof buf));
+    if (n <= 0) {
+      if ((!c.connected() && !c.available()) || millis() - t > 10000) return false;
+      vTaskDelay(2);
+      continue;
+    }
+    t = millis();
+    bytes -= n;
+    for (int i = 0; i < n; i++) {
+      if (!odd) { lo = buf[i]; odd = true; continue; }
+      odd = false;
+      if (replyLen < REPLY_MAX) { reply[replyLen] = (int16_t)(lo | buf[i] << 8); replyLen = replyLen + 1; }
+    }
+  }
+  return !talkCancel;
+}
+
+// POSTs the take (or nothing, for /new) and plays what comes back. Null, or what went wrong.
+static const char *exchange(const char *path, bool withTake) {
+  for (int i = 0; i < 50 && !benchNetConnected(); i++) vTaskDelay(pdMS_TO_TICKS(100));
+  if (!benchNetConnected()) return "no wifi";
+  WiFiClient c;
+  if (!(macPort && c.connect(macIp, macPort, 3000)) && !(findMac() && c.connect(macIp, macPort, 3000)))
+    return "no mac";
+  c.setNoDelay(true);
+  uint32_t bytes = withTake ? recLen * 2 : 0;
+  c.printf("POST %s HTTP/1.0\r\nX-Keybordy-Token: %s\r\nContent-Type: application/octet-stream\r\n"
+           "Content-Length: %u\r\n\r\n", path, BENCH_OTA_PASS, bytes);
+  const uint8_t *p = (const uint8_t *)rec;
+  uint32_t t = millis();
+  while (bytes && !talkCancel) {
+    size_t w = c.write(p, min(bytes, (uint32_t)4096));
+    if (w) { p += w; bytes -= w; t = millis(); continue; }
+    if (!c.connected() || millis() - t > 5000) return "upload failed";
+    vTaskDelay(2);
+  }
+  if (withTake) Serial.printf("talk sent (%.1f s)\n", recLen / (float)FS);
+  char line[224];   // T and C lines carry up to 190 characters
+  // Claude can think for a while; voice.py sends a status line at least every few seconds.
+  if (!readLine(c, line, sizeof line, 30000)) return talkCancel ? nullptr : "no answer";
+  if (!strstr(line, " 200")) return strstr(line, " 403") ? "bad token" : "mac error";
+  while (readLine(c, line, sizeof line, 10000) && line[0]) {}  // headers
+  while (readLine(c, line, sizeof line, 180000)) {
+    if (!strncmp(line, "S ", 2)) {
+      char *bar = strchr(line + 2, '|');
+      if (bar) *bar = 0;
+      setStatus(line + 2, bar ? bar + 1 : "");
+    } else if (!strncmp(line, "T ", 2) || !strncmp(line, "C ", 2)) {
+      setTicker(line + 2);
+      snprintf(lastTicker, sizeof lastTicker, "%s", line + 2);
+      if (line[0] == 'C') {
+        confirmPending = true;
+        confirmAt = millis();
+        Serial.printf("confirm? %s\n", line + 2);
+      }
+    } else if (!strncmp(line, "P ", 2)) {
+      if (!readChunk(c, atoi(line + 2))) return talkCancel ? nullptr : "answer cut off";
+    }
+  }
+  return nullptr;
+}
+
+static void talkTask(void *arg) {
+  const char *path = (const char *)arg;
+  bool withTake = !strcmp(path, "/take");
+  if (strcmp(path, "/new")) replyLen = replyPos = 0;   // /new keeps the last answer for K20
+  replyOpen = true;
+  const char *err = exchange(path, withTake);
+  replyOpen = false;
+  if (talkCancel) Serial.println("talk cancelled");
+  else if (err && withTake && !strcmp(err, "no mac")) {   // no voice.py: echo the take, as bring-up did
+    Serial.println("talk failed: no mac, local echo");
+    setStatus("ECHO", "no mac: playing it back");
+    playPos = 0;
+    playing = true;
+  } else if (err) {
+    Serial.printf("talk failed: %s\n", err);
+    setStatus("ERROR", err);
+  } else Serial.println("talk done");
+  talkBusy = false;
+  vTaskDelete(nullptr);
+}
+
+static void talkStart(const char *path) {
+  talkCancel = false;
+  talkBusy = true;
+  xTaskCreatePinnedToCore(talkTask, "talk", 8192, (void *)path, 1, nullptr, 0);
+}
+
+// Stops an answer still playing or coming in, so a new request can start.
+static void talkStop() {
+  if (talkBusy) {
+    talkCancel = true;
+    for (int i = 0; i < 100 && talkBusy; i++) delay(5);
+  }
+  replying = playing = false;
+  ticker[0] = 0;
+  confirmPending = false;
+}
+
+// The talk bar went down: stop any answer, then record.
+static void talkDown() {
+  talkStop();
+  recLen = 0;
+  recording = true;
+  Serial.println("rec start");
+  setStatus("REC", "release to send");
+}
+
+static void talkUp() {
+  if (!recording) return;
+  recording = false;
+  Serial.printf("rec %.1f s\n", recLen / (float)FS);
+  if (recLen < FS / 4) { setStatus("TALK", "too short: hold the bar"); return; }
+  setStatus("SENT", "to the Mac...");
+  talkStart("/take");
+}
+
+// K20: the last answer again, from PSRAM, or from the Mac when this boot has none yet.
+static void replay() {
+  if (replying) {
+    replying = false;
+    setStatus("STOP", "K20 to hear it again");
+    return;
+  }
+  if (talkBusy || recording) return;
+  if (replyLen) {
+    playing = false;
+    replyPos = 0;
+    replyOpen = false;
+    replying = true;
+    Serial.printf("replay %.1f s\n", replyLen / (float)FS);
+    setStatus("REPLAY", "K20 again to stop");
+    setTicker(lastTicker);
+  } else {
+    setStatus("REPLAY", "asking the Mac...");
+    talkStart("/replay");
+  }
+}
+
+// K22/K19 while Claude waits: the answer goes back as "yes"/"no" in the same session.
+static void answerConfirm(bool yes) {
+  talkStop();
+  Serial.printf("confirm %s\n", yes ? "yes" : "no");
+  setStatus(yes ? "YES" : "NO", "to Claude...");
+  talkStart(yes ? "/yes" : "/no");
+}
+
+static void newChat() {
+  if (talkBusy) return;
+  ticker[0] = 0;
+  confirmPending = false;
+  setStatus("NEW", "new Claude session");
+  talkStart("/new");
 }
 
 // ── Soft power ─────────────────────────────────────────────────────────────────────────────
@@ -408,18 +767,16 @@ static void handle(const Event &e) {
   switch (e.kind) {
     case EV_KEY:
       Serial.printf("key %d %s (R%d C%d)\n", e.id + 1, e.val ? "down" : "up", e.r, e.c);
-      if (e.id == TALK_SLOT && rec) {
-        if (e.val) {
-          playing = false; recLen = 0; recording = true;
-          Serial.println("rec start");
-          strcpy(bigText, "REC"); strcpy(subText, "release to play");
-        } else {
-          recording = false;
-          Serial.printf("rec %.1f s\nplay\n", recLen / (float)FS);
-          playPos = 0; playing = true;
-          strcpy(bigText, "PLAY"); snprintf(subText, sizeof subText, "%.1f s", recLen / (float)FS);
-        }
+      if (e.id == TALK_SLOT) {
+        if (!rec || !reply) break;
+        if (e.val) talkDown();
+        else talkUp();
+      } else if (e.id == REPLAY_SLOT) {
+        if (e.val && reply) replay();
+      } else if (confirmPending && (e.id == YES_SLOT || e.id == NO_SLOT)) {
+        if (e.val) answerConfirm(e.id == YES_SLOT);
       } else if (e.val) {
+        bleKey(e.id);
         playTone(keyHz(e.id), 70);
         snprintf(bigText, sizeof bigText, "K%d", e.id + 1);
         snprintf(subText, sizeof subText, "R%d C%d", e.r, e.c);
@@ -428,6 +785,7 @@ static void handle(const Event &e) {
     case EV_ENC_PUSH:
       Serial.printf("enc %s %s (R%d C%d)\n", ENCODER_IDS[e.id], e.val ? "push" : "release", e.r, e.c);
       if (e.val) { snprintf(bigText, sizeof bigText, "%s", ENCODER_IDS[e.id]); strcpy(subText, "push"); playTone(1760, 40); }
+      if (e.val && e.id > 0) bleKnob(e.id, 2);
       break;
     case EV_ENC_TURN:
       Serial.printf("enc %s %s\n", ENCODER_IDS[e.id], e.val > 0 ? "cw" : "ccw");
@@ -438,6 +796,7 @@ static void handle(const Event &e) {
         playTone(1320, 25);
       } else {
         snprintf(bigText, sizeof bigText, "%s %d", ENCODER_IDS[e.id], encCount[e.id]);
+        bleKnob(e.id, e.val > 0 ? 1 : 0);
       }
       snprintf(subText, sizeof subText, "%s", e.val > 0 ? "cw" : "ccw");
       break;
@@ -492,7 +851,8 @@ void setup() {
   if (!wokeByE1) testPattern();
   drawOled();
 
-  rec = (int16_t *)(psramFound() ? ps_malloc(REC_MAX * 2) : malloc(REC_MAX * 2));
+  rec = (int16_t *)(psramFound() ? ps_malloc(REC_MAX * 2) : nullptr);
+  reply = (int16_t *)(psramFound() ? ps_malloc(REPLY_MAX * 2) : nullptr);
   bool audio = audioInit();
   events = xQueueCreate(32, sizeof(Event));
   xTaskCreatePinnedToCore(scanTask, "scan", 4096, nullptr, 5, &scanHandle, 0);
@@ -502,6 +862,7 @@ void setup() {
   Serial.printf("bat %.2f V %s\n", batVolts(), charging() ? "charging" : "not charging");
   if (audio) { playTone(880, 90); delay(110); playTone(1318.5f, 140); }
   benchNetBegin(HOSTNAME, true);
+  bleBegin();
 }
 
 void loop() {
@@ -516,21 +877,32 @@ void loop() {
   uint32_t now = millis();
   digitalWrite(PIN_MIC_LED, held > 0 || recording ? HIGH : LOW);
   if (recording) {
-    snprintf(subText, sizeof subText, "%.1f s, release to play", recLen / (float)FS);
-    if (recLen >= REC_MAX) { recording = false; playPos = 0; playing = true; strcpy(bigText, "PLAY"); Serial.println("rec full\nplay"); }
+    snprintf(subText, sizeof subText, "%.1f s, release to send", recLen / (float)FS);
+    if (recLen >= REC_MAX) talkUp();
     dirty = true;
   }
   static bool e1Was;
   if (e1Held != e1Was) {
     e1Was = e1Held;
     if (e1Was) e1DownAt = e1Armed ? now | 1 : 0;
-    else { e1DownAt = 0; e1Armed = true; if (offPending) powerOff(); }
+    else {
+      bool tap = e1DownAt && now - e1DownAt < OFF_HOLD_MS;
+      e1DownAt = 0;
+      e1Armed = true;
+      if (offPending) powerOff();
+      else if (tap) newChat();
+    }
   }
   if (e1DownAt && !offPending && !benchOtaActive() && now - e1DownAt >= OFF_HOLD_MS) {
     offPending = true;
     Serial.println("power off (E1 held 2 s): let go of E1");
     strcpy(bigText, "bye"); strcpy(subText, "let go; tap E1 to wake");
     dirty = true;
+  }
+  if (confirmPending && now - confirmAt > CONFIRM_MS) {
+    confirmPending = false;
+    ticker[0] = 0;
+    setStatus("ready", "question timed out");
   }
   if (now - lastMic >= 2000) {
     lastMic = now;
@@ -541,6 +913,7 @@ void loop() {
   if (now - lastBat >= 10000) {
     lastBat = now;
     Serial.printf("bat %.2f V %s\n", batVolts(), charging() ? "charging" : "not charging");
+    if (hid) hid->setBatteryLevel(batPercent(batSmooth));
   }
   if (benchOtaActive()) {
     strcpy(bigText, "OTA"); snprintf(subText, sizeof subText, "%d %%  keep power on", benchOtaProgress());

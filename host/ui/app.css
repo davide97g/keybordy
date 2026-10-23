@@ -104,13 +104,58 @@ button.chip:hover { background: var(--wb-6); }
 
 /* ── Panels ─────────────────────────────────────────────────────────── */
 
+:root { --top-h: 59px; }
+:root[data-app] { --top-h: 0px; }
+
+/* Board and activity on the left, the selected slot's inspector on the right: picking a cap never
+   scrolls its settings out of view. */
 .main {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
   gap: var(--space-6);
+  align-items: start;
   padding: var(--space-7);
-  max-width: 1320px;
+  max-width: 1640px;
   margin: 0 auto;
 }
+
+.main__left { display: grid; gap: var(--space-6); min-width: 0; }
+
+.editor {
+  position: sticky;
+  top: calc(var(--top-h) + var(--space-7));
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--top-h) - var(--space-7) * 2 - var(--status-h, 0px));
+}
+
+.editor__body { flex: 1; overflow: auto; min-height: 0; }
+
+@media (max-width: 1000px) {
+  .main { grid-template-columns: 1fr; }
+  .editor { position: static; max-height: none; }
+}
+
+/* The Mac app: the window's title bar is the header, the chips sit in a status bar. */
+:root[data-app] { --status-h: 30px; }
+:root[data-app] .top { display: none; }
+:root[data-app] body { padding-bottom: var(--status-h); }
+.statusbar { display: none; }
+:root[data-app] .statusbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  height: var(--status-h);
+  padding: 0 var(--space-6);
+  background: var(--color-bg-header);
+  border-top: 1px solid var(--wb-6);
+  backdrop-filter: blur(8px);
+}
+:root[data-app] .statusbar .top__status { margin-left: 0; justify-content: flex-start; }
 
 .panel {
   background: var(--wb-2);
@@ -148,15 +193,7 @@ button.chip:hover { background: var(--wb-6); }
   text-align: right;
 }
 
-.split {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
-  gap: var(--space-6);
-  align-items: start;
-}
-
 @media (max-width: 900px) {
-  .split { grid-template-columns: 1fr; }
   .panel__hint { display: none; }
 }
 
@@ -164,14 +201,83 @@ button.chip:hover { background: var(--wb-6); }
 
 .caps {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: var(--space-5);
+  gap: var(--space-7);
   padding: var(--space-7) var(--space-6) var(--space-8);
   background: var(--wb-1);
 }
 
+/* The MP as it sits on the desk: OLED and three knobs on top, the key field
+   below, placed in half units from layout/macropad.json. */
+.mp__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.mp__oled {
+  display: grid;
+  align-content: center;
+  gap: var(--space-2);
+  min-height: 92px;
+  padding: var(--space-5);
+  border-radius: 8px;
+  background: var(--gray-1000, #000);
+  box-shadow: 0 0 0 1px var(--wb-6), inset 0 0 0 4px var(--wb-2);
+  font: 700 13px/1.2 var(--font-mono);
+  color: var(--wb-12);
+}
+
+.mp__oled-sub { font: 400 10.5px/1.2 var(--font-mono); color: var(--wb-9); }
+
+.knob { display: grid; gap: var(--space-4); justify-items: center; }
+.caps--enter .knob { animation: cap-in 380ms var(--ease-spring) both; animation-delay: calc(var(--i) * 60ms); }
+
+.knob__dial {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(var(--wb-4) 0 6deg, var(--wb-3) 6deg 12deg);
+  box-shadow: 0 0 0 1px var(--wb-6), inset 0 0 0 5px var(--wb-2), 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent);
+  font: 700 11px/1 var(--font-mono);
+  color: var(--c);
+}
+
+.knob__turns { display: grid; gap: var(--space-4); width: 100%; }
+.knob__turns .cap { aspect-ratio: auto; min-height: 58px; padding: 7px 9px 12px; grid-template-rows: auto 1fr; }
+.knob__turns .cap__type, .knob__turns .cap__glyph { display: none; }
+.knob__turns .cap__label { font-size: 12px; -webkit-line-clamp: 1; }
+
+.knob__fixed {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+  font: 400 11px/1.3 var(--font-mono);
+  color: var(--wb-9);
+}
+
+.knob__fixed li { padding: 7px 9px; border-radius: 8px; background: var(--wb-2); box-shadow: 0 0 0 1px var(--wb-5); }
+
+.mp__keys {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.mp__keys .cap { aspect-ratio: 1 / 0.78; }
+.mp__keys .cap--wide { aspect-ratio: auto; height: 100%; }
+
 @media (max-width: 900px) {
-  .caps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .mp__top { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mp__oled { grid-column: 1 / -1; min-height: 0; }
+  .mp__keys { gap: var(--space-3); }
+  .cap { padding: 6px 6px 12px; }
+  .cap__glyph, .cap__type, .cap__fkey { display: none; }
 }
 
 .cap-slot { position: relative; }
@@ -576,6 +682,8 @@ button.chip:hover { background: var(--wb-6); }
 .editor__foot .spacer { flex: 1; }
 
 .editor__foot .msg { font: 400 11px/1.3 var(--font-mono); color: var(--wb-9); }
+.editor__foot .msg--saved { color: var(--color-feedback-success); }
+.editor__foot .msg--saving { color: var(--color-feedback-warning); }
 
 /* ── Activity log (the serial monitor's bed) ────────────────────────── */
 
@@ -583,8 +691,8 @@ button.chip:hover { background: var(--wb-6); }
   list-style: none;
   margin: 0;
   padding: var(--space-3) 0;
-  min-height: 200px;
-  max-height: 560px;
+  min-height: 120px;
+  max-height: 340px;
   overflow: auto;
   background: var(--color-terminal-bg);
   font: 400 11.5px/1.5 var(--font-mono);
@@ -646,3 +754,46 @@ button.chip:hover { background: var(--wb-6); }
   .cap { padding: 8px 8px 14px; }
   .cap__type { display: none; }
 }
+
+/* ── Voice (K21) ────────────────────────────────────────────────────── */
+
+.row--fields { align-items: start; }
+.row--fields > .field { flex: 1; min-width: 140px; }
+
+.voice-log {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: var(--space-4) var(--space-5);
+  border-radius: 8px;
+  background: var(--wb-1);
+  box-shadow: 0 0 0 1px var(--wb-5);
+  font: 400 10.5px/1.45 var(--font-mono);
+  color: var(--wb-10);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* The inspector is narrower than the old full-width editor. */
+.editor .types { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.editor .apps { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.editor__head > span:not(.panel__hint) { white-space: nowrap; }
+.editor__head .panel__hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* K22/K19: their yes/no role during Claude's questions, as a sticker on the cap. */
+.cap__confirm {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-3deg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #d6ff1f;  /* the brand lime, as the sticker */
+  color: var(--gray-1000);
+  font: 700 9px/1.2 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+.note--confirm { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--wb-3); box-shadow: 0 0 0 1px var(--wb-6); }
