@@ -76,6 +76,22 @@ mp-ota name="mp_bench": mp-secrets
 mp-monitor:
     arduino-cli monitor -p "${MP_PORT:-$(ls /dev/cu.usbmodem* | head -1)}" -c baudrate=115200
 
+# Compile and flash a sketch to the keybordy MP PCB (default firmware/mp_pcb). Its only port is the
+# native USB, and GPIO43 (UART0 TX) is the OLED's DC, so Serial must be USB CDC. Monitor: `just mp-monitor`.
+mp_pcb_fqbn := mp_fqbn + ",CDCOnBoot=cdc"
+mp-pcb-flash name="mp_pcb": mp-secrets
+    arduino-cli compile --upload -p "${MP_PORT:-$(ls /dev/cu.usbmodem* | head -1)}" --fqbn {{mp_pcb_fqbn}} {{mp_libs}} firmware/{{name}}
+
+# Flash the PCB over Wi-Fi (it must already run a sketch that calls benchNetBegin, like mp_pcb).
+# Apple's /usr/bin/python3 runs espota: the firewall blocks the board connecting back to Homebrew Python.
+mp-pcb-ota name="mp_pcb": mp-secrets
+    arduino-cli compile --fqbn {{mp_pcb_fqbn}} {{mp_libs}} --output-dir build/ota/pcb-{{name}} firmware/{{name}}
+    /usr/bin/python3 ~/Library/Arduino15/packages/esp32/hardware/esp32/*/tools/espota.py -r -i "${MP_PCB_HOST:-keybordy-mp-pcb.local}" -p 3232 --auth="$ESP32_OTA_PASS" -f build/ota/pcb-{{name}}/{{name}}.ino.bin
+
+# Compile only (no board needed)
+mp-pcb-build name="mp_pcb": mp-secrets
+    arduino-cli compile --fqbn {{mp_pcb_fqbn}} {{mp_libs}} firmware/{{name}}
+
 # Printed parts from the layout (build123d): STL + STEP into cad/out/ (e.g. `just cad-build knob cap1`)
 [working-directory: 'cad']
 cad-build *parts:
